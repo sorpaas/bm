@@ -2,17 +2,34 @@ use digest::Digest;
 use generic_array::GenericArray;
 
 use std::collections::HashMap;
-use core::mem;
+use core::num::NonZeroUsize;
 
-pub struct List<D: Digest> {
+pub enum Value<D: Digest> {
+    Intermediate(GenericArray<u8, D::OutputSize>),
+    End(Vec<u8>),
+}
+
+pub struct RawList<D: Digest> {
     db: HashMap<GenericArray<u8, D::OutputSize>, (GenericArray<u8, D::OutputSize>, GenericArray<u8, D::OutputSize>)>,
     default_value: GenericArray<u8, D::OutputSize>,
     last_default_root: GenericArray<u8, D::OutputSize>,
     root: GenericArray<u8, D::OutputSize>,
-    len: usize,
+    depth: u32,
 }
 
-impl<D: Digest> List<D> {
+fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
+    let mut index = index.get();
+    if index < 2_usize.pow(depth) {
+        return None
+    }
+
+    while index > 2_usize.pow(depth + 1) {
+        index = index / 2;
+    }
+    Some(index % 2)
+}
+
+impl<D: Digest> RawList<D> {
     pub fn new_with_default(default_value: GenericArray<u8, D::OutputSize>) -> Self {
         let root = {
             let mut digest = D::new();
@@ -25,11 +42,11 @@ impl<D: Digest> List<D> {
         db.insert(root.clone(), (default_value.clone(), default_value.clone()));
 
         Self {
-            len: 2,
+            depth: 1,
             last_default_root: default_value.clone(),
+            default_value,
             db,
             root,
-            default_value,
         }
     }
 
@@ -56,13 +73,11 @@ impl<D: Digest> List<D> {
 
         self.last_default_root = new_last_default_root;
         self.root = new_root;
-        self.len = self.len * 2;
+        self.depth += 1;
     }
 
     pub fn shrink(&mut self) {
-        debug_assert!(self.len().is_power_of_two() && self.len() >= 2);
-
-        if self.len() <= 2 {
+        if self.depth < 2 {
             return
         }
 
@@ -71,69 +86,68 @@ impl<D: Digest> List<D> {
         let new_root = self.db.get(&self.root)
             .expect("Root must exist; qed").0.clone();
 
-        self.len = self.len / 2;
+        self.depth -= 1;
         self.root = new_root;
         self.last_default_root = new_last_default_root;
     }
 
-    pub fn len(&self) -> usize {
-        self.len
+    pub fn depth(&self) -> u32 {
+        self.depth
     }
 
-    pub fn depth(&self) -> usize {
-        debug_assert!(self.len().is_power_of_two() && self.len() != 0);
-
-        mem::size_of::<usize>() * 8 - self.len().leading_zeros() as usize - 1
-    }
-
-    pub fn get(&self, index: usize) -> Option<GenericArray<u8, D::OutputSize>> {
-        debug_assert!(self.len().is_power_of_two());
-
-        if index >= self.len() {
-            return None
-        }
-        let depth = self.depth();
-
+    pub fn get(&self, index: NonZeroUsize) -> Option<GenericArray<u8, D::OutputSize>> {
         let mut current = self.root.clone();
-        for d in 0..depth {
-            let sel = (index & (0b1 << (depth - 1 - d))) >> (depth - 1 - d);
-            current = self.db.get(&current).map(|values| {
-                if sel == 0 {
-                    values.0.clone()
-                } else {
-                    values.1.clone()
-                }
-            }).expect("Any depth level key must exists; qed");
+        let mut depth = 1;
+        loop {
+            let sel = match selection_at(index, depth) {
+                Some(sel) => sel,
+                None => break,
+            };
+            current = match self.db.get(&current) {
+                Some(value) => {
+                    if sel == 0 {
+                        value.0.clone()
+                    } else {
+                        value.1.clone()
+                    }
+                },
+                None => return None,
+            };
+            depth += 1;
         }
 
         Some(current)
     }
 
-    pub fn set(&mut self, index: usize, set: GenericArray<u8, D::OutputSize>) {
-        debug_assert!(self.len().is_power_of_two());
-
-        if index >= self.len() {
-            return
-        }
-        let depth = self.depth();
-
+    pub fn set(&mut self, index: NonZeroUsize, set: GenericArray<u8, D::OutputSize>) {
         let mut current = self.root.clone();
+        let mut depth = 1;
         let mut values = Vec::new();
-        for d in 0..depth {
-            let sel = (index & (0b1 << (depth - 1 - d))) >> (depth - 1 - d);
-            println!("index: {}, d: {}, sel: {}", index, d, sel);
-            let value = self.db.get(&current).expect("Any depth level key must exists; qed");
+        loop {
+            let sel = match selection_at(index, depth) {
+                Some(sel) => sel,
+                None => break,
+            };
+            let value = match self.db.get(&current) {
+                Some(value) => value.clone(),
+                None => (self.default_value.clone(), self.default_value.clone()),
+            };
             values.push((sel, value.clone()));
             current = if sel == 0 {
                 value.0.clone()
             } else {
                 value.1.clone()
             };
+            depth += 1;
         }
 
         let mut update = set;
-        while !values.is_empty() {
-            let (sel, mut value) = values.pop().expect("values checked not to be empty; qed");
+        loop {
+            let (sel, mut value) = match values.pop() {
+                Some(v) => v,
+                None => break,
+            };
+
             if sel == 0 {
                 value.0 = update;
             } else {
@@ -159,35 +173,34 @@ mod tests {
 
     #[test]
     fn test_extend_and_get() {
-        let mut list = List::<Sha256>::new();
+        let mut list = RawList::<Sha256>::new();
         list.extend();
-        assert_eq!(list.len(), 4);
+        assert_eq!(list.depth(), 2);
 
-        for i in 0..list.len() {
-            assert_eq!(list.get(i), Some(Default::default()));
+        for i in 4..8 {
+            assert_eq!(list.get(NonZeroUsize::new(i).unwrap()), Some(Default::default()));
         }
     }
 
     #[test]
     fn test_set_and_shrink() {
-        let mut list = List::<Sha256>::new();
+        let mut list = RawList::<Sha256>::new();
         list.extend();
-        assert_eq!(list.len(), 4);
-        for i in 0..list.len() {
+        assert_eq!(list.depth(), 2);
+        for i in 4..8 {
             let mut arr = [0u8; 32];
             arr[0] = i as u8;
-            list.set(i, arr.into());
+            list.set(NonZeroUsize::new(i).unwrap(), arr.into());
         }
-        for i in 0..list.len() {
-            let val = list.get(i).unwrap();
+        for i in 4..8 {
+            let val = list.get(NonZeroUsize::new(i).unwrap()).unwrap();
             assert_eq!(val[0], i as u8);
         }
         list.shrink();
-        assert_eq!(list.len(), 2);
-        for i in 0..list.len() {
-            let val = list.get(i).unwrap();
-            println!("val: {:?}", val);
-            assert_eq!(val[0], i as u8);
+        assert_eq!(list.depth(), 1);
+        for i in 2..3 {
+            let val = list.get(NonZeroUsize::new(i).unwrap()).unwrap();
+            assert_eq!(val[0], (i + 2) as u8);
         }
     }
 }
