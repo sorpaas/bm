@@ -148,7 +148,18 @@ impl<D: Digest> RawList<D> {
         Some(Value::Intermediate(current))
     }
 
-    pub fn set_end(&mut self, index: NonZeroUsize, set: Vec<u8>) {
+    pub fn set(&mut self, index: NonZeroUsize, set: Value<D>) {
+        match &set {
+            Value::Intermediate(ref intermediate) => {
+                let value = match self.db.get(intermediate) {
+                    Some(value) => value.0.clone(),
+                    None => panic!("Intermediate value to set does not exist"),
+                };
+                self.insert_one(intermediate.clone(), value);
+            },
+            Value::End(_) => ()
+        }
+
         let mut values = {
             let mut values = Vec::new();
             let mut depth = 1;
@@ -167,7 +178,7 @@ impl<D: Digest> RawList<D> {
                                 Value::End(_) => (),
                             }
 
-                            self.root = Value::End(set);
+                            self.root = set;
                             return
                         },
                     };
@@ -214,7 +225,7 @@ impl<D: Digest> RawList<D> {
             values
         };
 
-        let mut update = Value::End(set);
+        let mut update = set;
         loop {
             let (sel, mut value) = match values.pop() {
                 Some(v) => v,
@@ -251,10 +262,10 @@ mod tests {
         let mut list2 = RawList::<Sha256>::new();
 
         for i in 32..64 {
-            list1.set_end(NonZeroUsize::new(i).unwrap(), vec![i as u8]);
+            list1.set(NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
         }
         for i in (32..64).rev() {
-            list2.set_end(NonZeroUsize::new(i).unwrap(), vec![i as u8]);
+            list2.set(NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
         }
         assert_eq!(list1.db, list2.db);
         for i in 32..64 {
@@ -264,7 +275,26 @@ mod tests {
             assert_eq!(val2, Value::End(vec![i as u8]));
         }
 
-        list1.set_end(NonZeroUsize::new(1).unwrap(), vec![1]);
+        list1.set(NonZeroUsize::new(1).unwrap(), Value::End(vec![1]));
         assert!(list1.db.is_empty());
+    }
+
+    #[test]
+    fn test_intermediate() {
+        let mut list = RawList::<Sha256>::new_with_default(vec![0]);
+        list.set(NonZeroUsize::new(2).unwrap(), Value::End(vec![0]));
+        assert_eq!(list.get(NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![0]));
+
+        let empty1 = list.get(NonZeroUsize::new(1).unwrap()).unwrap();
+        list.set(NonZeroUsize::new(2).unwrap(), empty1.clone());
+        list.set(NonZeroUsize::new(3).unwrap(), empty1.clone());
+        for i in 4..8 {
+            assert_eq!(list.get(NonZeroUsize::new(i).unwrap()).unwrap(), Value::End(vec![0]));
+        }
+        assert_eq!(list.db.len(), 2);
+
+        list.set(NonZeroUsize::new(1).unwrap(), empty1.clone());
+        assert_eq!(list.get(NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![0]));
+        assert_eq!(list.db.len(), 1);
     }
 }
