@@ -38,8 +38,9 @@ impl<D: Digest> Clone for Value<D> {
     }
 }
 
+#[derive(Debug)]
 pub struct RawList<D: Digest> {
-    db: HashMap<GenericArray<u8, D::OutputSize>, (Value<D>, Value<D>)>,
+    db: HashMap<GenericArray<u8, D::OutputSize>, ((Value<D>, Value<D>), usize)>,
     default_value: Vec<u8>,
     root: Value<D>,
 }
@@ -57,6 +58,38 @@ fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
 }
 
 impl<D: Digest> RawList<D> {
+    fn remove_one(&mut self, intermediate: &GenericArray<u8, D::OutputSize>, remove_child: bool) -> Option<(Value<D>, Value<D>)> {
+        let (to_remove, value) = self.db.get_mut(intermediate)
+            .map(|value| {
+                value.1 -= 1;
+                (value.1 == 0, Some(value.0.clone()))
+            })
+            .unwrap_or((false, None));
+        if to_remove {
+            self.db.remove(intermediate);
+
+            if remove_child {
+                value.as_ref().map(|(left, right)| {
+                    match left {
+                        Value::Intermediate(ref intermediate) => { self.remove_one(intermediate, true); },
+                        Value::End(_) => (),
+                    }
+                    match right {
+                        Value::Intermediate(ref intermediate) => { self.remove_one(intermediate, true); },
+                        Value::End(_) => (),
+                    }
+                });
+            }
+        }
+        value
+    }
+
+    fn insert_one(&mut self, intermediate: GenericArray<u8, D::OutputSize>, value: (Value<D>, Value<D>)) {
+        self.db.entry(intermediate)
+            .and_modify(|value| value.1 += 1)
+            .or_insert((value, 1));
+    }
+
     pub fn new_with_default(default_value: Vec<u8>) -> Self {
         Self {
             root: Value::End(default_value.clone()),
@@ -90,9 +123,9 @@ impl<D: Digest> RawList<D> {
                 let value = match self.db.get(&current) {
                     Some(pair) => {
                         if sel == 0 {
-                            pair.0.clone()
+                            (pair.0).0.clone()
                         } else {
-                            pair.1.clone()
+                            (pair.0).1.clone()
                         }
                     },
                     None => return None,
@@ -120,27 +153,41 @@ impl<D: Digest> RawList<D> {
             let mut values = Vec::new();
             let mut depth = 1;
             let mut current = match self.root.clone() {
-                Value::Intermediate(intermediate) => Some(intermediate),
+                Value::Intermediate(intermediate) => {
+                    Some(intermediate)
+                },
                 Value::End(_) => {
-                    if selection_at(index, depth).is_none() {
-                        self.root = Value::End(set);
-                        return
-                    } else {
-                        values.push((0, (Value::End(self.default_value.clone()), Value::End(self.default_value.clone()))));
-                        depth += 1;
-                        None
-                    }
+                    let sel = match selection_at(index, depth) {
+                        Some(sel) => sel,
+                        None => {
+                            match self.root.clone() {
+                                Value::Intermediate(intermediate) => {
+                                    self.remove_one(&intermediate, true);
+                                },
+                                Value::End(_) => (),
+                            }
+
+                            self.root = Value::End(set);
+                            return
+                        },
+                    };
+                    values.push((sel, (Value::End(self.default_value.clone()), Value::End(self.default_value.clone()))));
+                    depth += 1;
+                    None
                 },
             };
 
             loop {
                 let sel = match selection_at(index, depth) {
                     Some(sel) => sel,
-                    None => break,
+                    None => {
+                        current.map(|cur| self.remove_one(&cur, true));
+                        break
+                    },
                 };
                 match current.clone() {
                     Some(cur) => {
-                        let value = match self.db.get(&cur) {
+                        let value = match self.remove_one(&cur, false) {
                             Some(value) => value.clone(),
                             None => (Value::End(self.default_value.clone()), Value::End(self.default_value.clone())),
                         };
@@ -185,7 +232,7 @@ impl<D: Digest> RawList<D> {
                 digest.input(&value.1.as_ref()[..]);
                 digest.result()
             };
-            self.db.insert(intermediate.clone(), value);
+            self.insert_one(intermediate.clone(), value);
             update = Value::Intermediate(intermediate);
         }
 
@@ -200,14 +247,24 @@ mod tests {
 
     #[test]
     fn test_set() {
-        let mut list = RawList::<Sha256>::new();
+        let mut list1 = RawList::<Sha256>::new();
+        let mut list2 = RawList::<Sha256>::new();
 
-        for i in 1..16 {
-            list.set_end(NonZeroUsize::new(i).unwrap(), vec![i as u8]);
+        for i in 32..64 {
+            list1.set_end(NonZeroUsize::new(i).unwrap(), vec![i as u8]);
         }
-        for i in 8..16 {
-            let val = list.get(NonZeroUsize::new(i).unwrap()).unwrap();
-            assert_eq!(val, Value::End(vec![i as u8]));
+        for i in (32..64).rev() {
+            list2.set_end(NonZeroUsize::new(i).unwrap(), vec![i as u8]);
         }
+        assert_eq!(list1.db, list2.db);
+        for i in 32..64 {
+            let val1 = list1.get(NonZeroUsize::new(i).unwrap()).unwrap();
+            let val2 = list2.get(NonZeroUsize::new(i).unwrap()).unwrap();
+            assert_eq!(val1, Value::End(vec![i as u8]));
+            assert_eq!(val2, Value::End(vec![i as u8]));
+        }
+
+        list1.set_end(NonZeroUsize::new(1).unwrap(), vec![1]);
+        assert!(list1.db.is_empty());
     }
 }
