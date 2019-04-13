@@ -1,0 +1,15 @@
+[package]
+name = "merklist"
+version = "0.1.0"
+description = "Generalized merkle index that allows efficiently merkling lists."
+authors = ["Wei Tang <hi@that.world>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+digest = "0.8"
+typenum = "1.10"
+generic-array = "0.12"
+
+[dev-dependencies]
+sha2 = "0.8"
