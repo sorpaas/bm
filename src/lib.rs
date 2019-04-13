@@ -4,17 +4,44 @@ use generic_array::GenericArray;
 use std::collections::HashMap;
 use core::num::NonZeroUsize;
 
+#[derive(Eq, Debug)]
 pub enum Value<D: Digest> {
     Intermediate(GenericArray<u8, D::OutputSize>),
     End(Vec<u8>),
 }
 
+impl<D: Digest> AsRef<[u8]> for Value<D> {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Value::Intermediate(ref intermediate) => intermediate.as_ref(),
+            Value::End(ref end) => end.as_ref(),
+        }
+    }
+}
+
+impl<D: Digest> PartialEq for Value<D> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Intermediate(s1), Value::Intermediate(s2)) => s1 == s2,
+            (Value::End(s1), Value::End(s2)) => s1 == s2,
+            _ => false,
+        }
+    }
+}
+
+impl<D: Digest> Clone for Value<D> {
+    fn clone(&self) -> Self {
+        match self {
+            Value::Intermediate(intermediate) => Value::Intermediate(intermediate.clone()),
+            Value::End(end) => Value::End(end.clone()),
+        }
+    }
+}
+
 pub struct RawList<D: Digest> {
-    db: HashMap<GenericArray<u8, D::OutputSize>, (GenericArray<u8, D::OutputSize>, GenericArray<u8, D::OutputSize>)>,
-    default_value: GenericArray<u8, D::OutputSize>,
-    last_default_root: GenericArray<u8, D::OutputSize>,
-    root: GenericArray<u8, D::OutputSize>,
-    depth: u32,
+    db: HashMap<GenericArray<u8, D::OutputSize>, (Value<D>, Value<D>)>,
+    default_value: Vec<u8>,
+    root: Value<D>,
 }
 
 fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
@@ -30,23 +57,11 @@ fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
 }
 
 impl<D: Digest> RawList<D> {
-    pub fn new_with_default(default_value: GenericArray<u8, D::OutputSize>) -> Self {
-        let root = {
-            let mut digest = D::new();
-            digest.input(&default_value[..]);
-            digest.input(&default_value[..]);
-            digest.result()
-        };
-
-        let mut db = HashMap::new();
-        db.insert(root.clone(), (default_value.clone(), default_value.clone()));
-
+    pub fn new_with_default(default_value: Vec<u8>) -> Self {
         Self {
-            depth: 1,
-            last_default_root: default_value.clone(),
+            root: Value::End(default_value.clone()),
+            db: Default::default(),
             default_value,
-            db,
-            root,
         }
     }
 
@@ -54,94 +69,105 @@ impl<D: Digest> RawList<D> {
         Self::new_with_default(Default::default())
     }
 
-    pub fn extend(&mut self) {
-        let new_last_default_root = {
-            let mut digest = D::new();
-            digest.input(&self.last_default_root[..]);
-            digest.input(&self.last_default_root[..]);
-            digest.result()
+    pub fn get(&self, index: NonZeroUsize) -> Option<Value<D>> {
+        let mut current = match self.root.clone() {
+            Value::Intermediate(intermediate) => intermediate,
+            Value::End(value) => {
+                if index.get() == 1 {
+                    return Some(Value::End(value))
+                } else {
+                    return None
+                }
+            },
         };
-        self.db.insert(new_last_default_root.clone(), (self.last_default_root.clone(), self.last_default_root.clone()));
-
-        let new_root = {
-            let mut digest = D::new();
-            digest.input(&self.root[..]);
-            digest.input(&new_last_default_root[..]);
-            digest.result()
-        };
-        self.db.insert(new_root.clone(), (self.root.clone(), new_last_default_root.clone()));
-
-        self.last_default_root = new_last_default_root;
-        self.root = new_root;
-        self.depth += 1;
-    }
-
-    pub fn shrink(&mut self) {
-        if self.depth < 2 {
-            return
-        }
-
-        let new_last_default_root = self.db.get(&self.last_default_root)
-            .expect("Last default root must exist; qed").0.clone();
-        let new_root = self.db.get(&self.root)
-            .expect("Root must exist; qed").0.clone();
-
-        self.depth -= 1;
-        self.root = new_root;
-        self.last_default_root = new_last_default_root;
-    }
-
-    pub fn depth(&self) -> u32 {
-        self.depth
-    }
-
-    pub fn get(&self, index: NonZeroUsize) -> Option<GenericArray<u8, D::OutputSize>> {
-        let mut current = self.root.clone();
         let mut depth = 1;
         loop {
             let sel = match selection_at(index, depth) {
                 Some(sel) => sel,
                 None => break,
             };
-            current = match self.db.get(&current) {
-                Some(value) => {
-                    if sel == 0 {
-                        value.0.clone()
+            current = {
+                let value = match self.db.get(&current) {
+                    Some(pair) => {
+                        if sel == 0 {
+                            pair.0.clone()
+                        } else {
+                            pair.1.clone()
+                        }
+                    },
+                    None => return None,
+                };
+
+                match value {
+                    Value::Intermediate(intermediate) => intermediate,
+                    Value::End(value) => {
+                        if selection_at(index, depth + 1).is_none() {
+                            return Some(Value::End(value))
+                        } else {
+                            return None
+                        }
+                    },
+                }
+            };
+            depth += 1;
+        }
+
+        Some(Value::Intermediate(current))
+    }
+
+    pub fn set_end(&mut self, index: NonZeroUsize, set: Vec<u8>) {
+        let mut values = {
+            let mut values = Vec::new();
+            let mut depth = 1;
+            let mut current = match self.root.clone() {
+                Value::Intermediate(intermediate) => Some(intermediate),
+                Value::End(_) => {
+                    if selection_at(index, depth).is_none() {
+                        self.root = Value::End(set);
+                        return
                     } else {
-                        value.1.clone()
+                        values.push((0, (Value::End(self.default_value.clone()), Value::End(self.default_value.clone()))));
+                        depth += 1;
+                        None
                     }
                 },
-                None => return None,
             };
-            depth += 1;
-        }
 
-        Some(current)
-    }
+            loop {
+                let sel = match selection_at(index, depth) {
+                    Some(sel) => sel,
+                    None => break,
+                };
+                match current.clone() {
+                    Some(cur) => {
+                        let value = match self.db.get(&cur) {
+                            Some(value) => value.clone(),
+                            None => (Value::End(self.default_value.clone()), Value::End(self.default_value.clone())),
+                        };
+                        values.push((sel, value.clone()));
+                        current = if sel == 0 {
+                            match value.0 {
+                                Value::Intermediate(intermediate) => Some(intermediate),
+                                Value::End(_) => None,
+                            }
+                        } else {
+                            match value.1 {
+                                Value::Intermediate(intermediate) => Some(intermediate),
+                                Value::End(_) => None,
+                            }
+                        };
+                    },
+                    None => {
+                        values.push((sel, (Value::End(self.default_value.clone()), Value::End(self.default_value.clone()))));
+                    },
+                }
+                depth += 1;
+            }
 
-    pub fn set(&mut self, index: NonZeroUsize, set: GenericArray<u8, D::OutputSize>) {
-        let mut current = self.root.clone();
-        let mut depth = 1;
-        let mut values = Vec::new();
-        loop {
-            let sel = match selection_at(index, depth) {
-                Some(sel) => sel,
-                None => break,
-            };
-            let value = match self.db.get(&current) {
-                Some(value) => value.clone(),
-                None => (self.default_value.clone(), self.default_value.clone()),
-            };
-            values.push((sel, value.clone()));
-            current = if sel == 0 {
-                value.0.clone()
-            } else {
-                value.1.clone()
-            };
-            depth += 1;
-        }
+            values
+        };
 
-        let mut update = set;
+        let mut update = Value::End(set);
         loop {
             let (sel, mut value) = match values.pop() {
                 Some(v) => v,
@@ -153,13 +179,14 @@ impl<D: Digest> RawList<D> {
             } else {
                 value.1 = update;
             }
-            update = {
+            let intermediate = {
                 let mut digest = D::new();
-                digest.input(&value.0[..]);
-                digest.input(&value.1[..]);
+                digest.input(&value.0.as_ref()[..]);
+                digest.input(&value.1.as_ref()[..]);
                 digest.result()
             };
-            self.db.insert(update.clone(), value);
+            self.db.insert(intermediate.clone(), value);
+            update = Value::Intermediate(intermediate);
         }
 
         self.root = update;
@@ -172,35 +199,15 @@ mod tests {
     use sha2::Sha256;
 
     #[test]
-    fn test_extend_and_get() {
+    fn test_set() {
         let mut list = RawList::<Sha256>::new();
-        list.extend();
-        assert_eq!(list.depth(), 2);
 
-        for i in 4..8 {
-            assert_eq!(list.get(NonZeroUsize::new(i).unwrap()), Some(Default::default()));
+        for i in 1..16 {
+            list.set_end(NonZeroUsize::new(i).unwrap(), vec![i as u8]);
         }
-    }
-
-    #[test]
-    fn test_set_and_shrink() {
-        let mut list = RawList::<Sha256>::new();
-        list.extend();
-        assert_eq!(list.depth(), 2);
-        for i in 4..8 {
-            let mut arr = [0u8; 32];
-            arr[0] = i as u8;
-            list.set(NonZeroUsize::new(i).unwrap(), arr.into());
-        }
-        for i in 4..8 {
+        for i in 8..16 {
             let val = list.get(NonZeroUsize::new(i).unwrap()).unwrap();
-            assert_eq!(val[0], i as u8);
-        }
-        list.shrink();
-        assert_eq!(list.depth(), 1);
-        for i in 2..3 {
-            let val = list.get(NonZeroUsize::new(i).unwrap()).unwrap();
-            assert_eq!(val[0], (i + 2) as u8);
+            assert_eq!(val, Value::End(vec![i as u8]));
         }
     }
 }
