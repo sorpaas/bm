@@ -38,7 +38,7 @@ impl<D: Digest> Clone for Value<D> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RawList<D: Digest> {
     db: HashMap<GenericArray<u8, D::OutputSize>, ((Value<D>, Value<D>), usize)>,
     default_value: Vec<u8>,
@@ -293,8 +293,13 @@ mod tests {
         }
         assert_eq!(list.db.len(), 2);
 
+        let mut list1 = list.clone();
         list.set(NonZeroUsize::new(1).unwrap(), empty1.clone());
         assert_eq!(list.get(NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![0]));
         assert_eq!(list.db.len(), 1);
+
+        list1.set(NonZeroUsize::new(1).unwrap(), Value::End(vec![0]));
+        assert_eq!(list1.get(NonZeroUsize::new(1).unwrap()).unwrap(), Value::End(vec![0]));
+        assert!(list1.db.is_empty());
     }
 }
