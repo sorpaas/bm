@@ -1,3 +1,5 @@
+mod traits;
+
 use digest::Digest;
 use generic_array::GenericArray;
 
