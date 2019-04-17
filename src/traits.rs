@@ -3,30 +3,52 @@ use generic_array::GenericArray;
 
 use std::collections::HashMap;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Value<I, E> {
     Intermediate(I),
     End(E),
+}
+
+impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Value::Intermediate(ref intermediate) => intermediate.as_ref(),
+            Value::End(ref end) => end.as_ref(),
+        }
+    }
 }
 
 pub type IntermediateOf<DB> = GenericArray<u8, <<DB as RawListDB>::Digest as Digest>::OutputSize>;
 pub type EndOf<DB> = <DB as RawListDB>::Value;
 pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
 
-pub trait RawListDB {
+pub trait RawListDB: Default {
     type Digest: Digest;
-    type Value;
+    type Value: AsRef<[u8]> + Clone;
 
     fn get(&self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
     fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>));
     fn remove(&mut self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
 }
 
-pub struct InMemoryRawListDB<D: Digest, T: Clone>(
+#[derive(Clone)]
+pub struct InMemoryRawListDB<D: Digest, T: AsRef<[u8]> + Clone>(
     HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>
 );
 
-impl<D: Digest, T: Clone> RawListDB for InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone> Default for InMemoryRawListDB<D, T> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl<D: Digest, T: AsRef<[u8]> + Clone> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>> for InMemoryRawListDB<D, T> {
+    fn as_ref(&self) -> &HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)> {
+        &self.0
+    }
+}
+
+impl<D: Digest, T: AsRef<[u8]> + Clone> RawListDB for InMemoryRawListDB<D, T> {
     type Digest = D;
     type Value = T;
 
