@@ -1,8 +1,7 @@
-use crate::traits::{RawListDB, Value, IntermediateOf, EndOf, ValueOf};
-
+use core::num::NonZeroUsize;
 use digest::Digest;
 
-use core::num::NonZeroUsize;
+use crate::traits::{RawListDB, Value, IntermediateOf, EndOf, ValueOf};
 
 fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
     let mut index = index.get();
@@ -21,6 +20,14 @@ pub struct RawList<DB: RawListDB> {
     db: DB,
     default_value: EndOf<DB>,
     root: ValueOf<DB>,
+}
+
+impl<DB: RawListDB> Default for RawList<DB> where
+    EndOf<DB>: Default
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<DB: RawListDB> RawList<DB> {
@@ -60,6 +67,10 @@ impl<DB: RawListDB> RawList<DB> {
         EndOf<DB>: Default
     {
         Self::new_with_default(Default::default())
+    }
+
+    pub fn root(&self) -> ValueOf<DB> {
+        self.root.clone()
     }
 
     pub fn get(&self, index: NonZeroUsize) -> Option<ValueOf<DB>> {

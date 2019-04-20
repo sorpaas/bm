@@ -9,6 +9,22 @@ pub enum Value<I, E> {
     End(E),
 }
 
+impl<I, E> Value<I, E> {
+    pub fn intermediate(self) -> Option<I> {
+        match self {
+            Value::Intermediate(intermediate) => Some(intermediate),
+            Value::End(_) => None,
+        }
+    }
+
+    pub fn end(self) -> Option<E> {
+        match self {
+            Value::Intermediate(_) => None,
+            Value::End(end) => Some(end),
+        }
+    }
+}
+
 impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
     fn as_ref(&self) -> &[u8] {
         match self {
