@@ -49,7 +49,27 @@ impl<DB: RawListDB> RawList<DB> {
         value
     }
 
-    fn insert_one(&mut self, db: &mut DB, intermediate: IntermediateOf<DB>, value: (ValueOf<DB>, ValueOf<DB>)) {
+    fn insert_one(&mut self, db: &mut DB, intermediate: IntermediateOf<DB>, value: (ValueOf<DB>, ValueOf<DB>), insert_child: bool) {
+        if insert_child {
+            let (left, right) = value.clone();
+
+            match left {
+                Value::Intermediate(subkey) => {
+                    let subvalue = db.get(&subkey).expect("Key must exist");
+                    self.insert_one(db, subkey, subvalue, true);
+                },
+                Value::End(_) => (),
+            }
+
+            match right {
+                Value::Intermediate(subkey) => {
+                    let subvalue = db.get(&subkey).expect("Key must exist");
+                    self.insert_one(db, subkey, subvalue, true);
+                },
+                Value::End(_) => (),
+            }
+        }
+
         db.insert(intermediate, value);
     }
 
@@ -71,7 +91,7 @@ impl<DB: RawListDB> RawList<DB> {
         self.root.clone()
     }
 
-    pub fn get(&self, db: &mut DB, index: NonZeroUsize) -> Option<ValueOf<DB>> {
+    pub fn get(&self, db: &DB, index: NonZeroUsize) -> Option<ValueOf<DB>> {
         let mut current = match self.root.clone() {
             Value::Intermediate(intermediate) => intermediate,
             Value::End(value) => {
@@ -124,7 +144,7 @@ impl<DB: RawListDB> RawList<DB> {
                     Some(value) => value.clone(),
                     None => panic!("Intermediate value to set does not exist"),
                 };
-                self.insert_one(db, intermediate.clone(), value);
+                self.insert_one(db, intermediate.clone(), value, true);
             },
             Value::End(_) => ()
         }
@@ -212,7 +232,7 @@ impl<DB: RawListDB> RawList<DB> {
                 digest.input(&value.1.as_ref()[..]);
                 digest.result()
             };
-            self.insert_one(db, intermediate.clone(), value);
+            self.insert_one(db, intermediate.clone(), value, false);
             update = Value::Intermediate(intermediate);
         }
 
