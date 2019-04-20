@@ -45,11 +45,13 @@ pub trait RawListDB: Default {
     fn get(&self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
     fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>));
     fn remove(&mut self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
+    fn mark_permanent(&mut self, key: &IntermediateOf<Self>);
+    fn is_permanent(&self, key: &IntermediateOf<Self>) -> bool;
 }
 
 #[derive(Clone)]
 pub struct InMemoryRawListDB<D: Digest, T: AsRef<[u8]> + Clone>(
-    HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>
+    HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>
 );
 
 impl<D: Digest, T: AsRef<[u8]> + Clone> Default for InMemoryRawListDB<D, T> {
@@ -58,8 +60,8 @@ impl<D: Digest, T: AsRef<[u8]> + Clone> Default for InMemoryRawListDB<D, T> {
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>> for InMemoryRawListDB<D, T> {
-    fn as_ref(&self) -> &HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)> {
+impl<D: Digest, T: AsRef<[u8]> + Clone> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>> for InMemoryRawListDB<D, T> {
+    fn as_ref(&self) -> &HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)> {
         &self.0
     }
 }
@@ -74,15 +76,15 @@ impl<D: Digest, T: AsRef<[u8]> + Clone> RawListDB for InMemoryRawListDB<D, T> {
 
     fn insert(&mut self, key: GenericArray<u8, D::OutputSize>, value: (ValueOf<Self>, ValueOf<Self>)) {
         self.0.entry(key)
-            .and_modify(|value| value.1 += 1)
-            .or_insert((value, 1));
+            .and_modify(|value| { value.1.as_mut().map(|v| *v += 1); })
+            .or_insert((value, Some(1)));
     }
 
     fn remove(&mut self, key: &GenericArray<u8, D::OutputSize>) -> Option<(ValueOf<Self>, ValueOf<Self>)> {
         let (to_remove, value) = self.0.get_mut(key)
             .map(|value| {
-                value.1 -= 1;
-                (value.1 == 0, Some(value.0.clone()))
+                value.1.as_mut().map(|v| *v -= 1);
+                (value.1 == Some(0), Some(value.0.clone()))
             })
             .unwrap_or((false, None));
 
@@ -91,5 +93,15 @@ impl<D: Digest, T: AsRef<[u8]> + Clone> RawListDB for InMemoryRawListDB<D, T> {
         }
 
         value
+    }
+
+    fn mark_permanent(&mut self, key: &GenericArray<u8, D::OutputSize>) {
+        if let Some(value) = self.0.get_mut(key) {
+            value.1 = None;
+        }
+    }
+
+    fn is_permanent(&self, key: &GenericArray<u8, D::OutputSize>) -> bool {
+        self.0.get(key).map(|value| value.1.is_none()).unwrap_or(false)
     }
 }

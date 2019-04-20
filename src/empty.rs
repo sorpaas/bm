@@ -16,6 +16,7 @@ impl<DB: RawListDB> MerkleEmpty<DB> {
         let root = self.raw.root();
         self.raw.set(db, LEFT_INDEX, root.clone());
         self.raw.set(db, RIGHT_INDEX, root);
+        self.raw.snapshot(db);
     }
 
     pub fn shrink(&mut self, db: &mut DB) {
@@ -53,7 +54,7 @@ mod tests {
         let mut empty = MerkleEmpty::<InMemory>::new();
 
         let mut values = Vec::new();
-        for _ in 0..8 {
+        for _ in 0..32 {
             values.push(empty.root());
             empty.extend(&mut db);
         }

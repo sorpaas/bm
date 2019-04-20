@@ -30,17 +30,21 @@ impl<DB: RawListDB> Default for RawList<DB> where
 }
 
 impl<DB: RawListDB> RawList<DB> {
-    fn remove_one(&mut self, db: &mut DB, intermediate: &IntermediateOf<DB>, remove_child: bool) -> Option<(ValueOf<DB>, ValueOf<DB>)> {
-        let value = db.remove(intermediate);
+    fn remove_one(&mut self, db: &mut DB, key: &IntermediateOf<DB>, remove_child: bool) -> Option<(ValueOf<DB>, ValueOf<DB>)> {
+        if db.is_permanent(key) {
+            return db.get(key)
+        }
+
+        let value = db.remove(key);
 
         if remove_child {
             value.as_ref().map(|(left, right)| {
                 match left {
-                    Value::Intermediate(ref intermediate) => { self.remove_one(db, intermediate, true); },
+                    Value::Intermediate(ref subkey) => { self.remove_one(db, subkey, true); },
                     Value::End(_) => (),
                 }
                 match right {
-                    Value::Intermediate(ref intermediate) => { self.remove_one(db, intermediate, true); },
+                    Value::Intermediate(ref subkey) => { self.remove_one(db, subkey, true); },
                     Value::End(_) => (),
                 }
             });
@@ -49,7 +53,11 @@ impl<DB: RawListDB> RawList<DB> {
         value
     }
 
-    fn insert_one(&mut self, db: &mut DB, intermediate: IntermediateOf<DB>, value: (ValueOf<DB>, ValueOf<DB>), insert_child: bool) {
+    fn insert_one(&mut self, db: &mut DB, key: IntermediateOf<DB>, value: (ValueOf<DB>, ValueOf<DB>), insert_child: bool) {
+        if db.is_permanent(&key) {
+            return
+        }
+
         if insert_child {
             let (left, right) = value.clone();
 
@@ -70,9 +78,30 @@ impl<DB: RawListDB> RawList<DB> {
             }
         }
 
-        db.insert(intermediate, value);
+        db.insert(key, value);
     }
 
+    fn mark_permanent(&mut self, db: &mut DB, key: &IntermediateOf<DB>) {
+        if db.is_permanent(key) {
+            return
+        }
+
+        let value = db.get(key);
+
+        if let Some((left, right)) = value {
+            match left {
+                Value::Intermediate(subkey) => self.mark_permanent(db, &subkey),
+                Value::End(_) => (),
+            }
+
+            match right {
+                Value::Intermediate(subkey) => self.mark_permanent(db, &subkey),
+                Value::End(_) => (),
+            }
+        }
+
+        db.mark_permanent(key);
+    }
 
     pub fn new_with_default(default_value: EndOf<DB>) -> Self {
         Self {
@@ -89,6 +118,13 @@ impl<DB: RawListDB> RawList<DB> {
 
     pub fn root(&self) -> ValueOf<DB> {
         self.root.clone()
+    }
+
+    pub fn snapshot(&mut self, db: &mut DB) {
+        match self.root() {
+            Value::Intermediate(key) => self.mark_permanent(db, &key),
+            Value::End(_) => (),
+        }
     }
 
     pub fn get(&self, db: &DB, index: NonZeroUsize) -> Option<ValueOf<DB>> {
