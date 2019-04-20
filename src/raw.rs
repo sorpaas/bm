@@ -17,7 +17,6 @@ fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
 
 #[derive(Clone)]
 pub struct RawList<DB: RawListDB> {
-    db: DB,
     default_value: EndOf<DB>,
     root: ValueOf<DB>,
 }
@@ -31,17 +30,17 @@ impl<DB: RawListDB> Default for RawList<DB> where
 }
 
 impl<DB: RawListDB> RawList<DB> {
-    fn remove_one(&mut self, intermediate: &IntermediateOf<DB>, remove_child: bool) -> Option<(ValueOf<DB>, ValueOf<DB>)> {
-        let value = self.db.remove(intermediate);
+    fn remove_one(&mut self, db: &mut DB, intermediate: &IntermediateOf<DB>, remove_child: bool) -> Option<(ValueOf<DB>, ValueOf<DB>)> {
+        let value = db.remove(intermediate);
 
         if remove_child {
             value.as_ref().map(|(left, right)| {
                 match left {
-                    Value::Intermediate(ref intermediate) => { self.remove_one(intermediate, true); },
+                    Value::Intermediate(ref intermediate) => { self.remove_one(db, intermediate, true); },
                     Value::End(_) => (),
                 }
                 match right {
-                    Value::Intermediate(ref intermediate) => { self.remove_one(intermediate, true); },
+                    Value::Intermediate(ref intermediate) => { self.remove_one(db, intermediate, true); },
                     Value::End(_) => (),
                 }
             });
@@ -50,15 +49,14 @@ impl<DB: RawListDB> RawList<DB> {
         value
     }
 
-    fn insert_one(&mut self, intermediate: IntermediateOf<DB>, value: (ValueOf<DB>, ValueOf<DB>)) {
-        self.db.insert(intermediate, value);
+    fn insert_one(&mut self, db: &mut DB, intermediate: IntermediateOf<DB>, value: (ValueOf<DB>, ValueOf<DB>)) {
+        db.insert(intermediate, value);
     }
 
 
     pub fn new_with_default(default_value: EndOf<DB>) -> Self {
         Self {
             root: Value::End(default_value.clone()),
-            db: Default::default(),
             default_value,
         }
     }
@@ -73,7 +71,7 @@ impl<DB: RawListDB> RawList<DB> {
         self.root.clone()
     }
 
-    pub fn get(&self, index: NonZeroUsize) -> Option<ValueOf<DB>> {
+    pub fn get(&self, db: &mut DB, index: NonZeroUsize) -> Option<ValueOf<DB>> {
         let mut current = match self.root.clone() {
             Value::Intermediate(intermediate) => intermediate,
             Value::End(value) => {
@@ -91,7 +89,7 @@ impl<DB: RawListDB> RawList<DB> {
                 None => break,
             };
             current = {
-                let value = match self.db.get(&current) {
+                let value = match db.get(&current) {
                     Some(pair) => {
                         if sel == 0 {
                             pair.0.clone()
@@ -119,14 +117,14 @@ impl<DB: RawListDB> RawList<DB> {
         Some(Value::Intermediate(current))
     }
 
-    pub fn set(&mut self, index: NonZeroUsize, set: ValueOf<DB>) {
+    pub fn set(&mut self, db: &mut DB, index: NonZeroUsize, set: ValueOf<DB>) {
         match &set {
             Value::Intermediate(ref intermediate) => {
-                let value = match self.db.get(intermediate) {
+                let value = match db.get(intermediate) {
                     Some(value) => value.clone(),
                     None => panic!("Intermediate value to set does not exist"),
                 };
-                self.insert_one(intermediate.clone(), value);
+                self.insert_one(db, intermediate.clone(), value);
             },
             Value::End(_) => ()
         }
@@ -144,7 +142,7 @@ impl<DB: RawListDB> RawList<DB> {
                         None => {
                             match self.root.clone() {
                                 Value::Intermediate(intermediate) => {
-                                    self.remove_one(&intermediate, true);
+                                    self.remove_one(db, &intermediate, true);
                                 },
                                 Value::End(_) => (),
                             }
@@ -163,13 +161,13 @@ impl<DB: RawListDB> RawList<DB> {
                 let sel = match selection_at(index, depth) {
                     Some(sel) => sel,
                     None => {
-                        current.map(|cur| self.remove_one(&cur, true));
+                        current.map(|cur| self.remove_one(db, &cur, true));
                         break
                     },
                 };
                 match current.clone() {
                     Some(cur) => {
-                        let value = match self.remove_one(&cur, false) {
+                        let value = match self.remove_one(db, &cur, false) {
                             Some(value) => value.clone(),
                             None => (Value::End(self.default_value.clone()), Value::End(self.default_value.clone())),
                         };
@@ -214,7 +212,7 @@ impl<DB: RawListDB> RawList<DB> {
                 digest.input(&value.1.as_ref()[..]);
                 digest.result()
             };
-            self.insert_one(intermediate.clone(), value);
+            self.insert_one(db, intermediate.clone(), value);
             update = Value::Intermediate(intermediate);
         }
 
@@ -231,48 +229,52 @@ mod tests {
 
     #[test]
     fn test_set() {
+        let mut db1 = InMemory::default();
+        let mut db2 = InMemory::default();
         let mut list1 = RawList::<InMemory>::new();
         let mut list2 = RawList::<InMemory>::new();
 
         for i in 32..64 {
-            list1.set(NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
+            list1.set(&mut db1, NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
         }
         for i in (32..64).rev() {
-            list2.set(NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
+            list2.set(&mut db2, NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
         }
-        assert_eq!(list1.db.as_ref(), list2.db.as_ref());
+        assert_eq!(db1.as_ref(), db2.as_ref());
         for i in 32..64 {
-            let val1 = list1.get(NonZeroUsize::new(i).unwrap()).unwrap();
-            let val2 = list2.get(NonZeroUsize::new(i).unwrap()).unwrap();
+            let val1 = list1.get(&mut db1, NonZeroUsize::new(i).unwrap()).unwrap();
+            let val2 = list2.get(&mut db2, NonZeroUsize::new(i).unwrap()).unwrap();
             assert_eq!(val1, Value::End(vec![i as u8]));
             assert_eq!(val2, Value::End(vec![i as u8]));
         }
 
-        list1.set(NonZeroUsize::new(1).unwrap(), Value::End(vec![1]));
-        assert!(list1.db.as_ref().is_empty());
+        list1.set(&mut db1, NonZeroUsize::new(1).unwrap(), Value::End(vec![1]));
+        assert!(db1.as_ref().is_empty());
     }
 
     #[test]
     fn test_intermediate() {
+        let mut db = InMemory::default();
         let mut list = RawList::<InMemory>::new_with_default(vec![0]);
-        list.set(NonZeroUsize::new(2).unwrap(), Value::End(vec![0]));
-        assert_eq!(list.get(NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![0]));
+        list.set(&mut db, NonZeroUsize::new(2).unwrap(), Value::End(vec![0]));
+        assert_eq!(list.get(&mut db, NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![0]));
 
-        let empty1 = list.get(NonZeroUsize::new(1).unwrap()).unwrap();
-        list.set(NonZeroUsize::new(2).unwrap(), empty1.clone());
-        list.set(NonZeroUsize::new(3).unwrap(), empty1.clone());
+        let empty1 = list.get(&mut db, NonZeroUsize::new(1).unwrap()).unwrap();
+        list.set(&mut db, NonZeroUsize::new(2).unwrap(), empty1.clone());
+        list.set(&mut db, NonZeroUsize::new(3).unwrap(), empty1.clone());
         for i in 4..8 {
-            assert_eq!(list.get(NonZeroUsize::new(i).unwrap()).unwrap(), Value::End(vec![0]));
+            assert_eq!(list.get(&mut db, NonZeroUsize::new(i).unwrap()).unwrap(), Value::End(vec![0]));
         }
-        assert_eq!(list.db.as_ref().len(), 2);
+        assert_eq!(db.as_ref().len(), 2);
 
+        let mut db1 = db.clone();
         let mut list1 = list.clone();
-        list.set(NonZeroUsize::new(1).unwrap(), empty1.clone());
-        assert_eq!(list.get(NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![0]));
-        assert_eq!(list.db.as_ref().len(), 1);
+        list.set(&mut db, NonZeroUsize::new(1).unwrap(), empty1.clone());
+        assert_eq!(list.get(&mut db, NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![0]));
+        assert_eq!(db.as_ref().len(), 1);
 
-        list1.set(NonZeroUsize::new(1).unwrap(), Value::End(vec![0]));
-        assert_eq!(list1.get(NonZeroUsize::new(1).unwrap()).unwrap(), Value::End(vec![0]));
-        assert!(list1.db.as_ref().is_empty());
+        list1.set(&mut db1, NonZeroUsize::new(1).unwrap(), Value::End(vec![0]));
+        assert_eq!(list1.get(&mut db1, NonZeroUsize::new(1).unwrap()).unwrap(), Value::End(vec![0]));
+        assert!(db1.as_ref().is_empty());
     }
 }
