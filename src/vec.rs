@@ -1,6 +1,6 @@
 use core::num::NonZeroUsize;
 
-use crate::traits::{RawListDB, EndOf, Value};
+use crate::traits::{RawListDB, EndOf, Value, ValueOf};
 use crate::empty::MerkleEmpty;
 use crate::raw::RawList;
 
@@ -58,6 +58,10 @@ impl<DB: RawListDB> MerkleVec<DB> where
             }
             ret
         }
+    }
+
+    pub fn root(&self) -> ValueOf<DB> {
+        self.raw.root()
     }
 
     pub fn push(&mut self, db: &mut DB, value: EndOf<DB>) {
