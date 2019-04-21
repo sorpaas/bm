@@ -284,6 +284,15 @@ mod tests {
     type InMemory = crate::traits::InMemoryRawListDB<Sha256, Vec<u8>>;
 
     #[test]
+    fn test_set_skip() {
+        let mut db = InMemory::default();
+        let mut list = RawList::<InMemory>::new();
+
+        list.set(&mut db, NonZeroUsize::new(4).unwrap(), Value::End(vec![2]));
+        assert_eq!(list.get(&db, NonZeroUsize::new(4).unwrap()), Some(Value::End(vec![2])));
+    }
+
+    #[test]
     fn test_set() {
         let mut db1 = InMemory::default();
         let mut db2 = InMemory::default();
