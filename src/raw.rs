@@ -1,7 +1,7 @@
 use core::num::NonZeroUsize;
 use digest::Digest;
 
-use crate::traits::{RawListDB, Value, IntermediateOf, EndOf, ValueOf, ReplaceValue};
+use crate::traits::{RawListDB, Value, EndOf, ValueOf};
 
 fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
     let mut index = index.get();
@@ -94,21 +94,13 @@ impl<DB: RawListDB> RawList<DB> {
     }
 
     pub fn set(&mut self, db: &mut DB, index: NonZeroUsize, set: ValueOf<DB>) {
-        let old = match self.get(db, index) {
-            None | Some(Value::End(_)) => ReplaceValue::EndOrNone,
-            Some(Value::Intermediate(key)) => {
-                let value = db.get(&key).expect("Local database is invalid");
-                ReplaceValue::Intermediate((key, value))
-            },
-        };
-        let new = match set.clone() {
-            Value::End(_) => ReplaceValue::EndOrNone,
+        match set.clone() {
+            Value::End(_) => (),
             Value::Intermediate(key) => {
                 let value = db.get(&key).expect("Intermediate to set does not exist");
-                ReplaceValue::Intermediate((key, value))
+                db.insert(key, value);
             },
         };
-        db.replace(old, new);
 
         let mut values = {
             let mut values = Vec::new();
@@ -121,6 +113,10 @@ impl<DB: RawListDB> RawList<DB> {
                     let sel = match selection_at(index, depth) {
                         Some(sel) => sel,
                         None => {
+                            match &set {
+                                Value::End(_) => (),
+                                Value::Intermediate(key) => { db.rootify(key); }
+                            }
                             self.root = set;
                             return
                         },
@@ -166,17 +162,6 @@ impl<DB: RawListDB> RawList<DB> {
                 None => break,
             };
 
-            let old_value = match values.last() {
-                Some((sel, ref v)) => {
-                    if *sel == 0 {
-                        v.0.clone()
-                    } else {
-                        v.1.clone()
-                    }
-                },
-                None => self.root.clone(),
-            };
-
             if sel == 0 {
                 value.0 = update.clone();
             } else {
@@ -190,17 +175,17 @@ impl<DB: RawListDB> RawList<DB> {
                 digest.result()
             };
 
-            let old = match old_value {
-                Value::End(_) => ReplaceValue::EndOrNone,
-                Value::Intermediate(key) => {
-                    let value = db.get(&key).expect("Intermediate to set does not exist");
-                    ReplaceValue::Intermediate((key, value))
-                },
-            };
-            let new = ReplaceValue::Intermediate((intermediate.clone(), value));
-            db.replace(old, new);
-
+            db.insert(intermediate.clone(), value);
             update = Value::Intermediate(intermediate);
+        }
+
+        match &update {
+            Value::Intermediate(ref key) => { db.rootify(key); }
+            Value::End(_) => (),
+        }
+        match &self.root {
+            Value::Intermediate(ref key) => { db.unrootify(key); }
+            Value::End(_) => (),
         }
 
         self.root = update;
@@ -215,6 +200,19 @@ mod tests {
     type InMemory = crate::traits::InMemoryRawListDB<Sha256, Vec<u8>>;
 
     #[test]
+    fn test_set_empty() {
+        let mut db = InMemory::default();
+        let mut list = RawList::<InMemory>::new();
+
+        let mut last_root = list.root();
+        for _ in 0..3 {
+            list.set(&mut db, NonZeroUsize::new(2).unwrap(), last_root.clone());
+            list.set(&mut db, NonZeroUsize::new(3).unwrap(), last_root.clone());
+            last_root = list.root();
+        }
+    }
+
+    #[test]
     fn test_set_skip() {
         let mut db = InMemory::default();
         let mut list = RawList::<InMemory>::new();
@@ -226,7 +224,17 @@ mod tests {
     }
 
     #[test]
-    fn test_set() {
+    fn test_set_basic() {
+        let mut db = InMemory::default();
+        let mut list = RawList::<InMemory>::new();
+
+        for i in 4..8 {
+            list.set(&mut db, NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
+        }
+    }
+
+    #[test]
+    fn test_set_only() {
         let mut db1 = InMemory::default();
         let mut db2 = InMemory::default();
         let mut list1 = RawList::<InMemory>::new();

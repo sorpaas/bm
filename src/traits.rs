@@ -37,40 +37,59 @@ impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
 pub type IntermediateOf<DB> = GenericArray<u8, <<DB as RawListDB>::Digest as Digest>::OutputSize>;
 pub type EndOf<DB> = <DB as RawListDB>::Value;
 pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
-pub type ReplaceValueOf<DB> = ReplaceValue<IntermediateOf<DB>, EndOf<DB>>;
 
 pub trait RawListDB: Default {
     type Digest: Digest;
     type Value: AsRef<[u8]> + Clone;
 
     fn get(&self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
-    fn replace(&mut self, old: ReplaceValueOf<Self>, new: ReplaceValueOf<Self>);
+    fn rootify(&mut self, key: &IntermediateOf<Self>);
+    fn unrootify(&mut self, key: &IntermediateOf<Self>);
+    fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>));
 }
 
 #[derive(Clone)]
-pub struct InMemoryRawListDB<D: Digest, T: AsRef<[u8]> + Clone>(
-    HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>
+pub struct InMemoryRawListDB<D: Digest, T: AsRef<[u8]> + core::fmt::Debug + Clone>(
+    HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>
 );
 
-impl<D: Digest, T: AsRef<[u8]> + Clone> Default for InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + core::fmt::Debug + Clone> InMemoryRawListDB<D, T> {
+    fn remove(&mut self, old_key: &IntermediateOf<Self>) {
+        let (old_value, to_remove) = {
+            let value = self.0.get_mut(old_key).expect("Set key does not exist");
+            value.1 -= 1;
+            (value.0.clone(), value.1 == 0)
+        };
+
+        if to_remove {
+            match old_value.0 {
+                Value::Intermediate(subkey) => { self.remove(&subkey); },
+                Value::End(_) => (),
+            }
+
+            match old_value.1 {
+                Value::Intermediate(subkey) => { self.remove(&subkey); },
+                Value::End(_) => (),
+            }
+
+            self.0.remove(old_key);
+        }
+    }
+}
+
+impl<D: Digest, T: AsRef<[u8]> + core::fmt::Debug + Clone> Default for InMemoryRawListDB<D, T> {
     fn default() -> Self {
         Self(Default::default())
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>> for InMemoryRawListDB<D, T> {
-    fn as_ref(&self) -> &HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)> {
+impl<D: Digest, T: AsRef<[u8]> + core::fmt::Debug + Clone> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>> for InMemoryRawListDB<D, T> {
+    fn as_ref(&self) -> &HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)> {
         &self.0
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub enum ReplaceValue<I, E> {
-    EndOrNone,
-    Intermediate((I, (Value<I, E>, Value<I, E>))),
-}
-
-impl<D: Digest, T: AsRef<[u8]> + Clone> RawListDB for InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + core::fmt::Debug + Clone> RawListDB for InMemoryRawListDB<D, T> {
     type Digest = D;
     type Value = T;
 
@@ -78,28 +97,34 @@ impl<D: Digest, T: AsRef<[u8]> + Clone> RawListDB for InMemoryRawListDB<D, T> {
         self.0.get(key).map(|v| v.0.clone())
     }
 
-    fn replace(&mut self, old: ReplaceValueOf<Self>, new: ReplaceValueOf<Self>) {
-        print!("old: ");
-        match old.clone() {
-            ReplaceValue::EndOrNone => { print!("EndOrNone  "); },
-            ReplaceValue::Intermediate((key, value)) => {
-                print!("{:?} => ({:?}, {:?})  ", key.as_ref(), value.0.as_ref(), value.1.as_ref());
-            },
-        }
-        print!("new: ");
-        match new.clone() {
-            ReplaceValue::EndOrNone => { print!("EndOrNone  "); },
-            ReplaceValue::Intermediate((key, value)) => {
-                print!("{:?} => ({:?}, {:?})  ", key.as_ref(), value.0.as_ref(), value.1.as_ref());
-            },
-        }
-        println!("");
+    fn rootify(&mut self, key: &IntermediateOf<Self>) {
+        self.0.get_mut(key).expect("Trying to rootify a non-existing key").1 += 1;
+    }
 
-        match new {
-            ReplaceValue::Intermediate((key, value)) => {
-                self.0.entry(key).or_insert((value, Some(1)));
-            },
-            _ => (),
+    fn unrootify(&mut self, key: &IntermediateOf<Self>) {
+        self.remove(key);
+    }
+
+    fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>)) {
+        if self.0.contains_key(&key) {
+            return
         }
+
+        let (left, right) = value;
+
+        match &left {
+            Value::Intermediate(ref subkey) => {
+                self.0.get_mut(subkey).expect("Set subkey does not exist").1 += 1;
+            },
+            Value::End(_) => (),
+        }
+        match &right {
+            Value::Intermediate(ref subkey) => {
+                self.0.get_mut(subkey).expect("Set subkey does not exist").1 += 1;
+            },
+            Value::End(_) => (),
+        }
+
+        self.0.insert(key, ((left, right), 0));
     }
 }

@@ -17,7 +17,6 @@ impl<DB: RawListDB> MerkleEmpty<DB> {
         let root = self.raw.root();
         self.raw.set(db, LEFT_INDEX, root.clone());
         self.raw.set(db, RIGHT_INDEX, root);
-        self.raw.snapshot(db);
     }
 
     pub fn shrink(&mut self, db: &mut DB) {
@@ -66,5 +65,6 @@ mod tests {
             empty.shrink(&mut db);
             assert_eq!(root, empty.root());
         }
+        assert!(db.as_ref().is_empty());
     }
 }
