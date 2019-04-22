@@ -9,6 +9,7 @@ const LEN_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(3) };
 const ITEM_ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
 const ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 
+/// Binary merkle vector.
 pub struct MerkleVec<DB: MerkleDB> {
     raw: MerkleRaw<DB>,
     empty: MerkleEmpty<DB>,
@@ -59,10 +60,12 @@ impl<DB: MerkleDB> MerkleVec<DB> where
         }
     }
 
+    /// Root of the current merkle vector.
     pub fn root(&self) -> ValueOf<DB> {
         self.raw.root()
     }
 
+    /// Push a new value to the vector.
     pub fn push(&mut self, db: &mut DB, value: EndOf<DB>) {
         let old_len = self.len(db);
         if old_len == self.max_len(db) {
@@ -76,6 +79,7 @@ impl<DB: MerkleDB> MerkleVec<DB> where
         self.raw.set(db, raw_index, Value::End(value));
     }
 
+    /// Pop a value from the vector.
     pub fn pop(&mut self, db: &mut DB) -> Option<EndOf<DB>> {
         let old_len = self.len(db);
         if old_len == 0 {
@@ -94,6 +98,7 @@ impl<DB: MerkleDB> MerkleVec<DB> where
         value
     }
 
+    /// Length of the vector.
     pub fn len(&self, db: &mut DB) -> usize {
         self.raw.get(db, LEN_INDEX)
             .expect("Valid merkle vec must exist in item index 3.")
@@ -102,6 +107,7 @@ impl<DB: MerkleDB> MerkleVec<DB> where
             .into()
     }
 
+    /// Create a new vector.
     pub fn create(db: &mut DB) -> Self {
         let empty = MerkleEmpty::new();
         let raw = MerkleRaw::new();
@@ -110,15 +116,18 @@ impl<DB: MerkleDB> MerkleVec<DB> where
         ret
     }
 
+    /// Drop the current vector.
     pub fn drop(self, db: &mut DB) {
         self.raw.drop(db);
         self.empty.drop(db);
     }
 
+    /// Leak the current vector.
     pub fn leak(self) -> (ValueOf<DB>, ValueOf<DB>) {
         (self.raw.leak(), self.empty.leak())
     }
 
+    /// Initialize from a previously leaked one.
     pub fn from_leaked(raw_root: ValueOf<DB>, empty_root: ValueOf<DB>) -> Self {
         Self {
             raw: MerkleRaw::from_leaked(raw_root),

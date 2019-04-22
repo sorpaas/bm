@@ -1,3 +1,7 @@
+#![warn(missing_docs)]
+
+//! Binary merkle tree implementation.
+
 mod traits;
 mod raw;
 mod vec;

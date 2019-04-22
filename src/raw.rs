@@ -15,7 +15,7 @@ fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
     Some(index % 2)
 }
 
-#[derive(Clone)]
+/// Raw merkle tree.
 pub struct MerkleRaw<DB: MerkleDB> {
     root: ValueOf<DB>,
 }
@@ -27,30 +27,36 @@ impl<DB: MerkleDB> Default for MerkleRaw<DB> {
 }
 
 impl<DB: MerkleDB> MerkleRaw<DB> {
+    /// Create a new raw tree.
     pub fn new() -> Self {
         Self {
             root: Value::End(Default::default()),
         }
     }
 
+    /// Return the root of the tree.
     pub fn root(&self) -> ValueOf<DB> {
         self.root.clone()
     }
 
+    /// Drop the current tree.
     pub fn drop(self, db: &mut DB) {
         self.root().intermediate().map(|key| {
             db.unrootify(&key);
         });
     }
 
+    /// Leak this tree and return the root.
     pub fn leak(self) -> ValueOf<DB> {
         self.root()
     }
 
+    /// Create from leaked value.
     pub fn from_leaked(root: ValueOf<DB>) -> Self {
         Self { root }
     }
 
+    /// Get value from the tree via generalized merkle index.
     pub fn get(&self, db: &DB, index: NonZeroUsize) -> Option<ValueOf<DB>> {
         let mut current = match self.root.clone() {
             Value::Intermediate(intermediate) => intermediate,
@@ -97,6 +103,7 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
         Some(Value::Intermediate(current))
     }
 
+    /// Set value of the merkle tree via generalized merkle index.
     pub fn set(&mut self, db: &mut DB, index: NonZeroUsize, set: ValueOf<DB>) {
         match set.clone() {
             Value::End(_) => (),
@@ -278,7 +285,7 @@ mod tests {
         assert_eq!(db.as_ref().len(), 2);
 
         let mut db1 = db.clone();
-        let mut list1 = list.clone();
+        let mut list1 = MerkleRaw::<InMemory>::from_leaked(list.root());
         list.set(&mut db, NonZeroUsize::new(1).unwrap(), empty1.clone());
         assert_eq!(list.get(&mut db, NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![]));
         assert_eq!(db.as_ref().len(), 1);

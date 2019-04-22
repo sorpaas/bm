@@ -3,13 +3,17 @@ use generic_array::GenericArray;
 
 use std::collections::HashMap;
 
+/// Value in a merkle tree.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Value<I, E> {
+    /// Intermediate, which is hash of two sub-items.
     Intermediate(I),
+    /// End value of the tree.
     End(E),
 }
 
 impl<I, E> Value<I, E> {
+    /// Return `Some` if this value is an intermediate, otherwise return `None`.
     pub fn intermediate(self) -> Option<I> {
         match self {
             Value::Intermediate(intermediate) => Some(intermediate),
@@ -17,6 +21,7 @@ impl<I, E> Value<I, E> {
         }
     }
 
+    /// Return `Some` if this value is an end value, otherwise return `None`.
     pub fn end(self) -> Option<E> {
         match self {
             Value::Intermediate(_) => None,
@@ -34,21 +39,32 @@ impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
     }
 }
 
+/// Intermediate value of a database.
 pub type IntermediateOf<DB> = GenericArray<u8, <<DB as MerkleDB>::Digest as Digest>::OutputSize>;
+/// End value of a database.
 pub type EndOf<DB> = <DB as MerkleDB>::Value;
+/// Value of a database.
 pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
 
+/// Traits for a merkle database.
 pub trait MerkleDB: Default {
+    /// Hash function for merkle tree.
     type Digest: Digest;
+    /// End value stored in this merkle database.
     type Value: AsRef<[u8]> + Clone + Default;
 
+    /// Get an internal item by key.
     fn get(&self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
+    /// Rootify a key.
     fn rootify(&mut self, key: &IntermediateOf<Self>);
+    /// Unrootify a key.
     fn unrootify(&mut self, key: &IntermediateOf<Self>);
+    /// Insert a new internal item.
     fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>));
 }
 
 #[derive(Clone)]
+/// In-memory merkle database.
 pub struct InMemoryMerkleDB<D: Digest, T: AsRef<[u8]> + Clone + Default>(
     HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>
 );
