@@ -34,11 +34,11 @@ impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
     }
 }
 
-pub type IntermediateOf<DB> = GenericArray<u8, <<DB as RawListDB>::Digest as Digest>::OutputSize>;
-pub type EndOf<DB> = <DB as RawListDB>::Value;
+pub type IntermediateOf<DB> = GenericArray<u8, <<DB as MerkleDB>::Digest as Digest>::OutputSize>;
+pub type EndOf<DB> = <DB as MerkleDB>::Value;
 pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
 
-pub trait RawListDB: Default {
+pub trait MerkleDB: Default {
     type Digest: Digest;
     type Value: AsRef<[u8]> + Clone + Default;
 
@@ -49,11 +49,11 @@ pub trait RawListDB: Default {
 }
 
 #[derive(Clone)]
-pub struct InMemoryRawListDB<D: Digest, T: AsRef<[u8]> + Clone + Default>(
+pub struct InMemoryMerkleDB<D: Digest, T: AsRef<[u8]> + Clone + Default>(
     HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>
 );
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryMerkleDB<D, T> {
     fn remove(&mut self, old_key: &IntermediateOf<Self>) {
         let (old_value, to_remove) = {
             let value = self.0.get_mut(old_key).expect("Set key does not exist");
@@ -77,19 +77,19 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryRawListDB<D, T> {
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Default for InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Default for InMemoryMerkleDB<D, T> {
     fn default() -> Self {
         Self(Default::default())
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>> for InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>> for InMemoryMerkleDB<D, T> {
     fn as_ref(&self) -> &HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)> {
         &self.0
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> RawListDB for InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<D, T> {
     type Digest = D;
     type Value = T;
 

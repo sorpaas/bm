@@ -1,7 +1,7 @@
 use core::num::NonZeroUsize;
 use digest::Digest;
 
-use crate::traits::{RawListDB, Value, ValueOf};
+use crate::traits::{MerkleDB, Value, ValueOf};
 
 fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
     let mut index = index.get();
@@ -16,17 +16,17 @@ fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
 }
 
 #[derive(Clone)]
-pub struct RawList<DB: RawListDB> {
+pub struct MerkleRaw<DB: MerkleDB> {
     root: ValueOf<DB>,
 }
 
-impl<DB: RawListDB> Default for RawList<DB> {
+impl<DB: MerkleDB> Default for MerkleRaw<DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<DB: RawListDB> RawList<DB> {
+impl<DB: MerkleDB> MerkleRaw<DB> {
     pub fn new() -> Self {
         Self {
             root: Value::End(Default::default()),
@@ -35,6 +35,20 @@ impl<DB: RawListDB> RawList<DB> {
 
     pub fn root(&self) -> ValueOf<DB> {
         self.root.clone()
+    }
+
+    pub fn drop(self, db: &mut DB) {
+        self.root().intermediate().map(|key| {
+            db.unrootify(&key);
+        });
+    }
+
+    pub fn leak(self) -> ValueOf<DB> {
+        self.root()
+    }
+
+    pub fn from_leaked(root: ValueOf<DB>) -> Self {
+        Self { root }
     }
 
     pub fn get(&self, db: &DB, index: NonZeroUsize) -> Option<ValueOf<DB>> {
@@ -187,12 +201,12 @@ mod tests {
     use super::*;
     use sha2::Sha256;
 
-    type InMemory = crate::traits::InMemoryRawListDB<Sha256, Vec<u8>>;
+    type InMemory = crate::traits::InMemoryMerkleDB<Sha256, Vec<u8>>;
 
     #[test]
     fn test_set_empty() {
         let mut db = InMemory::default();
-        let mut list = RawList::<InMemory>::new();
+        let mut list = MerkleRaw::<InMemory>::new();
 
         let mut last_root = list.root();
         for _ in 0..3 {
@@ -205,7 +219,7 @@ mod tests {
     #[test]
     fn test_set_skip() {
         let mut db = InMemory::default();
-        let mut list = RawList::<InMemory>::new();
+        let mut list = MerkleRaw::<InMemory>::new();
 
         list.set(&mut db, NonZeroUsize::new(4).unwrap(), Value::End(vec![2]));
         assert_eq!(list.get(&db, NonZeroUsize::new(4).unwrap()), Some(Value::End(vec![2])));
@@ -216,7 +230,7 @@ mod tests {
     #[test]
     fn test_set_basic() {
         let mut db = InMemory::default();
-        let mut list = RawList::<InMemory>::new();
+        let mut list = MerkleRaw::<InMemory>::new();
 
         for i in 4..8 {
             list.set(&mut db, NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
@@ -227,8 +241,8 @@ mod tests {
     fn test_set_only() {
         let mut db1 = InMemory::default();
         let mut db2 = InMemory::default();
-        let mut list1 = RawList::<InMemory>::new();
-        let mut list2 = RawList::<InMemory>::new();
+        let mut list1 = MerkleRaw::<InMemory>::new();
+        let mut list2 = MerkleRaw::<InMemory>::new();
 
         for i in 32..64 {
             list1.set(&mut db1, NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
@@ -251,7 +265,7 @@ mod tests {
     #[test]
     fn test_intermediate() {
         let mut db = InMemory::default();
-        let mut list = RawList::<InMemory>::new();
+        let mut list = MerkleRaw::<InMemory>::new();
         list.set(&mut db, NonZeroUsize::new(2).unwrap(), Value::End(vec![]));
         assert_eq!(list.get(&mut db, NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![]));
 

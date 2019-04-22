@@ -1,20 +1,20 @@
 use core::num::NonZeroUsize;
 
-use crate::traits::{RawListDB, EndOf, Value, ValueOf};
+use crate::traits::{MerkleDB, EndOf, Value, ValueOf};
 use crate::empty::MerkleEmpty;
-use crate::raw::RawList;
+use crate::raw::MerkleRaw;
 
 const EXTEND_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(4) };
 const LEN_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(3) };
 const ITEM_ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
 const ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 
-pub struct MerkleVec<DB: RawListDB> {
-    raw: RawList<DB>,
+pub struct MerkleVec<DB: MerkleDB> {
+    raw: MerkleRaw<DB>,
     empty: MerkleEmpty<DB>,
 }
 
-impl<DB: RawListDB> MerkleVec<DB> where
+impl<DB: MerkleDB> MerkleVec<DB> where
     EndOf<DB>: From<usize> + Into<usize>,
 {
     fn set_len(&mut self, db: &mut DB, len: usize) {
@@ -25,7 +25,7 @@ impl<DB: RawListDB> MerkleVec<DB> where
         self.empty.extend(db);
         let len_raw = self.raw.get(db, LEN_INDEX).expect("Len must exist");
         let item_root_raw = self.raw.get(db, ITEM_ROOT_INDEX).expect("Item root must exist");
-        let mut new_raw = RawList::new();
+        let mut new_raw = MerkleRaw::new();
         new_raw.set(db, ITEM_ROOT_INDEX, self.empty.root());
         new_raw.set(db, LEN_INDEX, len_raw);
         new_raw.set(db, EXTEND_INDEX, item_root_raw);
@@ -104,10 +104,26 @@ impl<DB: RawListDB> MerkleVec<DB> where
 
     pub fn create(db: &mut DB) -> Self {
         let empty = MerkleEmpty::new();
-        let raw = RawList::new();
+        let raw = MerkleRaw::new();
         let mut ret = Self { raw, empty };
         ret.set_len(db, 0);
         ret
+    }
+
+    pub fn drop(self, db: &mut DB) {
+        self.raw.drop(db);
+        self.empty.drop(db);
+    }
+
+    pub fn leak(self) -> (ValueOf<DB>, ValueOf<DB>) {
+        (self.raw.leak(), self.empty.leak())
+    }
+
+    pub fn from_leaked(raw_root: ValueOf<DB>, empty_root: ValueOf<DB>) -> Self {
+        Self {
+            raw: MerkleRaw::from_leaked(raw_root),
+            empty: MerkleEmpty::from_leaked(empty_root),
+        }
     }
 }
 
@@ -116,7 +132,7 @@ mod tests {
     use super::*;
     use sha2::Sha256;
 
-    type InMemory = crate::traits::InMemoryRawListDB<Sha256, VecValue>;
+    type InMemory = crate::traits::InMemoryMerkleDB<Sha256, VecValue>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
     struct VecValue(Vec<u8>);

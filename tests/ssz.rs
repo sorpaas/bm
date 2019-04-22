@@ -1,4 +1,4 @@
-use bm::{RawList, Value, MerkleVec};
+use bm::{MerkleRaw, Value, MerkleVec};
 use sha2::Sha256;
 use digest::Digest;
 use core::num::NonZeroUsize;
@@ -56,7 +56,7 @@ impl Default for VecValue {
     }
 }
 
-type InMemory = bm::InMemoryRawListDB<Sha256, VecValue>;
+type InMemory = bm::InMemoryMerkleDB<Sha256, VecValue>;
 
 #[test]
 fn ssz_composite_fixed() {
@@ -64,7 +64,7 @@ fn ssz_composite_fixed() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();
-    let mut raw = RawList::<InMemory>::new();
+    let mut raw = MerkleRaw::<InMemory>::new();
 
     raw.set(&mut db, NonZeroUsize::new(4).unwrap(), Value::End(VecValue(ssz_value.0.hash::<Sha256Hasher>()[..].to_vec())));
     raw.set(&mut db, NonZeroUsize::new(5).unwrap(), Value::End(VecValue(ssz_value.1.hash::<Sha256Hasher>()[..].to_vec())));
