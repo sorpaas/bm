@@ -20,7 +20,7 @@ impl Hasher for Sha256Hasher {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 struct VecValue(Vec<u8>);
 
 impl AsRef<[u8]> for VecValue {
@@ -47,6 +47,15 @@ impl Into<usize> for VecValue {
     }
 }
 
+impl Default for VecValue {
+    fn default() -> Self {
+        VecValue(vec![0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0])
+    }
+}
+
 type InMemory = bm::InMemoryRawListDB<Sha256, VecValue>;
 
 #[test]
@@ -55,12 +64,7 @@ fn ssz_composite_fixed() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();
-    let mut raw = RawList::<InMemory>::new_with_default(
-        VecValue(vec![0, 0, 0, 0, 0, 0, 0, 0,
-                      0, 0, 0, 0, 0, 0, 0, 0,
-                      0, 0, 0, 0, 0, 0, 0, 0,
-                      0, 0, 0, 0, 0, 0, 0, 0])
-    );
+    let mut raw = RawList::<InMemory>::new();
 
     raw.set(&mut db, NonZeroUsize::new(4).unwrap(), Value::End(VecValue(ssz_value.0.hash::<Sha256Hasher>()[..].to_vec())));
     raw.set(&mut db, NonZeroUsize::new(5).unwrap(), Value::End(VecValue(ssz_value.1.hash::<Sha256Hasher>()[..].to_vec())));
@@ -75,13 +79,7 @@ fn ssz_composite_variable() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();
-    let mut vec = MerkleVec::<InMemory>::new_with_default(
-        &mut db,
-        VecValue(vec![0, 0, 0, 0, 0, 0, 0, 0,
-                      0, 0, 0, 0, 0, 0, 0, 0,
-                      0, 0, 0, 0, 0, 0, 0, 0,
-                      0, 0, 0, 0, 0, 0, 0, 0])
-    );
+    let mut vec = MerkleVec::<InMemory>::create(&mut db);
 
     for v in ssz_value {
         vec.push(&mut db, VecValue(v.hash::<Sha256Hasher>()[..].to_vec()));

@@ -40,7 +40,7 @@ pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
 
 pub trait RawListDB: Default {
     type Digest: Digest;
-    type Value: AsRef<[u8]> + Clone;
+    type Value: AsRef<[u8]> + Clone + Default;
 
     fn get(&self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
     fn rootify(&mut self, key: &IntermediateOf<Self>);
@@ -49,11 +49,11 @@ pub trait RawListDB: Default {
 }
 
 #[derive(Clone)]
-pub struct InMemoryRawListDB<D: Digest, T: AsRef<[u8]> + Clone>(
+pub struct InMemoryRawListDB<D: Digest, T: AsRef<[u8]> + Clone + Default>(
     HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>
 );
 
-impl<D: Digest, T: AsRef<[u8]> + Clone> InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryRawListDB<D, T> {
     fn remove(&mut self, old_key: &IntermediateOf<Self>) {
         let (old_value, to_remove) = {
             let value = self.0.get_mut(old_key).expect("Set key does not exist");
@@ -77,19 +77,19 @@ impl<D: Digest, T: AsRef<[u8]> + Clone> InMemoryRawListDB<D, T> {
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone> Default for InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Default for InMemoryRawListDB<D, T> {
     fn default() -> Self {
         Self(Default::default())
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>> for InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>> for InMemoryRawListDB<D, T> {
     fn as_ref(&self) -> &HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)> {
         &self.0
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone> RawListDB for InMemoryRawListDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> RawListDB for InMemoryRawListDB<D, T> {
     type Digest = D;
     type Value = T;
 

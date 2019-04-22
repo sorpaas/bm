@@ -1,6 +1,6 @@
 use core::num::NonZeroUsize;
 
-use crate::traits::{RawListDB, Value, EndOf, ValueOf};
+use crate::traits::{RawListDB, Value, ValueOf};
 use crate::raw::RawList;
 
 const ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
@@ -9,7 +9,6 @@ const RIGHT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(3) };
 
 pub struct MerkleEmpty<DB: RawListDB> {
     raw: RawList<DB>,
-    default_value: EndOf<DB>,
 }
 
 impl<DB: RawListDB> MerkleEmpty<DB> {
@@ -22,7 +21,7 @@ impl<DB: RawListDB> MerkleEmpty<DB> {
     pub fn shrink(&mut self, db: &mut DB) {
         match self.raw.get(db, LEFT_INDEX) {
             Some(left) => { self.raw.set(db, ROOT_INDEX, left); },
-            None => { self.raw.set(db, ROOT_INDEX, Value::End(self.default_value.clone())); }
+            None => { self.raw.set(db, ROOT_INDEX, Value::End(Default::default())); }
         }
     }
 
@@ -30,17 +29,10 @@ impl<DB: RawListDB> MerkleEmpty<DB> {
         self.raw.root()
     }
 
-    pub fn new_with_default(default_value: EndOf<DB>) -> Self {
+    pub fn new() -> Self {
         Self {
-            raw: RawList::new_with_default(default_value.clone()),
-            default_value,
+            raw: RawList::new(),
         }
-    }
-
-    pub fn new() -> Self where
-        EndOf<DB>: Default
-    {
-        Self::new_with_default(Default::default())
     }
 }
 

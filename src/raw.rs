@@ -1,7 +1,7 @@
 use core::num::NonZeroUsize;
 use digest::Digest;
 
-use crate::traits::{RawListDB, Value, EndOf, ValueOf};
+use crate::traits::{RawListDB, Value, ValueOf};
 
 fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
     let mut index = index.get();
@@ -17,30 +17,20 @@ fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
 
 #[derive(Clone)]
 pub struct RawList<DB: RawListDB> {
-    default_value: EndOf<DB>,
     root: ValueOf<DB>,
 }
 
-impl<DB: RawListDB> Default for RawList<DB> where
-    EndOf<DB>: Default
-{
+impl<DB: RawListDB> Default for RawList<DB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl<DB: RawListDB> RawList<DB> {
-    pub fn new_with_default(default_value: EndOf<DB>) -> Self {
+    pub fn new() -> Self {
         Self {
-            root: Value::End(default_value.clone()),
-            default_value,
+            root: Value::End(Default::default()),
         }
-    }
-
-    pub fn new() -> Self where
-        EndOf<DB>: Default
-    {
-        Self::new_with_default(Default::default())
     }
 
     pub fn root(&self) -> ValueOf<DB> {
@@ -121,7 +111,7 @@ impl<DB: RawListDB> RawList<DB> {
                             return
                         },
                     };
-                    values.push((sel, (Value::End(self.default_value.clone()), Value::End(self.default_value.clone()))));
+                    values.push((sel, (Value::End(Default::default()), Value::End(Default::default()))));
                     depth += 1;
                     None
                 },
@@ -136,7 +126,7 @@ impl<DB: RawListDB> RawList<DB> {
                     Some(cur) => {
                         let value = match db.get(&cur) {
                             Some(value) => value.clone(),
-                            None => (Value::End(self.default_value.clone()), Value::End(self.default_value.clone())),
+                            None => (Value::End(Default::default()), Value::End(Default::default())),
                         };
                         values.push((sel, value.clone()));
                         current = if sel == 0 {
@@ -146,7 +136,7 @@ impl<DB: RawListDB> RawList<DB> {
                         };
                     },
                     None => {
-                        values.push((sel, (Value::End(self.default_value.clone()), Value::End(self.default_value.clone()))));
+                        values.push((sel, (Value::End(Default::default()), Value::End(Default::default()))));
                     },
                 }
                 depth += 1;
@@ -261,22 +251,22 @@ mod tests {
     #[test]
     fn test_intermediate() {
         let mut db = InMemory::default();
-        let mut list = RawList::<InMemory>::new_with_default(vec![0]);
-        list.set(&mut db, NonZeroUsize::new(2).unwrap(), Value::End(vec![0]));
-        assert_eq!(list.get(&mut db, NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![0]));
+        let mut list = RawList::<InMemory>::new();
+        list.set(&mut db, NonZeroUsize::new(2).unwrap(), Value::End(vec![]));
+        assert_eq!(list.get(&mut db, NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![]));
 
         let empty1 = list.get(&mut db, NonZeroUsize::new(1).unwrap()).unwrap();
         list.set(&mut db, NonZeroUsize::new(2).unwrap(), empty1.clone());
         list.set(&mut db, NonZeroUsize::new(3).unwrap(), empty1.clone());
         for i in 4..8 {
-            assert_eq!(list.get(&mut db, NonZeroUsize::new(i).unwrap()).unwrap(), Value::End(vec![0]));
+            assert_eq!(list.get(&mut db, NonZeroUsize::new(i).unwrap()).unwrap(), Value::End(vec![]));
         }
         assert_eq!(db.as_ref().len(), 2);
 
         let mut db1 = db.clone();
         let mut list1 = list.clone();
         list.set(&mut db, NonZeroUsize::new(1).unwrap(), empty1.clone());
-        assert_eq!(list.get(&mut db, NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![0]));
+        assert_eq!(list.get(&mut db, NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![]));
         assert_eq!(db.as_ref().len(), 1);
 
         list1.set(&mut db1, NonZeroUsize::new(1).unwrap(), Value::End(vec![0]));

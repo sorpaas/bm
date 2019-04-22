@@ -12,7 +12,6 @@ const ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 pub struct MerkleVec<DB: RawListDB> {
     raw: RawList<DB>,
     empty: MerkleEmpty<DB>,
-    default_value: EndOf<DB>,
 }
 
 impl<DB: RawListDB> MerkleVec<DB> where
@@ -26,11 +25,11 @@ impl<DB: RawListDB> MerkleVec<DB> where
         self.empty.extend(db);
         let len_raw = self.raw.get(db, LEN_INDEX).expect("Len must exist");
         let item_root_raw = self.raw.get(db, ITEM_ROOT_INDEX).expect("Item root must exist");
-        let mut new_raw = RawList::new_with_default(self.default_value.clone());
+        let mut new_raw = RawList::new();
         new_raw.set(db, ITEM_ROOT_INDEX, self.empty.root());
         new_raw.set(db, LEN_INDEX, len_raw);
         new_raw.set(db, EXTEND_INDEX, item_root_raw);
-        self.raw.set(db, ROOT_INDEX, Value::End(self.default_value.clone()));
+        self.raw.set(db, ROOT_INDEX, Value::End(Default::default()));
         self.raw = new_raw;
     }
 
@@ -38,7 +37,7 @@ impl<DB: RawListDB> MerkleVec<DB> where
         self.empty.shrink(db);
         match self.raw.get(db, EXTEND_INDEX) {
             Some(extended_value) => { self.raw.set(db, ITEM_ROOT_INDEX, extended_value); },
-            None => { self.raw.set(db, ITEM_ROOT_INDEX, Value::End(self.default_value.clone())); },
+            None => { self.raw.set(db, ITEM_ROOT_INDEX, Value::End(Default::default())); },
         }
     }
 
@@ -103,18 +102,12 @@ impl<DB: RawListDB> MerkleVec<DB> where
             .into()
     }
 
-    pub fn new_with_default(db: &mut DB, default_value: EndOf<DB>) -> Self {
-        let empty = MerkleEmpty::new_with_default(default_value.clone());
-        let raw = RawList::new_with_default(default_value.clone());
-        let mut ret = Self { raw, default_value, empty };
+    pub fn create(db: &mut DB) -> Self {
+        let empty = MerkleEmpty::new();
+        let raw = RawList::new();
+        let mut ret = Self { raw, empty };
         ret.set_len(db, 0);
         ret
-    }
-
-    pub fn new(db: &mut DB) -> Self where
-        EndOf<DB>: Default
-    {
-        Self::new_with_default(db, Default::default())
     }
 }
 
@@ -151,7 +144,7 @@ mod tests {
     #[test]
     fn test_push_pop() {
         let mut db = InMemory::default();
-        let mut vec = MerkleVec::new(&mut db);
+        let mut vec = MerkleVec::create(&mut db);
 
         for i in 0..100 {
             assert_eq!(vec.len(&mut db), i);
