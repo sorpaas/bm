@@ -37,16 +37,14 @@ impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
 pub type IntermediateOf<DB> = GenericArray<u8, <<DB as RawListDB>::Digest as Digest>::OutputSize>;
 pub type EndOf<DB> = <DB as RawListDB>::Value;
 pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
+pub type ReplaceValueOf<DB> = ReplaceValue<IntermediateOf<DB>, EndOf<DB>>;
 
 pub trait RawListDB: Default {
     type Digest: Digest;
     type Value: AsRef<[u8]> + Clone;
 
     fn get(&self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
-    fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>));
-    fn remove(&mut self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
-    fn mark_permanent(&mut self, key: &IntermediateOf<Self>);
-    fn is_permanent(&self, key: &IntermediateOf<Self>) -> bool;
+    fn replace(&mut self, old: ReplaceValueOf<Self>, new: ReplaceValueOf<Self>);
 }
 
 #[derive(Clone)]
@@ -66,6 +64,12 @@ impl<D: Digest, T: AsRef<[u8]> + Clone> AsRef<HashMap<IntermediateOf<Self>, ((Va
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum ReplaceValue<I, E> {
+    EndOrNone,
+    Intermediate((I, (Value<I, E>, Value<I, E>))),
+}
+
 impl<D: Digest, T: AsRef<[u8]> + Clone> RawListDB for InMemoryRawListDB<D, T> {
     type Digest = D;
     type Value = T;
@@ -74,34 +78,28 @@ impl<D: Digest, T: AsRef<[u8]> + Clone> RawListDB for InMemoryRawListDB<D, T> {
         self.0.get(key).map(|v| v.0.clone())
     }
 
-    fn insert(&mut self, key: GenericArray<u8, D::OutputSize>, value: (ValueOf<Self>, ValueOf<Self>)) {
-        self.0.entry(key)
-            .and_modify(|value| { value.1.as_mut().map(|v| *v += 1); })
-            .or_insert((value, Some(1)));
-    }
-
-    fn remove(&mut self, key: &GenericArray<u8, D::OutputSize>) -> Option<(ValueOf<Self>, ValueOf<Self>)> {
-        let (to_remove, value) = self.0.get_mut(key)
-            .map(|value| {
-                value.1.as_mut().map(|v| *v -= 1);
-                (value.1 == Some(0), Some(value.0.clone()))
-            })
-            .unwrap_or((false, None));
-
-        if to_remove {
-            self.0.remove(key);
+    fn replace(&mut self, old: ReplaceValueOf<Self>, new: ReplaceValueOf<Self>) {
+        print!("old: ");
+        match old.clone() {
+            ReplaceValue::EndOrNone => { print!("EndOrNone  "); },
+            ReplaceValue::Intermediate((key, value)) => {
+                print!("{:?} => ({:?}, {:?})  ", key.as_ref(), value.0.as_ref(), value.1.as_ref());
+            },
         }
-
-        value
-    }
-
-    fn mark_permanent(&mut self, key: &GenericArray<u8, D::OutputSize>) {
-        if let Some(value) = self.0.get_mut(key) {
-            value.1 = None;
+        print!("new: ");
+        match new.clone() {
+            ReplaceValue::EndOrNone => { print!("EndOrNone  "); },
+            ReplaceValue::Intermediate((key, value)) => {
+                print!("{:?} => ({:?}, {:?})  ", key.as_ref(), value.0.as_ref(), value.1.as_ref());
+            },
         }
-    }
+        println!("");
 
-    fn is_permanent(&self, key: &GenericArray<u8, D::OutputSize>) -> bool {
-        self.0.get(key).map(|value| value.1.is_none()).unwrap_or(false)
+        match new {
+            ReplaceValue::Intermediate((key, value)) => {
+                self.0.entry(key).or_insert((value, Some(1)));
+            },
+            _ => (),
+        }
     }
 }

@@ -1,7 +1,7 @@
 use core::num::NonZeroUsize;
 use digest::Digest;
 
-use crate::traits::{RawListDB, Value, IntermediateOf, EndOf, ValueOf};
+use crate::traits::{RawListDB, Value, IntermediateOf, EndOf, ValueOf, ReplaceValue};
 
 fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
     let mut index = index.get();
@@ -30,79 +30,6 @@ impl<DB: RawListDB> Default for RawList<DB> where
 }
 
 impl<DB: RawListDB> RawList<DB> {
-    fn remove_one(&mut self, db: &mut DB, key: &IntermediateOf<DB>, remove_child: bool) -> Option<(ValueOf<DB>, ValueOf<DB>)> {
-        if db.is_permanent(key) {
-            return db.get(key)
-        }
-
-        let value = db.remove(key);
-
-        if remove_child {
-            value.as_ref().map(|(left, right)| {
-                match left {
-                    Value::Intermediate(ref subkey) => { self.remove_one(db, subkey, true); },
-                    Value::End(_) => (),
-                }
-                match right {
-                    Value::Intermediate(ref subkey) => { self.remove_one(db, subkey, true); },
-                    Value::End(_) => (),
-                }
-            });
-        }
-
-        value
-    }
-
-    fn insert_one(&mut self, db: &mut DB, key: IntermediateOf<DB>, value: (ValueOf<DB>, ValueOf<DB>), insert_child: bool) {
-        if db.is_permanent(&key) {
-            return
-        }
-
-        if insert_child {
-            let (left, right) = value.clone();
-
-            match left {
-                Value::Intermediate(subkey) => {
-                    let subvalue = db.get(&subkey).expect("Key must exist");
-                    self.insert_one(db, subkey, subvalue, true);
-                },
-                Value::End(_) => (),
-            }
-
-            match right {
-                Value::Intermediate(subkey) => {
-                    let subvalue = db.get(&subkey).expect("Key must exist");
-                    self.insert_one(db, subkey, subvalue, true);
-                },
-                Value::End(_) => (),
-            }
-        }
-
-        db.insert(key, value);
-    }
-
-    fn mark_permanent(&mut self, db: &mut DB, key: &IntermediateOf<DB>) {
-        if db.is_permanent(key) {
-            return
-        }
-
-        let value = db.get(key);
-
-        if let Some((left, right)) = value {
-            match left {
-                Value::Intermediate(subkey) => self.mark_permanent(db, &subkey),
-                Value::End(_) => (),
-            }
-
-            match right {
-                Value::Intermediate(subkey) => self.mark_permanent(db, &subkey),
-                Value::End(_) => (),
-            }
-        }
-
-        db.mark_permanent(key);
-    }
-
     pub fn new_with_default(default_value: EndOf<DB>) -> Self {
         Self {
             root: Value::End(default_value.clone()),
@@ -118,13 +45,6 @@ impl<DB: RawListDB> RawList<DB> {
 
     pub fn root(&self) -> ValueOf<DB> {
         self.root.clone()
-    }
-
-    pub fn snapshot(&mut self, db: &mut DB) {
-        match self.root() {
-            Value::Intermediate(key) => self.mark_permanent(db, &key),
-            Value::End(_) => (),
-        }
     }
 
     pub fn get(&self, db: &DB, index: NonZeroUsize) -> Option<ValueOf<DB>> {
@@ -174,16 +94,21 @@ impl<DB: RawListDB> RawList<DB> {
     }
 
     pub fn set(&mut self, db: &mut DB, index: NonZeroUsize, set: ValueOf<DB>) {
-        match &set {
-            Value::Intermediate(ref intermediate) => {
-                let value = match db.get(intermediate) {
-                    Some(value) => value.clone(),
-                    None => panic!("Intermediate value to set does not exist"),
-                };
-                self.insert_one(db, intermediate.clone(), value, true);
+        let old = match self.get(db, index) {
+            None | Some(Value::End(_)) => ReplaceValue::EndOrNone,
+            Some(Value::Intermediate(key)) => {
+                let value = db.get(&key).expect("Local database is invalid");
+                ReplaceValue::Intermediate((key, value))
             },
-            Value::End(_) => ()
-        }
+        };
+        let new = match set.clone() {
+            Value::End(_) => ReplaceValue::EndOrNone,
+            Value::Intermediate(key) => {
+                let value = db.get(&key).expect("Intermediate to set does not exist");
+                ReplaceValue::Intermediate((key, value))
+            },
+        };
+        db.replace(old, new);
 
         let mut values = {
             let mut values = Vec::new();
@@ -196,13 +121,6 @@ impl<DB: RawListDB> RawList<DB> {
                     let sel = match selection_at(index, depth) {
                         Some(sel) => sel,
                         None => {
-                            match self.root.clone() {
-                                Value::Intermediate(intermediate) => {
-                                    self.remove_one(db, &intermediate, true);
-                                },
-                                Value::End(_) => (),
-                            }
-
                             self.root = set;
                             return
                         },
@@ -216,28 +134,19 @@ impl<DB: RawListDB> RawList<DB> {
             loop {
                 let sel = match selection_at(index, depth) {
                     Some(sel) => sel,
-                    None => {
-                        current.map(|cur| self.remove_one(db, &cur, true));
-                        break
-                    },
+                    None => break,
                 };
                 match current.clone() {
                     Some(cur) => {
-                        let value = match self.remove_one(db, &cur, false) {
+                        let value = match db.get(&cur) {
                             Some(value) => value.clone(),
                             None => (Value::End(self.default_value.clone()), Value::End(self.default_value.clone())),
                         };
                         values.push((sel, value.clone()));
                         current = if sel == 0 {
-                            match value.0 {
-                                Value::Intermediate(intermediate) => Some(intermediate),
-                                Value::End(_) => None,
-                            }
+                            value.0.intermediate()
                         } else {
-                            match value.1 {
-                                Value::Intermediate(intermediate) => Some(intermediate),
-                                Value::End(_) => None,
-                            }
+                            value.1.intermediate()
                         };
                     },
                     None => {
@@ -257,18 +166,40 @@ impl<DB: RawListDB> RawList<DB> {
                 None => break,
             };
 
+            let old_value = match values.last() {
+                Some((sel, ref v)) => {
+                    if *sel == 0 {
+                        v.0.clone()
+                    } else {
+                        v.1.clone()
+                    }
+                },
+                None => self.root.clone(),
+            };
+
             if sel == 0 {
-                value.0 = update;
+                value.0 = update.clone();
             } else {
-                value.1 = update;
+                value.1 = update.clone();
             }
+
             let intermediate = {
                 let mut digest = <DB::Digest as Digest>::new();
                 digest.input(&value.0.as_ref()[..]);
                 digest.input(&value.1.as_ref()[..]);
                 digest.result()
             };
-            self.insert_one(db, intermediate.clone(), value, false);
+
+            let old = match old_value {
+                Value::End(_) => ReplaceValue::EndOrNone,
+                Value::Intermediate(key) => {
+                    let value = db.get(&key).expect("Intermediate to set does not exist");
+                    ReplaceValue::Intermediate((key, value))
+                },
+            };
+            let new = ReplaceValue::Intermediate((intermediate.clone(), value));
+            db.replace(old, new);
+
             update = Value::Intermediate(intermediate);
         }
 
@@ -290,6 +221,8 @@ mod tests {
 
         list.set(&mut db, NonZeroUsize::new(4).unwrap(), Value::End(vec![2]));
         assert_eq!(list.get(&db, NonZeroUsize::new(4).unwrap()), Some(Value::End(vec![2])));
+        list.set(&mut db, NonZeroUsize::new(4).unwrap(), Value::End(vec![3]));
+        assert_eq!(list.get(&db, NonZeroUsize::new(4).unwrap()), Some(Value::End(vec![3])));
     }
 
     #[test]
