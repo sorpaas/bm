@@ -1,4 +1,4 @@
-use merklist::{RawList, Value, MerkleVec};
+use bm::{RawList, Value, MerkleVec};
 use sha2::Sha256;
 use digest::Digest;
 use core::num::NonZeroUsize;
@@ -47,7 +47,7 @@ impl Into<usize> for VecValue {
     }
 }
 
-type InMemory = merklist::InMemoryRawListDB<Sha256, VecValue>;
+type InMemory = bm::InMemoryRawListDB<Sha256, VecValue>;
 
 #[test]
 fn ssz_composite_fixed() {
