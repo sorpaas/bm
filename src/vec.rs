@@ -6,7 +6,6 @@ use crate::raw::MerkleRaw;
 
 const LEN_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(3) };
 const ITEM_ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
-const ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 
 /// Binary merkle vector.
 pub struct MerkleVec<DB: MerkleDB> {
@@ -20,14 +19,6 @@ impl<DB: MerkleDB> MerkleVec<DB> where
     fn update_metadata(&mut self, db: &mut DB) {
         self.raw.set(db, ITEM_ROOT_INDEX, self.tuple.root());
         self.raw.set(db, LEN_INDEX, Value::End(self.tuple.len().into()));
-    }
-
-    fn read_len(&self, db: &DB) -> usize {
-        self.raw.get(db, LEN_INDEX)
-            .expect("Valid merkle vec must exist in item index 3.")
-            .end()
-            .expect("Invalid structure for merkle vec.")
-            .into()
     }
 
     /// Get value at index.
@@ -60,7 +51,7 @@ impl<DB: MerkleDB> MerkleVec<DB> where
     }
 
     /// Length of the vector.
-    pub fn len(&self, db: &DB) -> usize {
+    pub fn len(&self) -> usize {
         self.tuple.len()
     }
 
@@ -130,16 +121,16 @@ mod tests {
         let mut vec = MerkleVec::create(&mut db);
 
         for i in 0..100 {
-            assert_eq!(vec.len(&mut db), i);
+            assert_eq!(vec.len(), i);
             vec.push(&mut db, i.into());
         }
-        assert_eq!(vec.len(&mut db), 100);
+        assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
             let value = vec.pop(&mut db);
             assert_eq!(value, Some(i.into()));
-            assert_eq!(vec.len(&mut db), i);
+            assert_eq!(vec.len(), i);
         }
-        assert_eq!(vec.len(&mut db), 0);
+        assert_eq!(vec.len(), 0);
     }
 
     #[test]
@@ -148,7 +139,7 @@ mod tests {
         let mut vec = MerkleVec::create(&mut db);
 
         for i in 0..100 {
-            assert_eq!(vec.len(&mut db), i);
+            assert_eq!(vec.len(), i);
             vec.push(&mut db, Default::default());
         }
 
