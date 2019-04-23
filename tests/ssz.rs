@@ -1,7 +1,6 @@
-use bm::{MerkleRaw, Value, MerkleVec};
+use bm::{MerkleVec, MerkleTuple};
 use sha2::Sha256;
 use digest::Digest;
-use core::num::NonZeroUsize;
 
 use hash_db::Hasher;
 use primitive_types::H256;
@@ -64,13 +63,13 @@ fn ssz_composite_fixed() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();
-    let mut raw = MerkleRaw::<InMemory>::new();
+    let mut tuple = MerkleTuple::<InMemory>::create(&mut db, 3);
 
-    raw.set(&mut db, NonZeroUsize::new(4).unwrap(), Value::End(VecValue(ssz_value.0.hash::<Sha256Hasher>()[..].to_vec())));
-    raw.set(&mut db, NonZeroUsize::new(5).unwrap(), Value::End(VecValue(ssz_value.1.hash::<Sha256Hasher>()[..].to_vec())));
-    raw.set(&mut db, NonZeroUsize::new(6).unwrap(), Value::End(VecValue(ssz_value.2.hash::<Sha256Hasher>()[..].to_vec())));
+    tuple.set(&mut db, 0, VecValue(ssz_value.0.hash::<Sha256Hasher>()[..].to_vec()));
+    tuple.set(&mut db, 1, VecValue(ssz_value.1.hash::<Sha256Hasher>()[..].to_vec()));
+    tuple.set(&mut db, 2, VecValue(ssz_value.2.hash::<Sha256Hasher>()[..].to_vec()));
 
-    assert_eq!(&ssz_hash[..], raw.root().intermediate().unwrap().as_slice());
+    assert_eq!(&ssz_hash[..], tuple.root().intermediate().unwrap().as_slice());
 }
 
 #[test]

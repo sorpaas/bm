@@ -23,6 +23,7 @@ impl<DB: MerkleDB> MerkleVec<DB> where
     }
 
     fn extend(&mut self, db: &mut DB) {
+        self.empty.extend(db);
         let len_raw = self.raw.get(db, LEN_INDEX).expect("Len must exist");
         let item_root_raw = self.raw.get(db, ITEM_ROOT_INDEX).expect("Item root must exist");
         let mut new_raw = MerkleRaw::new();
@@ -31,7 +32,6 @@ impl<DB: MerkleDB> MerkleVec<DB> where
         new_raw.set(db, EXTEND_INDEX, item_root_raw);
         self.raw.set(db, ROOT_INDEX, Value::End(Default::default()));
         self.raw = new_raw;
-        self.empty.extend(db);
     }
 
     fn shrink(&mut self, db: &mut DB) {
@@ -48,16 +48,7 @@ impl<DB: MerkleDB> MerkleVec<DB> where
     }
 
     fn max_len(&self, db: &DB) -> usize {
-        let len = self.len(db);
-        if len == 0 {
-            return 0
-        } else {
-            let mut ret = 1;
-            while ret < len {
-                ret *= 2;
-            }
-            ret
-        }
+        crate::utils::next_power_of_two(self.len(db))
     }
 
     /// Get value at index.
