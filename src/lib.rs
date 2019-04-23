@@ -7,6 +7,7 @@ mod raw;
 mod vec;
 mod empty;
 mod tuple;
+mod packed;
 mod utils;
 
 pub use crate::traits::{MerkleDB, InMemoryMerkleDB, Value, ValueOf, IntermediateOf, EndOf};
