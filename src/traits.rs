@@ -40,11 +40,13 @@ impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
 }
 
 /// Intermediate value of a database.
-pub type IntermediateOf<DB> = GenericArray<u8, <<DB as MerkleDB>::Digest as Digest>::OutputSize>;
+pub type IntermediateOf<DB> = GenericArray<u8, IntermediateSizeOf<DB>>;
 /// End value of a database.
 pub type EndOf<DB> = <DB as MerkleDB>::Value;
 /// Value of a database.
 pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
+/// Length of the digest.
+pub type IntermediateSizeOf<DB> = <<DB as MerkleDB>::Digest as Digest>::OutputSize;
 
 /// Traits for a merkle database.
 pub trait MerkleDB: Default {

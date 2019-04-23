@@ -1,10 +1,9 @@
 use core::num::NonZeroUsize;
 
 use crate::traits::{MerkleDB, EndOf, Value, ValueOf};
-use crate::empty::MerkleEmpty;
+use crate::tuple::MerkleTuple;
 use crate::raw::MerkleRaw;
 
-const EXTEND_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(4) };
 const LEN_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(3) };
 const ITEM_ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
 const ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
@@ -12,61 +11,34 @@ const ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 /// Binary merkle vector.
 pub struct MerkleVec<DB: MerkleDB> {
     raw: MerkleRaw<DB>,
-    empty: MerkleEmpty<DB>,
+    tuple: MerkleTuple<DB>,
 }
 
 impl<DB: MerkleDB> MerkleVec<DB> where
     EndOf<DB>: From<usize> + Into<usize>,
 {
-    fn set_len(&mut self, db: &mut DB, len: usize) {
-        self.raw.set(db, LEN_INDEX, Value::End(len.into()));
+    fn update_metadata(&mut self, db: &mut DB) {
+        self.raw.set(db, ITEM_ROOT_INDEX, self.tuple.root());
+        self.raw.set(db, LEN_INDEX, Value::End(self.tuple.len().into()));
     }
 
-    fn extend(&mut self, db: &mut DB) {
-        self.empty.extend(db);
-        let len_raw = self.raw.get(db, LEN_INDEX).expect("Len must exist");
-        let item_root_raw = self.raw.get(db, ITEM_ROOT_INDEX).expect("Item root must exist");
-        let mut new_raw = MerkleRaw::new();
-        new_raw.set(db, ITEM_ROOT_INDEX, self.empty.root());
-        new_raw.set(db, LEN_INDEX, len_raw);
-        new_raw.set(db, EXTEND_INDEX, item_root_raw);
-        self.raw.set(db, ROOT_INDEX, Value::End(Default::default()));
-        self.raw = new_raw;
-    }
-
-    fn shrink(&mut self, db: &mut DB) {
-        self.empty.shrink(db);
-        match self.raw.get(db, EXTEND_INDEX) {
-            Some(extended_value) => { self.raw.set(db, ITEM_ROOT_INDEX, extended_value); },
-            None => { self.raw.set(db, ITEM_ROOT_INDEX, Value::End(Default::default())); },
-        }
-    }
-
-    fn raw_index(&self, db: &DB, i: usize) -> NonZeroUsize {
-        let max_len = self.max_len(db);
-        NonZeroUsize::new(max_len * 2 + i).expect("Got usize must be greater than 0")
-    }
-
-    fn max_len(&self, db: &DB) -> usize {
-        crate::utils::next_power_of_two(self.len(db))
+    fn read_len(&self, db: &DB) -> usize {
+        self.raw.get(db, LEN_INDEX)
+            .expect("Valid merkle vec must exist in item index 3.")
+            .end()
+            .expect("Invalid structure for merkle vec.")
+            .into()
     }
 
     /// Get value at index.
     pub fn get(&self, db: &DB, index: usize) -> EndOf<DB> {
-        assert!(index < self.len(db));
-
-        let raw_index = self.raw_index(db, index);
-        self.raw.get(db, raw_index).expect("Invalid database")
-            .end()
-            .expect("Invalid database")
+        self.tuple.get(db, index)
     }
 
     /// Set value at index.
     pub fn set(&mut self, db: &mut DB, index: usize, value: EndOf<DB>) {
-        assert!(index < self.len(db));
-
-        let raw_index = self.raw_index(db, index);
-        self.raw.set(db, raw_index, Value::End(value));
+        self.tuple.set(db, index, value);
+        self.update_metadata(db);
     }
 
     /// Root of the current merkle vector.
@@ -76,71 +48,48 @@ impl<DB: MerkleDB> MerkleVec<DB> where
 
     /// Push a new value to the vector.
     pub fn push(&mut self, db: &mut DB, value: EndOf<DB>) {
-        let old_len = self.len(db);
-        if old_len == self.max_len(db) {
-            self.extend(db);
-        }
-        let len = old_len + 1;
-        let index = old_len;
-        self.set_len(db, len);
-
-        let raw_index = self.raw_index(db, index);
-        self.raw.set(db, raw_index, Value::End(value));
+        self.tuple.push(db, value);
+        self.update_metadata(db);
     }
 
     /// Pop a value from the vector.
     pub fn pop(&mut self, db: &mut DB) -> Option<EndOf<DB>> {
-        let old_len = self.len(db);
-        if old_len == 0 {
-            return None
-        }
-
-        let len = old_len - 1;
-        let index = old_len - 1;
-        let raw_index = self.raw_index(db, index);
-        let value = self.raw.get(db, raw_index).map(|value| value.end().expect("Invalid format"));
-
-        if len <= self.max_len(db) / 2 {
-            self.shrink(db);
-        }
-        self.set_len(db, len);
-        value
+        let ret = self.tuple.pop(db);
+        self.update_metadata(db);
+        ret
     }
 
     /// Length of the vector.
     pub fn len(&self, db: &DB) -> usize {
-        self.raw.get(db, LEN_INDEX)
-            .expect("Valid merkle vec must exist in item index 3.")
-            .end()
-            .expect("Invalid structure for merkle vec.")
-            .into()
+        self.tuple.len()
     }
 
     /// Create a new vector.
     pub fn create(db: &mut DB) -> Self {
-        let empty = MerkleEmpty::new();
+        let tuple = MerkleTuple::create(db, 0);
         let raw = MerkleRaw::new();
-        let mut ret = Self { raw, empty };
-        ret.set_len(db, 0);
+        let mut ret = Self { raw, tuple };
+        ret.update_metadata(db);
         ret
     }
 
     /// Drop the current vector.
     pub fn drop(self, db: &mut DB) {
         self.raw.drop(db);
-        self.empty.drop(db);
+        self.tuple.drop(db);
     }
 
     /// Leak the current vector.
-    pub fn leak(self) -> (ValueOf<DB>, ValueOf<DB>) {
-        (self.raw.leak(), self.empty.leak())
+    pub fn leak(self) -> (ValueOf<DB>, ValueOf<DB>, ValueOf<DB>, usize) {
+        let (tuple, empty, len) = self.tuple.leak();
+        (self.raw.leak(), tuple, empty, len)
     }
 
     /// Initialize from a previously leaked one.
-    pub fn from_leaked(raw_root: ValueOf<DB>, empty_root: ValueOf<DB>) -> Self {
+    pub fn from_leaked(raw_root: ValueOf<DB>, tuple_root: ValueOf<DB>, empty_root: ValueOf<DB>, len: usize) -> Self {
         Self {
             raw: MerkleRaw::from_leaked(raw_root),
-            empty: MerkleEmpty::from_leaked(empty_root),
+            tuple: MerkleTuple::from_leaked(tuple_root, empty_root, len),
         }
     }
 }
