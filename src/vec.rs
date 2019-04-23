@@ -23,7 +23,6 @@ impl<DB: MerkleDB> MerkleVec<DB> where
     }
 
     fn extend(&mut self, db: &mut DB) {
-        self.empty.extend(db);
         let len_raw = self.raw.get(db, LEN_INDEX).expect("Len must exist");
         let item_root_raw = self.raw.get(db, ITEM_ROOT_INDEX).expect("Item root must exist");
         let mut new_raw = MerkleRaw::new();
@@ -32,6 +31,7 @@ impl<DB: MerkleDB> MerkleVec<DB> where
         new_raw.set(db, EXTEND_INDEX, item_root_raw);
         self.raw.set(db, ROOT_INDEX, Value::End(Default::default()));
         self.raw = new_raw;
+        self.empty.extend(db);
     }
 
     fn shrink(&mut self, db: &mut DB) {
@@ -42,22 +42,40 @@ impl<DB: MerkleDB> MerkleVec<DB> where
         }
     }
 
-    fn raw_index(&self, db: &mut DB, i: usize) -> NonZeroUsize {
+    fn raw_index(&self, db: &DB, i: usize) -> NonZeroUsize {
         let max_len = self.max_len(db);
         NonZeroUsize::new(max_len * 2 + i).expect("Got usize must be greater than 0")
     }
 
-    fn max_len(&self, db: &mut DB) -> usize {
+    fn max_len(&self, db: &DB) -> usize {
         let len = self.len(db);
         if len == 0 {
             return 0
         } else {
-            let mut ret = 2;
+            let mut ret = 1;
             while ret < len {
                 ret *= 2;
             }
             ret
         }
+    }
+
+    /// Get value at index.
+    pub fn get(&self, db: &DB, index: usize) -> EndOf<DB> {
+        assert!(index < self.len(db));
+
+        let raw_index = self.raw_index(db, index);
+        self.raw.get(db, raw_index).expect("Invalid database")
+            .end()
+            .expect("Invalid database")
+    }
+
+    /// Set value at index.
+    pub fn set(&mut self, db: &mut DB, index: usize, value: EndOf<DB>) {
+        assert!(index < self.len(db));
+
+        let raw_index = self.raw_index(db, index);
+        self.raw.set(db, raw_index, Value::End(value));
     }
 
     /// Root of the current merkle vector.
@@ -91,7 +109,7 @@ impl<DB: MerkleDB> MerkleVec<DB> where
         let raw_index = self.raw_index(db, index);
         let value = self.raw.get(db, raw_index).map(|value| value.end().expect("Invalid format"));
 
-        if len <= self.max_len(db) / 2 && len != 1 {
+        if len <= self.max_len(db) / 2 {
             self.shrink(db);
         }
         self.set_len(db, len);
@@ -99,7 +117,7 @@ impl<DB: MerkleDB> MerkleVec<DB> where
     }
 
     /// Length of the vector.
-    pub fn len(&self, db: &mut DB) -> usize {
+    pub fn len(&self, db: &DB) -> usize {
         self.raw.get(db, LEN_INDEX)
             .expect("Valid merkle vec must exist in item index 3.")
             .end()
@@ -182,5 +200,23 @@ mod tests {
             assert_eq!(vec.len(&mut db), i);
         }
         assert_eq!(vec.len(&mut db), 0);
+    }
+
+    #[test]
+    fn test_set() {
+        let mut db = InMemory::default();
+        let mut vec = MerkleVec::create(&mut db);
+
+        for i in 0..100 {
+            assert_eq!(vec.len(&mut db), i);
+            vec.push(&mut db, Default::default());
+        }
+
+        for i in 0..100 {
+            vec.set(&mut db, i, i.into());
+        }
+        for i in 0..100 {
+            assert_eq!(vec.get(&db, i), i.into());
+        }
     }
 }
