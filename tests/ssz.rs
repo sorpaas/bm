@@ -1,11 +1,13 @@
-use bm::{MerkleVec, MerkleTuple};
+use bm::{MerkleVec, MerkleTuple, MerklePackedVec};
 use sha2::Sha256;
 use digest::Digest;
 
+use generic_array::GenericArray;
 use hash_db::Hasher;
 use primitive_types::H256;
 use plain_hasher::PlainHasher;
 use ssz::Hashable;
+use typenum::{U1, U32};
 
 /// Concrete `Hasher` impl for the Keccak-256 hash
 pub struct Sha256Hasher;
@@ -20,7 +22,7 @@ impl Hasher for Sha256Hasher {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-struct VecValue(Vec<u8>);
+struct VecValue([u8; 32]);
 
 impl AsRef<[u8]> for VecValue {
     fn as_ref(&self) -> &[u8] {
@@ -30,10 +32,8 @@ impl AsRef<[u8]> for VecValue {
 
 impl From<usize> for VecValue {
     fn from(value: usize) -> Self {
-        let mut bytes: Vec<u8> = (&(value as u64).to_le_bytes()[..]).into();
-        while bytes.len() != 32 {
-            bytes.push(0);
-        }
+        let mut bytes = [0u8; 32];
+        (&mut bytes[0..8]).copy_from_slice(&(value as u64).to_le_bytes()[..]);
         VecValue(bytes)
     }
 }
@@ -41,17 +41,41 @@ impl From<usize> for VecValue {
 impl Into<usize> for VecValue {
     fn into(self) -> usize {
         let mut raw = [0u8; 8];
-        (&mut raw).copy_from_slice(&self.0[0..8]);
+        (&mut raw[..]).copy_from_slice(&self.0[0..8]);
         u64::from_le_bytes(raw) as usize
     }
 }
 
 impl Default for VecValue {
     fn default() -> Self {
-        VecValue(vec![0, 0, 0, 0, 0, 0, 0, 0,
-                      0, 0, 0, 0, 0, 0, 0, 0,
-                      0, 0, 0, 0, 0, 0, 0, 0,
-                      0, 0, 0, 0, 0, 0, 0, 0])
+        VecValue([0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0,
+                  0, 0, 0, 0, 0, 0, 0, 0])
+    }
+}
+
+impl From<H256> for VecValue {
+    fn from(h: H256) -> VecValue {
+        let mut raw = [0u8; 32];
+        (&mut raw).copy_from_slice(&h[..]);
+        VecValue(raw)
+    }
+}
+
+impl From<GenericArray<u8, U32>> for VecValue {
+    fn from(arr: GenericArray<u8, U32>) -> VecValue {
+        let mut raw = [0u8; 32];
+        (&mut raw).copy_from_slice(&arr[..]);
+        VecValue(raw)
+    }
+}
+
+impl Into<GenericArray<u8, U32>> for VecValue {
+    fn into(self) -> GenericArray<u8, U32> {
+        let mut arr: GenericArray<u8, U32> = Default::default();
+        (&mut arr[..]).copy_from_slice(&self.0[..]);
+        arr
     }
 }
 
@@ -65,9 +89,9 @@ fn ssz_composite_fixed() {
     let mut db = InMemory::default();
     let mut tuple = MerkleTuple::<InMemory>::create(&mut db, 3);
 
-    tuple.set(&mut db, 0, VecValue(ssz_value.0.hash::<Sha256Hasher>()[..].to_vec()));
-    tuple.set(&mut db, 1, VecValue(ssz_value.1.hash::<Sha256Hasher>()[..].to_vec()));
-    tuple.set(&mut db, 2, VecValue(ssz_value.2.hash::<Sha256Hasher>()[..].to_vec()));
+    tuple.set(&mut db, 0, ssz_value.0.hash::<Sha256Hasher>().into());
+    tuple.set(&mut db, 1, ssz_value.1.hash::<Sha256Hasher>().into());
+    tuple.set(&mut db, 2, ssz_value.2.hash::<Sha256Hasher>().into());
 
     assert_eq!(&ssz_hash[..], tuple.root().intermediate().unwrap().as_slice());
 }
@@ -81,7 +105,26 @@ fn ssz_composite_variable() {
     let mut vec = MerkleVec::<InMemory>::create(&mut db);
 
     for v in ssz_value {
-        vec.push(&mut db, VecValue(v.hash::<Sha256Hasher>()[..].to_vec()));
+        vec.push(&mut db, v.hash::<Sha256Hasher>().into());
+    }
+
+    assert_eq!(&ssz_hash[..], vec.root().intermediate().unwrap().as_slice());
+}
+
+#[test]
+fn ssz_composite_packed_variable() {
+    let ssz_value = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+                         18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
+    let ssz_hash = ssz_value.hash::<Sha256Hasher>();
+
+    let mut db = InMemory::default();
+    let mut vec = MerklePackedVec::<InMemory, GenericArray<u8, U1>, U32, U1>::create(&mut db);
+    for v in ssz_value {
+        vec.push(&mut db, {
+            let mut arr = GenericArray::<u8, U1>::default();
+            arr[0] = v;
+            arr
+        });
     }
 
     assert_eq!(&ssz_hash[..], vec.root().intermediate().unwrap().as_slice());
