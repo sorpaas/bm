@@ -1,8 +1,8 @@
 use core::num::NonZeroUsize;
 
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf};
 use crate::empty::MerkleEmpty;
 use crate::raw::MerkleRaw;
+use crate::traits::{EndOf, MerkleDB, Value, ValueOf};
 
 const ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 const EXTEND_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
@@ -31,8 +31,12 @@ impl<DB: MerkleDB> MerkleTuple<DB> {
     fn shrink(&mut self, db: &mut DB) {
         self.empty.shrink(db);
         match self.raw.get(db, EXTEND_INDEX) {
-            Some(extended_value) => { self.raw.set(db, ROOT_INDEX, extended_value); },
-            None => { self.raw.set(db, ROOT_INDEX, Value::End(Default::default())); },
+            Some(extended_value) => {
+                self.raw.set(db, ROOT_INDEX, extended_value);
+            }
+            None => {
+                self.raw.set(db, ROOT_INDEX, Value::End(Default::default()));
+            }
         }
     }
 
@@ -66,7 +70,9 @@ impl<DB: MerkleDB> MerkleTuple<DB> {
         assert!(index < self.len());
 
         let raw_index = self.raw_index(index);
-        self.raw.get(db, raw_index).expect("Invalid database")
+        self.raw
+            .get(db, raw_index)
+            .expect("Invalid database")
             .end()
             .expect("Invalid database")
     }
@@ -97,13 +103,16 @@ impl<DB: MerkleDB> MerkleTuple<DB> {
     pub fn pop(&mut self, db: &mut DB) -> Option<EndOf<DB>> {
         let old_len = self.len();
         if old_len == 0 {
-            return None
+            return None;
         }
 
         let len = old_len - 1;
         let index = old_len - 1;
         let raw_index = self.raw_index(index);
-        let value = self.raw.get(db, raw_index).map(|value| value.end().expect("Invalid format"));
+        let value = self
+            .raw
+            .get(db, raw_index)
+            .map(|value| value.end().expect("Invalid format"));
 
         if len <= self.max_len() / 2 {
             self.shrink(db);

@@ -1,11 +1,11 @@
-use bm::{MerkleVec, MerkleTuple, MerklePackedVec};
-use sha2::Sha256;
+use bm::{MerklePackedVec, MerkleTuple, MerkleVec};
 use digest::Digest;
+use sha2::Sha256;
 
 use generic_array::GenericArray;
 use hash_db::Hasher;
-use primitive_types::H256;
 use plain_hasher::PlainHasher;
+use primitive_types::H256;
 use ssz::Hashable;
 use typenum::{U1, U32};
 
@@ -48,10 +48,10 @@ impl Into<usize> for VecValue {
 
 impl Default for VecValue {
     fn default() -> Self {
-        VecValue([0, 0, 0, 0, 0, 0, 0, 0,
-                  0, 0, 0, 0, 0, 0, 0, 0,
-                  0, 0, 0, 0, 0, 0, 0, 0,
-                  0, 0, 0, 0, 0, 0, 0, 0])
+        VecValue([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0,
+        ])
     }
 }
 
@@ -93,7 +93,10 @@ fn ssz_composite_fixed() {
     tuple.set(&mut db, 1, ssz_value.1.hash::<Sha256Hasher>().into());
     tuple.set(&mut db, 2, ssz_value.2.hash::<Sha256Hasher>().into());
 
-    assert_eq!(&ssz_hash[..], tuple.root().intermediate().unwrap().as_slice());
+    assert_eq!(
+        &ssz_hash[..],
+        tuple.root().intermediate().unwrap().as_slice()
+    );
 }
 
 #[test]
@@ -113,8 +116,10 @@ fn ssz_composite_variable() {
 
 #[test]
 fn ssz_composite_packed_variable() {
-    let ssz_value = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
-                         18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33];
+    let ssz_value = vec![
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31, 32, 33,
+    ];
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();

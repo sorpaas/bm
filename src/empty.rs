@@ -1,7 +1,7 @@
 use core::num::NonZeroUsize;
 
-use crate::traits::{MerkleDB, Value, ValueOf};
 use crate::raw::MerkleRaw;
+use crate::traits::{MerkleDB, Value, ValueOf};
 
 const ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
 const LEFT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
@@ -23,8 +23,12 @@ impl<DB: MerkleDB> MerkleEmpty<DB> {
     /// Shrink the current empty structure.
     pub fn shrink(&mut self, db: &mut DB) {
         match self.raw.get(db, LEFT_INDEX) {
-            Some(left) => { self.raw.set(db, ROOT_INDEX, left); },
-            None => { self.raw.set(db, ROOT_INDEX, Value::End(Default::default())); }
+            Some(left) => {
+                self.raw.set(db, ROOT_INDEX, left);
+            }
+            None => {
+                self.raw.set(db, ROOT_INDEX, Value::End(Default::default()));
+            }
         }
     }
 
@@ -46,7 +50,7 @@ impl<DB: MerkleDB> MerkleEmpty<DB> {
     /// Initialize this merkle tree from a previously leaked one.
     pub fn from_leaked(root: ValueOf<DB>) -> Self {
         Self {
-            raw: MerkleRaw::from_leaked(root)
+            raw: MerkleRaw::from_leaked(root),
         }
     }
 

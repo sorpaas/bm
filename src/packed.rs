@@ -1,14 +1,16 @@
-use generic_array::{GenericArray, ArrayLength};
-use core::ops::Range;
 use core::cmp;
 use core::marker::PhantomData;
 use core::num::NonZeroUsize;
+use core::ops::Range;
+use generic_array::{ArrayLength, GenericArray};
 
-use crate::tuple::MerkleTuple;
 use crate::raw::MerkleRaw;
-use crate::traits::{EndOf, Value, MerkleDB, ValueOf};
+use crate::traits::{EndOf, MerkleDB, Value, ValueOf};
+use crate::tuple::MerkleTuple;
 
-pub fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
+pub fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(
+    value_index: usize,
+) -> (usize, Vec<Range<usize>>) {
     let host_len = Host::to_usize();
     let value_len = Value::to_usize();
 
@@ -36,7 +38,8 @@ pub struct MerklePackedTuple<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength
     _marker: PhantomData<(T, H, V)>,
 }
 
-impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<DB, T, H, V> where
+impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<DB, T, H, V>
+where
     EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
@@ -48,7 +51,8 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<
         let mut value_offset = 0;
         for (i, range) in covering_ranges.into_iter().enumerate() {
             let host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i).into();
-            (&mut ret[value_offset..(value_offset + range.end - range.start)]).copy_from_slice(&host_value[range.clone()]);
+            (&mut ret[value_offset..(value_offset + range.end - range.start)])
+                .copy_from_slice(&host_value[range.clone()]);
             value_offset += range.end - range.start;
         }
 
@@ -63,14 +67,17 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<
         let mut value_offset = 0;
         for (i, range) in covering_ranges.into_iter().enumerate() {
             let mut host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i).into();
-            (&mut host_value[range.clone()]).copy_from_slice(&value[value_offset..(value_offset + range.end - range.start)]);
+            (&mut host_value[range.clone()])
+                .copy_from_slice(&value[value_offset..(value_offset + range.end - range.start)]);
             self.tuple.set(db, covering_base + i, host_value.into());
             value_offset += range.end - range.start;
         }
     }
 
     /// Root of the current merkle packed tuple.
-    pub fn root(&self) -> ValueOf<DB> { self.tuple.root() }
+    pub fn root(&self) -> ValueOf<DB> {
+        self.tuple.root()
+    }
 
     /// Push a new value to the tuple.
     pub fn push(&mut self, db: &mut DB, value: T) {
@@ -87,7 +94,7 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<
     /// Pop a value from the tuple.
     pub fn pop(&mut self, db: &mut DB) -> Option<T> {
         if self.len == 0 {
-            return None
+            return None;
         }
 
         let index = self.len - 1;
@@ -133,7 +140,12 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<
     }
 
     /// Initialize from a previously leaked one.
-    pub fn from_leaked(raw_root: ValueOf<DB>, empty_root: ValueOf<DB>, len: usize, value_len: usize) -> Self {
+    pub fn from_leaked(
+        raw_root: ValueOf<DB>,
+        empty_root: ValueOf<DB>,
+        len: usize,
+        value_len: usize,
+    ) -> Self {
         Self {
             tuple: MerkleTuple::from_leaked(raw_root, empty_root, len),
             len: value_len,
@@ -168,13 +180,15 @@ pub struct MerklePackedVec<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u
 const LEN_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(3) };
 const ITEM_ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
 
-impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedVec<DB, T, H, V> where
+impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedVec<DB, T, H, V>
+where
     EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     fn update_metadata(&mut self, db: &mut DB) {
         self.raw.set(db, ITEM_ROOT_INDEX, self.tuple.root());
-        self.raw.set(db, LEN_INDEX, Value::End(self.tuple.len().into()));
+        self.raw
+            .set(db, LEN_INDEX, Value::End(self.tuple.len().into()));
     }
 
     /// Get value at index.
@@ -233,7 +247,13 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedVec<DB
     }
 
     /// Initialize from a previously leaked one.
-    pub fn from_leaked(raw_root: ValueOf<DB>, tuple_root: ValueOf<DB>, empty_root: ValueOf<DB>, host_len: usize, len: usize) -> Self {
+    pub fn from_leaked(
+        raw_root: ValueOf<DB>,
+        tuple_root: ValueOf<DB>,
+        empty_root: ValueOf<DB>,
+        host_len: usize,
+        len: usize,
+    ) -> Self {
         Self {
             raw: MerkleRaw::from_leaked(raw_root),
             tuple: MerklePackedTuple::from_leaked(tuple_root, empty_root, host_len, len),
@@ -245,7 +265,7 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedVec<DB
 mod tests {
     use super::*;
     use sha2::Sha256;
-    use typenum::{U8, U32};
+    use typenum::{U32, U8};
 
     type InMemory = crate::traits::InMemoryMerkleDB<Sha256, VecValue>;
 
@@ -308,18 +328,24 @@ mod tests {
 
         for i in 0..100 {
             let value = tuple.get(&db, i);
-            assert_eq!(value.as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(
+                value.as_ref(),
+                &[
+                    i as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0
+                ]
+            );
         }
 
         for i in (0..100).rev() {
             let value = tuple.pop(&mut db);
-            assert_eq!(value.unwrap().as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(
+                value.unwrap().as_ref(),
+                &[
+                    i as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0
+                ]
+            );
         }
     }
 
@@ -336,18 +362,24 @@ mod tests {
 
         for i in 0..100 {
             let value = vec.get(&db, i);
-            assert_eq!(value.as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(
+                value.as_ref(),
+                &[
+                    i as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0
+                ]
+            );
         }
 
         for i in (0..100).rev() {
             let value = vec.pop(&mut db);
-            assert_eq!(value.unwrap().as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(
+                value.unwrap().as_ref(),
+                &[
+                    i as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0
+                ]
+            );
         }
     }
 }

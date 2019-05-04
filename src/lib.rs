@@ -2,17 +2,19 @@
 
 //! Binary merkle tree implementation.
 
-mod traits;
-mod raw;
-mod vec;
 mod empty;
-mod tuple;
 mod packed;
+mod raw;
+mod traits;
+mod tuple;
 mod utils;
+mod vec;
 
-pub use crate::traits::{MerkleDB, InMemoryMerkleDB, Value, ValueOf, IntermediateOf, IntermediateSizeOf, EndOf};
-pub use crate::raw::MerkleRaw;
 pub use crate::empty::MerkleEmpty;
-pub use crate::vec::MerkleVec;
-pub use crate::tuple::MerkleTuple;
 pub use crate::packed::{MerklePackedTuple, MerklePackedVec};
+pub use crate::raw::MerkleRaw;
+pub use crate::traits::{
+    EndOf, InMemoryMerkleDB, IntermediateOf, IntermediateSizeOf, MerkleDB, Value, ValueOf,
+};
+pub use crate::tuple::MerkleTuple;
+pub use crate::vec::MerkleVec;

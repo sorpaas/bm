@@ -1,8 +1,8 @@
 use core::num::NonZeroUsize;
 
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf};
-use crate::tuple::MerkleTuple;
 use crate::raw::MerkleRaw;
+use crate::traits::{EndOf, MerkleDB, Value, ValueOf};
+use crate::tuple::MerkleTuple;
 
 const LEN_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(3) };
 const ITEM_ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
@@ -13,12 +13,14 @@ pub struct MerkleVec<DB: MerkleDB> {
     tuple: MerkleTuple<DB>,
 }
 
-impl<DB: MerkleDB> MerkleVec<DB> where
+impl<DB: MerkleDB> MerkleVec<DB>
+where
     EndOf<DB>: From<usize> + Into<usize>,
 {
     fn update_metadata(&mut self, db: &mut DB) {
         self.raw.set(db, ITEM_ROOT_INDEX, self.tuple.root());
-        self.raw.set(db, LEN_INDEX, Value::End(self.tuple.len().into()));
+        self.raw
+            .set(db, LEN_INDEX, Value::End(self.tuple.len().into()));
     }
 
     /// Get value at index.
@@ -77,7 +79,12 @@ impl<DB: MerkleDB> MerkleVec<DB> where
     }
 
     /// Initialize from a previously leaked one.
-    pub fn from_leaked(raw_root: ValueOf<DB>, tuple_root: ValueOf<DB>, empty_root: ValueOf<DB>, len: usize) -> Self {
+    pub fn from_leaked(
+        raw_root: ValueOf<DB>,
+        tuple_root: ValueOf<DB>,
+        empty_root: ValueOf<DB>,
+        len: usize,
+    ) -> Self {
         Self {
             raw: MerkleRaw::from_leaked(raw_root),
             tuple: MerkleTuple::from_leaked(tuple_root, empty_root, len),

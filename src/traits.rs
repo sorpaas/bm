@@ -68,7 +68,7 @@ pub trait MerkleDB: Default {
 #[derive(Clone)]
 /// In-memory merkle database.
 pub struct InMemoryMerkleDB<D: Digest, T: AsRef<[u8]> + Clone + Default>(
-    HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>
+    HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>,
 );
 
 impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryMerkleDB<D, T> {
@@ -81,12 +81,16 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryMerkleDB<D, T> {
 
         if to_remove {
             match old_value.0 {
-                Value::Intermediate(subkey) => { self.remove(&subkey); },
+                Value::Intermediate(subkey) => {
+                    self.remove(&subkey);
+                }
                 Value::End(_) => (),
             }
 
             match old_value.1 {
-                Value::Intermediate(subkey) => { self.remove(&subkey); },
+                Value::Intermediate(subkey) => {
+                    self.remove(&subkey);
+                }
                 Value::End(_) => (),
             }
 
@@ -101,7 +105,10 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Default for InMemoryMerkleDB<D
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>> for InMemoryMerkleDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default>
+    AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)>>
+    for InMemoryMerkleDB<D, T>
+{
     fn as_ref(&self) -> &HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), usize)> {
         &self.0
     }
@@ -116,7 +123,10 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<
     }
 
     fn rootify(&mut self, key: &IntermediateOf<Self>) {
-        self.0.get_mut(key).expect("Trying to rootify a non-existing key").1 += 1;
+        self.0
+            .get_mut(key)
+            .expect("Trying to rootify a non-existing key")
+            .1 += 1;
     }
 
     fn unrootify(&mut self, key: &IntermediateOf<Self>) {
@@ -125,7 +135,7 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<
 
     fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>)) {
         if self.0.contains_key(&key) {
-            return
+            return;
         }
 
         let (left, right) = value;
@@ -133,13 +143,13 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<
         match &left {
             Value::Intermediate(ref subkey) => {
                 self.0.get_mut(subkey).expect("Set subkey does not exist").1 += 1;
-            },
+            }
             Value::End(_) => (),
         }
         match &right {
             Value::Intermediate(ref subkey) => {
                 self.0.get_mut(subkey).expect("Set subkey does not exist").1 += 1;
-            },
+            }
             Value::End(_) => (),
         }
 
