@@ -61,6 +61,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleEmpty<R, DB> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::traits::OwnedRoot;
     use sha2::Sha256;
 
     type InMemory = crate::traits::InMemoryMerkleDB<Sha256, Vec<u8>>;
@@ -68,7 +69,7 @@ mod tests {
     #[test]
     fn test_extend_shrink() {
         let mut db = InMemory::default();
-        let mut empty = MerkleEmpty::<InMemory>::new();
+        let mut empty = MerkleEmpty::<OwnedRoot, InMemory>::default();
 
         let mut values = Vec::new();
         for _ in 0..32 {

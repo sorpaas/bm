@@ -1,4 +1,4 @@
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf};
+use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, DanglingRoot, OwnedRoot};
 use crate::tuple::MerkleTuple;
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
@@ -7,12 +7,12 @@ const LEN_INDEX: MerkleIndex = MerkleIndex::root().right();
 const ITEM_ROOT_INDEX: MerkleIndex = MerkleIndex::root().left();
 
 /// Binary merkle vector.
-pub struct MerkleVec<DB: MerkleDB> {
-    raw: MerkleRaw<DB>,
-    tuple: MerkleTuple<DB>,
+pub struct MerkleVec<R: RootStatus, DB: MerkleDB> {
+    raw: MerkleRaw<R, DB>,
+    tuple: MerkleTuple<DanglingRoot, DB>,
 }
 
-impl<DB: MerkleDB> MerkleVec<DB> where
+impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
     EndOf<DB>: From<usize> + Into<usize>,
 {
     fn update_metadata(&mut self, db: &mut DB) {
@@ -54,15 +54,6 @@ impl<DB: MerkleDB> MerkleVec<DB> where
         self.tuple.len()
     }
 
-    /// Create a new vector.
-    pub fn create(db: &mut DB) -> Self {
-        let tuple = MerkleTuple::create(db, 0);
-        let raw = MerkleRaw::new();
-        let mut ret = Self { raw, tuple };
-        ret.update_metadata(db);
-        ret
-    }
-
     /// Drop the current vector.
     pub fn drop(self, db: &mut DB) {
         self.raw.drop(db);
@@ -81,6 +72,27 @@ impl<DB: MerkleDB> MerkleVec<DB> where
             raw: MerkleRaw::from_leaked(raw_root),
             tuple: MerkleTuple::from_leaked(tuple_root, empty_root, len),
         }
+    }
+}
+
+impl<DB: MerkleDB> MerkleVec<OwnedRoot, DB> where
+    EndOf<DB>: From<usize> + Into<usize>
+{
+    /// Create a new vector.
+    pub fn create(db: &mut DB) -> Self {
+        let tuple = MerkleTuple::create(db, 0);
+        let mut raw = MerkleRaw::default();
+
+        raw.set(db, ITEM_ROOT_INDEX, tuple.root());
+        raw.set(db, LEN_INDEX, Value::End(tuple.len().into()));
+        let tuple_root = tuple.root();
+        let empty_root = tuple.empty_root();
+        let tuple_len = tuple.len();
+
+        tuple.drop(db);
+        let dangling_tuple = MerkleTuple::from_leaked(tuple_root, empty_root, tuple_len);
+
+        Self { raw, tuple: dangling_tuple }
     }
 }
 

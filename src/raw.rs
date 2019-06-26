@@ -191,6 +191,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::traits::OwnedRoot;
     use sha2::Sha256;
 
     type InMemory = crate::traits::InMemoryMerkleDB<Sha256, Vec<u8>>;
@@ -238,7 +239,7 @@ mod tests {
     #[test]
     fn test_set_empty() {
         let mut db = InMemory::default();
-        let mut list = MerkleRaw::<InMemory>::new();
+        let mut list = MerkleRaw::<OwnedRoot, InMemory>::default();
 
         let mut last_root = list.root();
         for _ in 0..3 {
@@ -251,7 +252,7 @@ mod tests {
     #[test]
     fn test_set_skip() {
         let mut db = InMemory::default();
-        let mut list = MerkleRaw::<InMemory>::new();
+        let mut list = MerkleRaw::<OwnedRoot, InMemory>::default();
 
         list.set(&mut db, MerkleIndex::from_one(4).unwrap(), Value::End(vec![2]));
         assert_eq!(list.get(&db, MerkleIndex::from_one(4).unwrap()), Some(Value::End(vec![2])));
@@ -262,7 +263,7 @@ mod tests {
     #[test]
     fn test_set_basic() {
         let mut db = InMemory::default();
-        let mut list = MerkleRaw::<InMemory>::new();
+        let mut list = MerkleRaw::<OwnedRoot, InMemory>::default();
 
         for i in 4..8 {
             list.set(&mut db, MerkleIndex::from_one(i).unwrap(), Value::End(vec![i as u8]));
@@ -273,8 +274,8 @@ mod tests {
     fn test_set_only() {
         let mut db1 = InMemory::default();
         let mut db2 = InMemory::default();
-        let mut list1 = MerkleRaw::<InMemory>::new();
-        let mut list2 = MerkleRaw::<InMemory>::new();
+        let mut list1 = MerkleRaw::<OwnedRoot, InMemory>::default();
+        let mut list2 = MerkleRaw::<OwnedRoot, InMemory>::default();
 
         for i in 32..64 {
             list1.set(&mut db1, MerkleIndex::from_one(i).unwrap(), Value::End(vec![i as u8]));
@@ -297,7 +298,7 @@ mod tests {
     #[test]
     fn test_intermediate() {
         let mut db = InMemory::default();
-        let mut list = MerkleRaw::<InMemory>::new();
+        let mut list = MerkleRaw::<OwnedRoot, InMemory>::default();
         list.set(&mut db, MerkleIndex::from_one(2).unwrap(), Value::End(vec![]));
         assert_eq!(list.get(&mut db, MerkleIndex::from_one(3).unwrap()).unwrap(), Value::End(vec![]));
 
@@ -310,7 +311,7 @@ mod tests {
         assert_eq!(db.as_ref().len(), 2);
 
         let mut db1 = db.clone();
-        let mut list1 = MerkleRaw::<InMemory>::from_leaked(list.root());
+        let mut list1 = MerkleRaw::<OwnedRoot, InMemory>::from_leaked(list.root());
         list.set(&mut db, MerkleIndex::from_one(1).unwrap(), empty1.clone());
         assert_eq!(list.get(&mut db, MerkleIndex::from_one(3).unwrap()).unwrap(), Value::End(vec![]));
         assert_eq!(db.as_ref().len(), 1);

@@ -1,4 +1,4 @@
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, Dangling};
+use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, OwnedRoot};
 use crate::empty::MerkleEmpty;
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
@@ -8,26 +8,20 @@ const EXTEND_INDEX: MerkleIndex = MerkleIndex::root().left();
 
 /// Binary merkle tuple.
 pub struct MerkleTuple<R: RootStatus, DB: MerkleDB> {
-    top: MerkleRaw<R, DB>,
-    raw: MerkleRaw<Dangling, DB>,
-    empty: MerkleEmpty<Dangling, DB>,
+    raw: MerkleRaw<R, DB>,
+    empty: MerkleEmpty<OwnedRoot, DB>,
     len: usize,
 }
 
-impl<DB: MerkleDB> MerkleTuple<DB> {
+impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
     fn raw_index(&self, i: usize) -> MerkleIndex {
         MerkleIndex::from_one(self.max_len() + i).expect("Got usize must be greater than 0")
-    }
-
-    fn update_top(&mut self, db: &mut DB) {
-        self.top.set(db, MerkleIndex::root().left(), self.raw.root());
-        self.top.set(db, MerkleIndex::root().right(), self.empty.root());
     }
 
     fn extend(&mut self, db: &mut DB) {
         self.empty.extend(db);
         let root = self.root();
-        let mut new_raw = MerkleRaw::new();
+        let mut new_raw = MerkleRaw::default();
         new_raw.set(db, EXTEND_INDEX, root);
         self.raw.set(db, ROOT_INDEX, Value::End(Default::default()));
         self.raw = new_raw;
@@ -43,28 +37,6 @@ impl<DB: MerkleDB> MerkleTuple<DB> {
 
     fn max_len(&self) -> usize {
         crate::utils::next_power_of_two(self.len())
-    }
-
-    /// Create a new tuple.
-    pub fn create(db: &mut DB, len: usize) -> Self {
-        let mut raw = MerkleEmpty::<Owned, DB>::new();
-        let mut empty = MerkleEmpty::<Owned, DB>::new();
-
-        let mut max_len = 1;
-        while max_len < len {
-            empty.extend(db);
-            raw.extend(db);
-            max_len *= 2;
-        }
-
-        let top = MerkleRaw::<
-        let root = raw.leak();
-
-        Self {
-            raw: MerkleRaw::<DB>::from_leaked(root),
-            empty,
-            len,
-        }
     }
 
     /// Get value at index.
@@ -128,9 +100,15 @@ impl<DB: MerkleDB> MerkleTuple<DB> {
         self.raw.root()
     }
 
+    /// Root of the owned empty merkle.
+    pub fn empty_root(&self) -> ValueOf<DB> {
+        self.empty.root()
+    }
+
     /// Drop the current tuple.
     pub fn drop(self, db: &mut DB) {
         self.raw.drop(db);
+        self.empty.drop(db);
     }
 
     /// Leak the current tuple.
@@ -144,6 +122,29 @@ impl<DB: MerkleDB> MerkleTuple<DB> {
         Self {
             raw: MerkleRaw::from_leaked(raw_root),
             empty: MerkleEmpty::from_leaked(empty_root),
+            len,
+        }
+    }
+}
+
+impl<DB: MerkleDB> MerkleTuple<OwnedRoot, DB> {
+    /// Create a new tuple.
+    pub fn create(db: &mut DB, len: usize) -> Self {
+        let mut raw = MerkleEmpty::<OwnedRoot, DB>::default();
+        let mut empty = MerkleEmpty::<OwnedRoot, DB>::default();
+
+        let mut max_len = 1;
+        while max_len < len {
+            empty.extend(db);
+            raw.extend(db);
+            max_len *= 2;
+        }
+
+        let root = raw.leak();
+
+        Self {
+            raw: MerkleRaw::<OwnedRoot, DB>::from_leaked(root),
+            empty,
             len,
         }
     }

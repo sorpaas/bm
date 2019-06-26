@@ -1,4 +1,4 @@
-use bm::{MerkleVec, MerkleTuple, MerklePackedVec};
+use bm::{MerkleVec, MerkleTuple, MerklePackedVec, OwnedRoot};
 use sha2::Sha256;
 use digest::Digest;
 
@@ -87,7 +87,7 @@ fn ssz_composite_fixed() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();
-    let mut tuple = MerkleTuple::<InMemory>::create(&mut db, 3);
+    let mut tuple = MerkleTuple::<OwnedRoot, InMemory>::create(&mut db, 3);
 
     tuple.set(&mut db, 0, ssz_value.0.hash::<Sha256Hasher>().into());
     tuple.set(&mut db, 1, ssz_value.1.hash::<Sha256Hasher>().into());
@@ -102,7 +102,7 @@ fn ssz_composite_variable() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();
-    let mut vec = MerkleVec::<InMemory>::create(&mut db);
+    let mut vec = MerkleVec::<OwnedRoot, InMemory>::create(&mut db);
 
     for v in ssz_value {
         vec.push(&mut db, v.hash::<Sha256Hasher>().into());
@@ -118,7 +118,7 @@ fn ssz_composite_packed_variable() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();
-    let mut vec = MerklePackedVec::<InMemory, GenericArray<u8, U1>, U32, U1>::create(&mut db);
+    let mut vec = MerklePackedVec::<OwnedRoot, InMemory, GenericArray<u8, U1>, U32, U1>::create(&mut db);
     for v in ssz_value {
         vec.push(&mut db, {
             let mut arr = GenericArray::<u8, U1>::default();
