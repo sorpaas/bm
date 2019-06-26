@@ -9,9 +9,11 @@ mod empty;
 mod tuple;
 mod packed;
 mod utils;
+mod index;
 
 pub use crate::traits::{MerkleDB, InMemoryMerkleDB, Value, ValueOf, IntermediateOf, IntermediateSizeOf, EndOf};
-pub use crate::raw::{MerkleIndex, MerkleRaw};
+pub use crate::raw::MerkleRaw;
+pub use crate::index::{MerkleIndex, MerkleSelection, MerkleRoute};
 pub use crate::empty::MerkleEmpty;
 pub use crate::vec::MerkleVec;
 pub use crate::tuple::MerkleTuple;

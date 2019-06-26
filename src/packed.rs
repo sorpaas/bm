@@ -4,7 +4,8 @@ use core::cmp;
 use core::marker::PhantomData;
 
 use crate::tuple::MerkleTuple;
-use crate::raw::{MerkleIndex, MerkleRaw};
+use crate::raw::MerkleRaw;
+use crate::index::MerkleIndex;
 use crate::traits::{EndOf, Value, MerkleDB, ValueOf};
 
 pub fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {

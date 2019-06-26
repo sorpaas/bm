@@ -1,6 +1,7 @@
 use crate::traits::{MerkleDB, EndOf, Value, ValueOf};
 use crate::empty::MerkleEmpty;
-use crate::raw::{MerkleRaw, MerkleIndex};
+use crate::raw::MerkleRaw;
+use crate::index::MerkleIndex;
 
 const ROOT_INDEX: MerkleIndex = MerkleIndex::root();
 const EXTEND_INDEX: MerkleIndex = MerkleIndex::root().left();
