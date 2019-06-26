@@ -20,6 +20,22 @@ pub enum MerkleRoute {
     Select(Vec<MerkleSelection>),
 }
 
+impl MerkleRoute {
+    /// Get selection at depth, where root is considered depth 0.
+    pub fn at_depth(&self, depth: usize) -> Option<MerkleSelection> {
+        match self {
+            MerkleRoute::Root => None,
+            MerkleRoute::Select(selections) => {
+                if depth == 0 || depth > selections.len() {
+                    None
+                } else {
+                    Some(selections[depth - 1])
+                }
+            },
+        }
+    }
+}
+
 /// Raw merkle index.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct MerkleIndex(usize);
@@ -90,18 +106,6 @@ impl MerkleIndex {
             value = value >> 1;
         }
     }
-}
-
-fn selection_at(index: MerkleIndex, depth: u32) -> Option<usize> {
-    let mut index = index.0;
-    if index < 2_usize.pow(depth) {
-        return None
-    }
-
-    while index > 2_usize.pow(depth + 1) {
-        index = index / 2;
-    }
-    Some(index % 2)
 }
 
 /// Raw merkle tree.
@@ -176,6 +180,8 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
 
     /// Set value of the merkle tree via generalized merkle index.
     pub fn set(&mut self, db: &mut DB, index: MerkleIndex, set: ValueOf<DB>) {
+        let route = index.route();
+
         match set.clone() {
             Value::End(_) => (),
             Value::Intermediate(key) => {
@@ -192,7 +198,7 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
                     Some(intermediate)
                 },
                 Value::End(_) => {
-                    let sel = match selection_at(index, depth) {
+                    let sel = match route.at_depth(depth) {
                         Some(sel) => sel,
                         None => {
                             match &set {
@@ -210,7 +216,7 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
             };
 
             loop {
-                let sel = match selection_at(index, depth) {
+                let sel = match route.at_depth(depth) {
                     Some(sel) => sel,
                     None => break,
                 };
@@ -221,10 +227,9 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
                             None => (Value::End(Default::default()), Value::End(Default::default())),
                         };
                         values.push((sel, value.clone()));
-                        current = if sel == 0 {
-                            value.0.intermediate()
-                        } else {
-                            value.1.intermediate()
+                        current = match sel {
+                            MerkleSelection::Left => value.0.intermediate(),
+                            MerkleSelection::Right => value.1.intermediate(),
                         };
                     },
                     None => {
@@ -244,10 +249,9 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
                 None => break,
             };
 
-            if sel == 0 {
-                value.0 = update.clone();
-            } else {
-                value.1 = update.clone();
+            match sel {
+                MerkleSelection::Left => { value.0 = update.clone(); }
+                MerkleSelection::Right => { value.1 = update.clone(); }
             }
 
             let intermediate = {
@@ -314,6 +318,24 @@ mod tests {
                        MerkleSelection::Left,
                        MerkleSelection::Right,
                    ]));
+    }
+
+    #[test]
+    fn test_selection_at() {
+        fn selection_at(index: MerkleIndex, depth: u32) -> Option<usize> {
+            let mut index = index.0;
+            if index < 2_usize.pow(depth) {
+                return None
+            }
+
+            while index > 2_usize.pow(depth + 1) {
+                index = index / 2;
+            }
+            Some(index % 2)
+        }
+
+        assert_eq!(MerkleIndex::root().right().route().at_depth(1), Some(MerkleSelection::Right));
+        assert_eq!(selection_at(MerkleIndex::root().right(), 1), Some(1));
     }
 
     #[test]
