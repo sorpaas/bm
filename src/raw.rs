@@ -2,6 +2,24 @@ use digest::Digest;
 
 use crate::traits::{MerkleDB, Value, ValueOf};
 
+/// Merkle selection.
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum MerkleSelection {
+    /// Choose left at current depth.
+    Left,
+    /// Choose right at current depth.
+    Right,
+}
+
+/// Merkle route.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum MerkleRoute {
+    /// Root of the merkle tree.
+    Root,
+    /// Select items from the root.
+    Select(Vec<MerkleSelection>),
+}
+
 /// Raw merkle index.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct MerkleIndex(usize);
@@ -43,6 +61,34 @@ impl MerkleIndex {
     /// From zero-based index.
     pub fn from_zero(value: usize) -> Self {
         Self(value + 1)
+    }
+
+    /// Get selections from current index.
+    pub fn route(&self) -> MerkleRoute {
+        let mut value = self.0;
+        let mut selections = Vec::<MerkleSelection>::new();
+
+        loop {
+            if value >> 1 == 0 {
+                debug_assert!(value == 1);
+
+                if selections.is_empty() {
+                    return MerkleRoute::Root
+                } else {
+                    selections.reverse();
+                    return MerkleRoute::Select(selections)
+                }
+            }
+
+            let sel = value & 0b1;
+            if sel == 0 {
+                selections.push(MerkleSelection::Left)
+            } else {
+                selections.push(MerkleSelection::Right)
+            }
+
+            value = value >> 1;
+        }
     }
 }
 
@@ -101,49 +147,31 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
 
     /// Get value from the tree via generalized merkle index.
     pub fn get(&self, db: &DB, index: MerkleIndex) -> Option<ValueOf<DB>> {
-        let mut current = match self.root.clone() {
-            Value::Intermediate(intermediate) => intermediate,
-            Value::End(value) => {
-                if index == MerkleIndex::root() {
-                    return Some(Value::End(value))
-                } else {
-                    return None
+        match index.route() {
+            MerkleRoute::Root => Some(self.root.clone()),
+            MerkleRoute::Select(selections) => {
+                let mut current = self.root.clone();
+
+                for selection in selections {
+                    let intermediate = match current {
+                        Value::Intermediate(intermediate) => intermediate,
+                        Value::End(_) => return None,
+                    };
+
+                    current = match db.get(&intermediate) {
+                        Some(pair) => {
+                            match selection {
+                                MerkleSelection::Left => pair.0.clone(),
+                                MerkleSelection::Right => pair.1.clone(),
+                            }
+                        },
+                        None => return None,
+                    };
                 }
+
+                Some(current)
             },
-        };
-        let mut depth = 1;
-        loop {
-            let sel = match selection_at(index, depth) {
-                Some(sel) => sel,
-                None => break,
-            };
-            current = {
-                let value = match db.get(&current) {
-                    Some(pair) => {
-                        if sel == 0 {
-                            pair.0.clone()
-                        } else {
-                            pair.1.clone()
-                        }
-                    },
-                    None => return None,
-                };
-
-                match value {
-                    Value::Intermediate(intermediate) => intermediate,
-                    Value::End(value) => {
-                        if selection_at(index, depth + 1).is_none() {
-                            return Some(Value::End(value))
-                        } else {
-                            return None
-                        }
-                    },
-                }
-            };
-            depth += 1;
         }
-
-        Some(Value::Intermediate(current))
     }
 
     /// Set value of the merkle tree via generalized merkle index.
@@ -252,6 +280,41 @@ mod tests {
     use sha2::Sha256;
 
     type InMemory = crate::traits::InMemoryMerkleDB<Sha256, Vec<u8>>;
+
+    #[test]
+    fn test_merkle_selections() {
+        assert_eq!(MerkleIndex::root().route(), MerkleRoute::Root);
+        assert_eq!(MerkleIndex::root().left().route(),
+                   MerkleRoute::Select(vec![
+                       MerkleSelection::Left
+                   ]));
+        assert_eq!(MerkleIndex::root().left().right().route(),
+                   MerkleRoute::Select(vec![
+                       MerkleSelection::Left,
+                       MerkleSelection::Right,
+                   ]));
+        assert_eq!(MerkleIndex::root().right().left().left().route(),
+                   MerkleRoute::Select(vec![
+                       MerkleSelection::Right,
+                       MerkleSelection::Left,
+                       MerkleSelection::Left,
+                   ]));
+        assert_eq!(MerkleIndex::root().left().left().right().left().route(),
+                   MerkleRoute::Select(vec![
+                       MerkleSelection::Left,
+                       MerkleSelection::Left,
+                       MerkleSelection::Right,
+                       MerkleSelection::Left,
+                   ]));
+        assert_eq!(MerkleIndex::root().left().right().right().left().right().route(),
+                   MerkleRoute::Select(vec![
+                       MerkleSelection::Left,
+                       MerkleSelection::Right,
+                       MerkleSelection::Right,
+                       MerkleSelection::Left,
+                       MerkleSelection::Right,
+                   ]));
+    }
 
     #[test]
     fn test_set_empty() {
