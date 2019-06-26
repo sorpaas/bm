@@ -1,10 +1,53 @@
-use core::num::NonZeroUsize;
 use digest::Digest;
 
 use crate::traits::{MerkleDB, Value, ValueOf};
 
-fn selection_at(index: NonZeroUsize, depth: u32) -> Option<usize> {
-    let mut index = index.get();
+/// Raw merkle index.
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub struct MerkleIndex(usize);
+
+impl MerkleIndex {
+    /// Root merkle index.
+    pub const fn root() -> Self {
+        Self(1)
+    }
+
+    /// Get left child of current index.
+    pub const fn left(&self) -> Self {
+        Self(2 * self.0)
+    }
+
+    /// Get right child of current index.
+    pub const fn right(&self) -> Self {
+        Self(2 * self.0 + 1)
+    }
+
+    /// Get the parent of current merkle index.
+    pub fn parent(&self) -> Option<Self> {
+        if self.0 == 1 {
+            None
+        } else {
+            Some(Self(self.0 / 2))
+        }
+    }
+
+    /// From one-based index.
+    pub fn from_one(value: usize) -> Option<Self> {
+        if value == 0 {
+            None
+        } else {
+            Some(Self(value))
+        }
+    }
+
+    /// From zero-based index.
+    pub fn from_zero(value: usize) -> Self {
+        Self(value + 1)
+    }
+}
+
+fn selection_at(index: MerkleIndex, depth: u32) -> Option<usize> {
+    let mut index = index.0;
     if index < 2_usize.pow(depth) {
         return None
     }
@@ -57,11 +100,11 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
     }
 
     /// Get value from the tree via generalized merkle index.
-    pub fn get(&self, db: &DB, index: NonZeroUsize) -> Option<ValueOf<DB>> {
+    pub fn get(&self, db: &DB, index: MerkleIndex) -> Option<ValueOf<DB>> {
         let mut current = match self.root.clone() {
             Value::Intermediate(intermediate) => intermediate,
             Value::End(value) => {
-                if index.get() == 1 {
+                if index == MerkleIndex::root() {
                     return Some(Value::End(value))
                 } else {
                     return None
@@ -104,7 +147,7 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
     }
 
     /// Set value of the merkle tree via generalized merkle index.
-    pub fn set(&mut self, db: &mut DB, index: NonZeroUsize, set: ValueOf<DB>) {
+    pub fn set(&mut self, db: &mut DB, index: MerkleIndex, set: ValueOf<DB>) {
         match set.clone() {
             Value::End(_) => (),
             Value::Intermediate(key) => {
@@ -217,8 +260,8 @@ mod tests {
 
         let mut last_root = list.root();
         for _ in 0..3 {
-            list.set(&mut db, NonZeroUsize::new(2).unwrap(), last_root.clone());
-            list.set(&mut db, NonZeroUsize::new(3).unwrap(), last_root.clone());
+            list.set(&mut db, MerkleIndex::from_one(2).unwrap(), last_root.clone());
+            list.set(&mut db, MerkleIndex::from_one(3).unwrap(), last_root.clone());
             last_root = list.root();
         }
     }
@@ -228,10 +271,10 @@ mod tests {
         let mut db = InMemory::default();
         let mut list = MerkleRaw::<InMemory>::new();
 
-        list.set(&mut db, NonZeroUsize::new(4).unwrap(), Value::End(vec![2]));
-        assert_eq!(list.get(&db, NonZeroUsize::new(4).unwrap()), Some(Value::End(vec![2])));
-        list.set(&mut db, NonZeroUsize::new(4).unwrap(), Value::End(vec![3]));
-        assert_eq!(list.get(&db, NonZeroUsize::new(4).unwrap()), Some(Value::End(vec![3])));
+        list.set(&mut db, MerkleIndex::from_one(4).unwrap(), Value::End(vec![2]));
+        assert_eq!(list.get(&db, MerkleIndex::from_one(4).unwrap()), Some(Value::End(vec![2])));
+        list.set(&mut db, MerkleIndex::from_one(4).unwrap(), Value::End(vec![3]));
+        assert_eq!(list.get(&db, MerkleIndex::from_one(4).unwrap()), Some(Value::End(vec![3])));
     }
 
     #[test]
@@ -240,7 +283,7 @@ mod tests {
         let mut list = MerkleRaw::<InMemory>::new();
 
         for i in 4..8 {
-            list.set(&mut db, NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
+            list.set(&mut db, MerkleIndex::from_one(i).unwrap(), Value::End(vec![i as u8]));
         }
     }
 
@@ -252,20 +295,20 @@ mod tests {
         let mut list2 = MerkleRaw::<InMemory>::new();
 
         for i in 32..64 {
-            list1.set(&mut db1, NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
+            list1.set(&mut db1, MerkleIndex::from_one(i).unwrap(), Value::End(vec![i as u8]));
         }
         for i in (32..64).rev() {
-            list2.set(&mut db2, NonZeroUsize::new(i).unwrap(), Value::End(vec![i as u8]));
+            list2.set(&mut db2, MerkleIndex::from_one(i).unwrap(), Value::End(vec![i as u8]));
         }
         assert_eq!(db1.as_ref(), db2.as_ref());
         for i in 32..64 {
-            let val1 = list1.get(&mut db1, NonZeroUsize::new(i).unwrap()).unwrap();
-            let val2 = list2.get(&mut db2, NonZeroUsize::new(i).unwrap()).unwrap();
+            let val1 = list1.get(&mut db1, MerkleIndex::from_one(i).unwrap()).unwrap();
+            let val2 = list2.get(&mut db2, MerkleIndex::from_one(i).unwrap()).unwrap();
             assert_eq!(val1, Value::End(vec![i as u8]));
             assert_eq!(val2, Value::End(vec![i as u8]));
         }
 
-        list1.set(&mut db1, NonZeroUsize::new(1).unwrap(), Value::End(vec![1]));
+        list1.set(&mut db1, MerkleIndex::from_one(1).unwrap(), Value::End(vec![1]));
         assert!(db1.as_ref().is_empty());
     }
 
@@ -273,25 +316,25 @@ mod tests {
     fn test_intermediate() {
         let mut db = InMemory::default();
         let mut list = MerkleRaw::<InMemory>::new();
-        list.set(&mut db, NonZeroUsize::new(2).unwrap(), Value::End(vec![]));
-        assert_eq!(list.get(&mut db, NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![]));
+        list.set(&mut db, MerkleIndex::from_one(2).unwrap(), Value::End(vec![]));
+        assert_eq!(list.get(&mut db, MerkleIndex::from_one(3).unwrap()).unwrap(), Value::End(vec![]));
 
-        let empty1 = list.get(&mut db, NonZeroUsize::new(1).unwrap()).unwrap();
-        list.set(&mut db, NonZeroUsize::new(2).unwrap(), empty1.clone());
-        list.set(&mut db, NonZeroUsize::new(3).unwrap(), empty1.clone());
+        let empty1 = list.get(&mut db, MerkleIndex::from_one(1).unwrap()).unwrap();
+        list.set(&mut db, MerkleIndex::from_one(2).unwrap(), empty1.clone());
+        list.set(&mut db, MerkleIndex::from_one(3).unwrap(), empty1.clone());
         for i in 4..8 {
-            assert_eq!(list.get(&mut db, NonZeroUsize::new(i).unwrap()).unwrap(), Value::End(vec![]));
+            assert_eq!(list.get(&mut db, MerkleIndex::from_one(i).unwrap()).unwrap(), Value::End(vec![]));
         }
         assert_eq!(db.as_ref().len(), 2);
 
         let mut db1 = db.clone();
         let mut list1 = MerkleRaw::<InMemory>::from_leaked(list.root());
-        list.set(&mut db, NonZeroUsize::new(1).unwrap(), empty1.clone());
-        assert_eq!(list.get(&mut db, NonZeroUsize::new(3).unwrap()).unwrap(), Value::End(vec![]));
+        list.set(&mut db, MerkleIndex::from_one(1).unwrap(), empty1.clone());
+        assert_eq!(list.get(&mut db, MerkleIndex::from_one(3).unwrap()).unwrap(), Value::End(vec![]));
         assert_eq!(db.as_ref().len(), 1);
 
-        list1.set(&mut db1, NonZeroUsize::new(1).unwrap(), Value::End(vec![0]));
-        assert_eq!(list1.get(&mut db1, NonZeroUsize::new(1).unwrap()).unwrap(), Value::End(vec![0]));
+        list1.set(&mut db1, MerkleIndex::from_one(1).unwrap(), Value::End(vec![0]));
+        assert_eq!(list1.get(&mut db1, MerkleIndex::from_one(1).unwrap()).unwrap(), Value::End(vec![0]));
         assert!(db1.as_ref().is_empty());
     }
 }

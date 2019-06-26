@@ -2,10 +2,9 @@ use generic_array::{GenericArray, ArrayLength};
 use core::ops::Range;
 use core::cmp;
 use core::marker::PhantomData;
-use core::num::NonZeroUsize;
 
 use crate::tuple::MerkleTuple;
-use crate::raw::MerkleRaw;
+use crate::raw::{MerkleIndex, MerkleRaw};
 use crate::traits::{EndOf, Value, MerkleDB, ValueOf};
 
 pub fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
@@ -165,8 +164,8 @@ pub struct MerklePackedVec<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u
     raw: MerkleRaw<DB>,
 }
 
-const LEN_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(3) };
-const ITEM_ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
+const LEN_INDEX: MerkleIndex = MerkleIndex::root().right();
+const ITEM_ROOT_INDEX: MerkleIndex = MerkleIndex::root().left();
 
 impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedVec<DB, T, H, V> where
     EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,

@@ -1,11 +1,9 @@
-use core::num::NonZeroUsize;
-
 use crate::traits::{MerkleDB, EndOf, Value, ValueOf};
 use crate::tuple::MerkleTuple;
-use crate::raw::MerkleRaw;
+use crate::raw::{MerkleRaw, MerkleIndex};
 
-const LEN_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(3) };
-const ITEM_ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
+const LEN_INDEX: MerkleIndex = MerkleIndex::root().right();
+const ITEM_ROOT_INDEX: MerkleIndex = MerkleIndex::root().left();
 
 /// Binary merkle vector.
 pub struct MerkleVec<DB: MerkleDB> {

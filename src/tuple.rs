@@ -1,11 +1,9 @@
-use core::num::NonZeroUsize;
-
 use crate::traits::{MerkleDB, EndOf, Value, ValueOf};
 use crate::empty::MerkleEmpty;
-use crate::raw::MerkleRaw;
+use crate::raw::{MerkleRaw, MerkleIndex};
 
-const ROOT_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(1) };
-const EXTEND_INDEX: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(2) };
+const ROOT_INDEX: MerkleIndex = MerkleIndex::root();
+const EXTEND_INDEX: MerkleIndex = MerkleIndex::root().left();
 
 /// Binary merkle tuple.
 pub struct MerkleTuple<DB: MerkleDB> {
@@ -15,8 +13,8 @@ pub struct MerkleTuple<DB: MerkleDB> {
 }
 
 impl<DB: MerkleDB> MerkleTuple<DB> {
-    fn raw_index(&self, i: usize) -> NonZeroUsize {
-        NonZeroUsize::new(self.max_len() + i).expect("Got usize must be greater than 0")
+    fn raw_index(&self, i: usize) -> MerkleIndex {
+        MerkleIndex::from_one(self.max_len() + i).expect("Got usize must be greater than 0")
     }
 
     fn extend(&mut self, db: &mut DB) {
