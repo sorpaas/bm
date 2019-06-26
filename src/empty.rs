@@ -1,4 +1,4 @@
-use crate::traits::{MerkleDB, Value, ValueOf};
+use crate::traits::{MerkleDB, Value, ValueOf, RootStatus};
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
 
@@ -7,11 +7,19 @@ const LEFT_INDEX: MerkleIndex = MerkleIndex::root().left();
 const RIGHT_INDEX: MerkleIndex = MerkleIndex::root().right();
 
 /// Merkle structure storing hashes of empty roots.
-pub struct MerkleEmpty<DB: MerkleDB> {
-    raw: MerkleRaw<DB>,
+pub struct MerkleEmpty<R: RootStatus, DB: MerkleDB> {
+    raw: MerkleRaw<R, DB>,
 }
 
-impl<DB: MerkleDB> MerkleEmpty<DB> {
+impl<R: RootStatus, DB: MerkleDB> Default for MerkleEmpty<R, DB> {
+    fn default() -> Self {
+        Self {
+            raw: MerkleRaw::default()
+        }
+    }
+}
+
+impl<R: RootStatus, DB: MerkleDB> MerkleEmpty<R, DB> {
     /// Extend the current empty structure with a new depth.
     pub fn extend(&mut self, db: &mut DB) {
         let root = self.raw.root();
@@ -46,13 +54,6 @@ impl<DB: MerkleDB> MerkleEmpty<DB> {
     pub fn from_leaked(root: ValueOf<DB>) -> Self {
         Self {
             raw: MerkleRaw::from_leaked(root)
-        }
-    }
-
-    /// Initialize a new merkle empty tree.
-    pub fn new() -> Self {
-        Self {
-            raw: MerkleRaw::new(),
         }
     }
 }

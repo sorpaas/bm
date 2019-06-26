@@ -1,47 +1,28 @@
 use digest::Digest;
+use core::marker::PhantomData;
 
 use crate::index::{MerkleIndex, MerkleSelection, MerkleRoute};
-use crate::traits::{MerkleDB, Value, ValueOf};
+use crate::traits::{MerkleDB, Value, ValueOf, RootStatus};
 
 /// Raw merkle tree.
-pub struct MerkleRaw<DB: MerkleDB> {
+pub struct MerkleRaw<R: RootStatus, DB: MerkleDB> {
     root: ValueOf<DB>,
+    _marker: PhantomData<R>,
 }
 
-impl<DB: MerkleDB> Default for MerkleRaw<DB> {
+impl<R: RootStatus, DB: MerkleDB> Default for MerkleRaw<R, DB> {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<DB: MerkleDB> MerkleRaw<DB> {
-    /// Create a new raw tree.
-    pub fn new() -> Self {
         Self {
             root: Value::End(Default::default()),
+            _marker: PhantomData,
         }
     }
+}
 
+impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
     /// Return the root of the tree.
     pub fn root(&self) -> ValueOf<DB> {
         self.root.clone()
-    }
-
-    /// Drop the current tree.
-    pub fn drop(self, db: &mut DB) {
-        self.root().intermediate().map(|key| {
-            db.unrootify(&key);
-        });
-    }
-
-    /// Leak this tree and return the root.
-    pub fn leak(self) -> ValueOf<DB> {
-        self.root()
-    }
-
-    /// Create from leaked value.
-    pub fn from_leaked(root: ValueOf<DB>) -> Self {
-        Self { root }
     }
 
     /// Get value from the tree via generalized merkle index.
@@ -98,7 +79,11 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
                         None => {
                             match &set {
                                 Value::End(_) => (),
-                                Value::Intermediate(key) => { db.rootify(key); }
+                                Value::Intermediate(key) => {
+                                    if R::is_owned() {
+                                        db.rootify(key);
+                                    }
+                                }
                             }
                             self.root = set;
                             return
@@ -161,15 +146,45 @@ impl<DB: MerkleDB> MerkleRaw<DB> {
         }
 
         match &update {
-            Value::Intermediate(ref key) => { db.rootify(key); }
+            Value::Intermediate(ref key) => {
+                if R::is_owned() {
+                    db.rootify(key);
+                }
+            }
             Value::End(_) => (),
         }
         match &self.root {
-            Value::Intermediate(ref key) => { db.unrootify(key); }
+            Value::Intermediate(ref key) => {
+                if R::is_owned() {
+                    db.unrootify(key);
+                }
+            }
             Value::End(_) => (),
         }
 
         self.root = update;
+    }
+
+    /// Drop the current tree.
+    pub fn drop(self, db: &mut DB) {
+        if R::is_owned() {
+            self.root().intermediate().map(|key| {
+                db.unrootify(&key);
+            });
+        }
+    }
+
+    /// Leak this tree and return the root.
+    pub fn leak(self) -> ValueOf<DB> {
+        self.root()
+    }
+
+    /// Create from leaked value.
+    pub fn from_leaked(root: ValueOf<DB>) -> Self {
+        Self {
+            root,
+            _marker: PhantomData,
+        }
     }
 }
 

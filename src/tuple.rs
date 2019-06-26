@@ -1,4 +1,4 @@
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf};
+use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, Dangling};
 use crate::empty::MerkleEmpty;
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
@@ -7,15 +7,21 @@ const ROOT_INDEX: MerkleIndex = MerkleIndex::root();
 const EXTEND_INDEX: MerkleIndex = MerkleIndex::root().left();
 
 /// Binary merkle tuple.
-pub struct MerkleTuple<DB: MerkleDB> {
-    raw: MerkleRaw<DB>,
-    empty: MerkleEmpty<DB>,
+pub struct MerkleTuple<R: RootStatus, DB: MerkleDB> {
+    top: MerkleRaw<R, DB>,
+    raw: MerkleRaw<Dangling, DB>,
+    empty: MerkleEmpty<Dangling, DB>,
     len: usize,
 }
 
 impl<DB: MerkleDB> MerkleTuple<DB> {
     fn raw_index(&self, i: usize) -> MerkleIndex {
         MerkleIndex::from_one(self.max_len() + i).expect("Got usize must be greater than 0")
+    }
+
+    fn update_top(&mut self, db: &mut DB) {
+        self.top.set(db, MerkleIndex::root().left(), self.raw.root());
+        self.top.set(db, MerkleIndex::root().right(), self.empty.root());
     }
 
     fn extend(&mut self, db: &mut DB) {
@@ -41,8 +47,8 @@ impl<DB: MerkleDB> MerkleTuple<DB> {
 
     /// Create a new tuple.
     pub fn create(db: &mut DB, len: usize) -> Self {
-        let mut raw = MerkleEmpty::<DB>::new();
-        let mut empty = MerkleEmpty::<DB>::new();
+        let mut raw = MerkleEmpty::<Owned, DB>::new();
+        let mut empty = MerkleEmpty::<Owned, DB>::new();
 
         let mut max_len = 1;
         while max_len < len {
@@ -51,6 +57,7 @@ impl<DB: MerkleDB> MerkleTuple<DB> {
             max_len *= 2;
         }
 
+        let top = MerkleRaw::<
         let root = raw.leak();
 
         Self {

@@ -39,21 +39,43 @@ impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
     }
 }
 
+/// Root status of a merkle tree.
+pub trait RootStatus {
+    /// Whether it is a dangling root.
+    fn is_dangling() -> bool;
+    /// Whether it is an owned root.
+    fn is_owned() -> bool { !Self::is_dangling() }
+}
+
+/// Dangling root status.
+pub struct DanglingRoot;
+
+impl RootStatus for DanglingRoot {
+    fn is_dangling() -> bool { true }
+}
+
+/// Owned root status.
+pub struct OwnedRoot;
+
+impl RootStatus for OwnedRoot {
+    fn is_dangling() -> bool { false }
+}
+
 /// Intermediate value of a database.
 pub type IntermediateOf<DB> = GenericArray<u8, IntermediateSizeOf<DB>>;
 /// End value of a database.
-pub type EndOf<DB> = <DB as MerkleDB>::Value;
+pub type EndOf<DB> = <DB as MerkleDB>::End;
 /// Value of a database.
 pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
 /// Length of the digest.
 pub type IntermediateSizeOf<DB> = <<DB as MerkleDB>::Digest as Digest>::OutputSize;
 
 /// Traits for a merkle database.
-pub trait MerkleDB: Default {
+pub trait MerkleDB {
     /// Hash function for merkle tree.
     type Digest: Digest;
     /// End value stored in this merkle database.
-    type Value: AsRef<[u8]> + Clone + Default;
+    type End: AsRef<[u8]> + Clone + Default;
 
     /// Get an internal item by key.
     fn get(&self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
@@ -107,11 +129,11 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<S
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<D, T> {
+impl<D: Digest, V: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<D, V> {
     type Digest = D;
-    type Value = T;
+    type End = V;
 
-    fn get(&self, key: &GenericArray<u8, D::OutputSize>) -> Option<(ValueOf<Self>, ValueOf<Self>)> {
+    fn get(&self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)> {
         self.0.get(key).map(|v| v.0.clone())
     }
 
