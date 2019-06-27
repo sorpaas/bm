@@ -21,7 +21,7 @@ pub struct MerkleTuple<R: RootStatus, DB: MerkleDB> {
 
 impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
     fn raw_index(&self, i: usize) -> MerkleIndex {
-        MerkleIndex::from_one(self.max_len() + i).expect("Got usize must be greater than 0")
+        MerkleIndex::from_one(self.max_len() + i).expect("max_len returns value equal to or greater than 1; value always >= 1; qed")
     }
 
     fn extend(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {

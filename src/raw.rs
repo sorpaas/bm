@@ -76,7 +76,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
                     Some(value) => value,
                     None => return Err(Error::IntermediateNotFound),
                 };
-                db.insert(key, value);
+                db.insert(key, value)?;
             },
         };
 
@@ -95,7 +95,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
                                 Value::End(_) => (),
                                 Value::Intermediate(key) => {
                                     if R::is_owned() {
-                                        db.rootify(key);
+                                        db.rootify(key)?;
                                     }
                                 }
                             }
@@ -155,14 +155,14 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
                 digest.result()
             };
 
-            db.insert(intermediate.clone(), value);
+            db.insert(intermediate.clone(), value)?;
             update = Value::Intermediate(intermediate);
         }
 
         match &update {
             Value::Intermediate(ref key) => {
                 if R::is_owned() {
-                    db.rootify(key);
+                    db.rootify(key)?;
                 }
             }
             Value::End(_) => (),

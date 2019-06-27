@@ -99,11 +99,20 @@ pub trait MerkleDB {
     /// Get an internal item by key.
     fn get(&self, key: &IntermediateOf<Self>) -> Result<Option<(ValueOf<Self>, ValueOf<Self>)>, Self::Error>;
     /// Rootify a key.
-    fn rootify(&mut self, key: &IntermediateOf<Self>);
+    fn rootify(&mut self, key: &IntermediateOf<Self>) -> Result<(), Self::Error>;
     /// Unrootify a key.
     fn unrootify(&mut self, key: &IntermediateOf<Self>);
     /// Insert a new internal item.
-    fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>));
+    fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>)) -> Result<(), Self::Error>;
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+/// In-memory DB error.
+pub enum InMemoryMerkleDBError {
+    /// Trying to rootify a non-existing key.
+    RootifyKeyNotExist,
+    /// Set subkey does not exist.
+    SetIntermediateNotExist
 }
 
 #[derive(Clone)]
@@ -151,41 +160,43 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<S
 impl<D: Digest, V: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<D, V> {
     type Digest = D;
     type End = V;
-    type Error = core::convert::Infallible;
+    type Error = InMemoryMerkleDBError;
 
     fn get(&self, key: &IntermediateOf<Self>) -> Result<Option<(ValueOf<Self>, ValueOf<Self>)>, Self::Error> {
         Ok(self.0.get(key).map(|v| v.0.clone()))
     }
 
-    fn rootify(&mut self, key: &IntermediateOf<Self>) {
-        self.0.get_mut(key).expect("Trying to rootify a non-existing key").1 += 1;
+    fn rootify(&mut self, key: &IntermediateOf<Self>) -> Result<(), Self::Error> {
+        self.0.get_mut(key).ok_or(InMemoryMerkleDBError::RootifyKeyNotExist)?.1 += 1;
+        Ok(())
     }
 
     fn unrootify(&mut self, key: &IntermediateOf<Self>) {
         self.remove(key);
     }
 
-    fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>)) {
+    fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>)) -> Result<(), Self::Error> {
         if self.0.contains_key(&key) {
-            return
+            return Ok(())
         }
 
         let (left, right) = value;
 
         match &left {
             Value::Intermediate(ref subkey) => {
-                self.0.get_mut(subkey).expect("Set subkey does not exist").1 += 1;
+                self.0.get_mut(subkey).ok_or(InMemoryMerkleDBError::SetIntermediateNotExist)?.1 += 1;
             },
             Value::End(_) => (),
         }
         match &right {
             Value::Intermediate(ref subkey) => {
-                self.0.get_mut(subkey).expect("Set subkey does not exist").1 += 1;
+                self.0.get_mut(subkey).ok_or(InMemoryMerkleDBError::SetIntermediateNotExist)?.1 += 1;
             },
             Value::End(_) => (),
         }
 
         self.0.insert(key, ((left, right), 0));
+        Ok(())
     }
 }
 
