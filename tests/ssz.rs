@@ -87,11 +87,11 @@ fn ssz_composite_fixed() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();
-    let mut tuple = MerkleTuple::<OwnedRoot, InMemory>::create(&mut db, 3);
+    let mut tuple = MerkleTuple::<OwnedRoot, InMemory>::create(&mut db, 3).unwrap();
 
-    tuple.set(&mut db, 0, ssz_value.0.hash::<Sha256Hasher>().into());
-    tuple.set(&mut db, 1, ssz_value.1.hash::<Sha256Hasher>().into());
-    tuple.set(&mut db, 2, ssz_value.2.hash::<Sha256Hasher>().into());
+    tuple.set(&mut db, 0, ssz_value.0.hash::<Sha256Hasher>().into()).unwrap();
+    tuple.set(&mut db, 1, ssz_value.1.hash::<Sha256Hasher>().into()).unwrap();
+    tuple.set(&mut db, 2, ssz_value.2.hash::<Sha256Hasher>().into()).unwrap();
 
     assert_eq!(&ssz_hash[..], tuple.root().intermediate().unwrap().as_slice());
 }
@@ -102,10 +102,10 @@ fn ssz_composite_variable() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();
-    let mut vec = MerkleVec::<OwnedRoot, InMemory>::create(&mut db);
+    let mut vec = MerkleVec::<OwnedRoot, InMemory>::create(&mut db).unwrap();
 
     for v in ssz_value {
-        vec.push(&mut db, v.hash::<Sha256Hasher>().into());
+        vec.push(&mut db, v.hash::<Sha256Hasher>().into()).unwrap();
     }
 
     assert_eq!(&ssz_hash[..], vec.root().intermediate().unwrap().as_slice());
@@ -118,13 +118,13 @@ fn ssz_composite_packed_variable() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::default();
-    let mut vec = MerklePackedVec::<OwnedRoot, InMemory, GenericArray<u8, U1>, U32, U1>::create(&mut db);
+    let mut vec = MerklePackedVec::<OwnedRoot, InMemory, GenericArray<u8, U1>, U32, U1>::create(&mut db).unwrap();
     for v in ssz_value {
         vec.push(&mut db, {
             let mut arr = GenericArray::<u8, U1>::default();
             arr[0] = v;
             arr
-        });
+        }).unwrap();
     }
 
     assert_eq!(&ssz_hash[..], vec.root().intermediate().unwrap().as_slice());

@@ -1,4 +1,4 @@
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak};
+use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak, Error};
 use crate::empty::MerkleEmpty;
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
@@ -24,21 +24,23 @@ impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
         MerkleIndex::from_one(self.max_len() + i).expect("Got usize must be greater than 0")
     }
 
-    fn extend(&mut self, db: &mut DB) {
-        self.empty.extend(db);
+    fn extend(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+        self.empty.extend(db)?;
         let root = self.root();
         let mut new_raw = MerkleRaw::default();
-        new_raw.set(db, EXTEND_INDEX, root);
-        self.raw.set(db, ROOT_INDEX, Value::End(Default::default()));
+        new_raw.set(db, EXTEND_INDEX, root)?;
+        self.raw.set(db, ROOT_INDEX, Value::End(Default::default()))?;
         self.raw = new_raw;
+        Ok(())
     }
 
-    fn shrink(&mut self, db: &mut DB) {
-        self.empty.shrink(db);
-        match self.raw.get(db, EXTEND_INDEX) {
-            Some(extended_value) => { self.raw.set(db, ROOT_INDEX, extended_value); },
-            None => { self.raw.set(db, ROOT_INDEX, Value::End(Default::default())); },
+    fn shrink(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+        self.empty.shrink(db)?;
+        match self.raw.get(db, EXTEND_INDEX)? {
+            Some(extended_value) => { self.raw.set(db, ROOT_INDEX, extended_value)?; },
+            None => { self.raw.set(db, ROOT_INDEX, Value::End(Default::default()))?; },
         }
+        Ok(())
     }
 
     fn max_len(&self) -> usize {
@@ -46,54 +48,58 @@ impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
     }
 
     /// Get value at index.
-    pub fn get(&self, db: &DB, index: usize) -> EndOf<DB> {
+    pub fn get(&self, db: &DB, index: usize) -> Result<EndOf<DB>, Error<DB::Error>> {
         assert!(index < self.len());
 
         let raw_index = self.raw_index(index);
-        self.raw.get(db, raw_index).expect("Invalid database")
-            .end()
-            .expect("Invalid database")
+        self.raw.get(db, raw_index)?.ok_or(Error::CorruptedDatabase)?
+            .end().ok_or(Error::CorruptedDatabase)
     }
 
     /// Set value at index.
-    pub fn set(&mut self, db: &mut DB, index: usize, value: EndOf<DB>) {
+    pub fn set(&mut self, db: &mut DB, index: usize, value: EndOf<DB>) -> Result<(), Error<DB::Error>> {
         assert!(index < self.len());
 
         let raw_index = self.raw_index(index);
-        self.raw.set(db, raw_index, Value::End(value));
+        self.raw.set(db, raw_index, Value::End(value))?;
+        Ok(())
     }
 
     /// Push a new value to the vector.
-    pub fn push(&mut self, db: &mut DB, value: EndOf<DB>) {
+    pub fn push(&mut self, db: &mut DB, value: EndOf<DB>) -> Result<(), Error<DB::Error>> {
         let old_len = self.len();
         if old_len == self.max_len() {
-            self.extend(db);
+            self.extend(db)?;
         }
         let len = old_len + 1;
         let index = old_len;
         self.len = len;
 
         let raw_index = self.raw_index(index);
-        self.raw.set(db, raw_index, Value::End(value));
+        self.raw.set(db, raw_index, Value::End(value))?;
+        Ok(())
     }
 
     /// Pop a value from the vector.
-    pub fn pop(&mut self, db: &mut DB) -> Option<EndOf<DB>> {
+    pub fn pop(&mut self, db: &mut DB) -> Result<Option<EndOf<DB>>, Error<DB::Error>> {
         let old_len = self.len();
         if old_len == 0 {
-            return None
+            return Ok(None)
         }
 
         let len = old_len - 1;
         let index = old_len - 1;
         let raw_index = self.raw_index(index);
-        let value = self.raw.get(db, raw_index).map(|value| value.end().expect("Invalid format"));
+        let value = match self.raw.get(db, raw_index)? {
+            Some(value) => value.end().ok_or(Error::CorruptedDatabase)?,
+            None => return Err(Error::CorruptedDatabase),
+        };
 
         if len <= self.max_len() / 2 {
-            self.shrink(db);
+            self.shrink(db)?;
         }
         self.len = len;
-        value
+        Ok(Some(value))
     }
 
     /// Get the length of the tuple.
@@ -137,23 +143,23 @@ impl<R: RootStatus, DB: MerkleDB> Leak for MerkleTuple<R, DB> {
 
 impl<DB: MerkleDB> MerkleTuple<OwnedRoot, DB> {
     /// Create a new tuple.
-    pub fn create(db: &mut DB, len: usize) -> Self {
+    pub fn create(db: &mut DB, len: usize) -> Result<Self, Error<DB::Error>> {
         let mut raw = MerkleEmpty::<OwnedRoot, DB>::default();
         let mut empty = MerkleEmpty::<OwnedRoot, DB>::default();
 
         let mut max_len = 1;
         while max_len < len {
-            empty.extend(db);
-            raw.extend(db);
+            empty.extend(db)?;
+            raw.extend(db)?;
             max_len *= 2;
         }
 
         let root = raw.metadata();
 
-        Self {
+        Ok(Self {
             raw: MerkleRaw::<OwnedRoot, DB>::from_leaked(root),
             empty,
             len,
-        }
+        })
     }
 }

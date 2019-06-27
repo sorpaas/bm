@@ -70,15 +70,34 @@ pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
 /// Length of the digest.
 pub type IntermediateSizeOf<DB> = <<DB as MerkleDB>::Digest as Digest>::OutputSize;
 
+/// Set error.
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Error<DBError> {
+    /// The database is corrupted.
+    CorruptedDatabase,
+    /// Intermediate value to set not found.
+    IntermediateNotFound,
+    /// Backend database error.
+    Backend(DBError),
+}
+
+impl<DBError> From<DBError> for Error<DBError> {
+    fn from(err: DBError) -> Self {
+        Error::Backend(err)
+    }
+}
+
 /// Traits for a merkle database.
 pub trait MerkleDB {
     /// Hash function for merkle tree.
     type Digest: Digest;
     /// End value stored in this merkle database.
     type End: AsRef<[u8]> + Clone + Default;
+    /// Error type for DB access.
+    type Error;
 
     /// Get an internal item by key.
-    fn get(&self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)>;
+    fn get(&self, key: &IntermediateOf<Self>) -> Result<Option<(ValueOf<Self>, ValueOf<Self>)>, Self::Error>;
     /// Rootify a key.
     fn rootify(&mut self, key: &IntermediateOf<Self>);
     /// Unrootify a key.
@@ -132,9 +151,10 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<S
 impl<D: Digest, V: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<D, V> {
     type Digest = D;
     type End = V;
+    type Error = core::convert::Infallible;
 
-    fn get(&self, key: &IntermediateOf<Self>) -> Option<(ValueOf<Self>, ValueOf<Self>)> {
-        self.0.get(key).map(|v| v.0.clone())
+    fn get(&self, key: &IntermediateOf<Self>) -> Result<Option<(ValueOf<Self>, ValueOf<Self>)>, Self::Error> {
+        Ok(self.0.get(key).map(|v| v.0.clone()))
     }
 
     fn rootify(&mut self, key: &IntermediateOf<Self>) {

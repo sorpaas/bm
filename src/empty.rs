@@ -1,4 +1,4 @@
-use crate::traits::{MerkleDB, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak};
+use crate::traits::{MerkleDB, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak, Error};
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
 
@@ -27,18 +27,21 @@ impl<R: RootStatus, DB: MerkleDB> Default for MerkleEmpty<R, DB> {
 
 impl<R: RootStatus, DB: MerkleDB> MerkleEmpty<R, DB> {
     /// Extend the current empty structure with a new depth.
-    pub fn extend(&mut self, db: &mut DB) {
+    pub fn extend(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         let root = self.raw.root();
-        self.raw.set(db, LEFT_INDEX, root.clone());
-        self.raw.set(db, RIGHT_INDEX, root);
+        self.raw.set(db, LEFT_INDEX, root.clone())?;
+        self.raw.set(db, RIGHT_INDEX, root)?;
+        Ok(())
     }
 
     /// Shrink the current empty structure.
-    pub fn shrink(&mut self, db: &mut DB) {
-        match self.raw.get(db, LEFT_INDEX) {
-            Some(left) => { self.raw.set(db, ROOT_INDEX, left); },
-            None => { self.raw.set(db, ROOT_INDEX, Value::End(Default::default())); }
+    pub fn shrink(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+        match self.raw.get(db, LEFT_INDEX)? {
+            Some(left) => { self.raw.set(db, ROOT_INDEX, left)?; },
+            None => { self.raw.set(db, ROOT_INDEX, Value::End(Default::default()))?; }
         }
+
+        Ok(())
     }
 
     /// Root of the current depth.
@@ -82,10 +85,10 @@ mod tests {
         let mut values = Vec::new();
         for _ in 0..32 {
             values.push(empty.root());
-            empty.extend(&mut db);
+            empty.extend(&mut db).unwrap();
         }
         while let Some(root) = values.pop() {
-            empty.shrink(&mut db);
+            empty.shrink(&mut db).unwrap();
             assert_eq!(root, empty.root());
         }
         assert!(db.as_ref().is_empty());

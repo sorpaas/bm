@@ -6,7 +6,7 @@ use core::marker::PhantomData;
 use crate::tuple::MerkleTuple;
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
-use crate::traits::{EndOf, Value, MerkleDB, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak};
+use crate::traits::{EndOf, Value, MerkleDB, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak, Error};
 
 pub fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
     let host_len = Host::to_usize();
@@ -47,32 +47,34 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Mer
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Get value at index.
-    pub fn get(&self, db: &DB, index: usize) -> T {
+    pub fn get(&self, db: &DB, index: usize) -> Result<T, Error<DB::Error>> {
         let mut ret = GenericArray::<u8, V>::default();
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
         let mut value_offset = 0;
         for (i, range) in covering_ranges.into_iter().enumerate() {
-            let host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i).into();
+            let host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i)?.into();
             (&mut ret[value_offset..(value_offset + range.end - range.start)]).copy_from_slice(&host_value[range.clone()]);
             value_offset += range.end - range.start;
         }
 
-        ret.into()
+        Ok(ret.into())
     }
 
     /// Set value at index.
-    pub fn set(&mut self, db: &mut DB, index: usize, value: T) {
+    pub fn set(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
         let value: GenericArray<u8, V> = value.into();
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
         let mut value_offset = 0;
         for (i, range) in covering_ranges.into_iter().enumerate() {
-            let mut host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i).into();
+            let mut host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i)?.into();
             (&mut host_value[range.clone()]).copy_from_slice(&value[value_offset..(value_offset + range.end - range.start)]);
-            self.tuple.set(db, covering_base + i, host_value.into());
+            self.tuple.set(db, covering_base + i, host_value.into())?;
             value_offset += range.end - range.start;
         }
+
+        Ok(())
     }
 
     /// Root of the current merkle packed tuple.
@@ -82,46 +84,47 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Mer
     pub fn empty_root(&self) -> ValueOf<DB> { self.tuple.empty_root() }
 
     /// Push a new value to the tuple.
-    pub fn push(&mut self, db: &mut DB, value: T) {
+    pub fn push(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
         let index = self.len;
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
         while self.tuple.len() < covering_base + covering_ranges.len() {
-            self.tuple.push(db, Default::default());
+            self.tuple.push(db, Default::default())?;
         }
-        self.set(db, index, value);
+        self.set(db, index, value)?;
         self.len += 1;
+        Ok(())
     }
 
     /// Pop a value from the tuple.
-    pub fn pop(&mut self, db: &mut DB) -> Option<T> {
+    pub fn pop(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
         if self.len == 0 {
-            return None
+            return Ok(None)
         }
 
         let index = self.len - 1;
-        let ret = self.get(db, index);
+        let ret = self.get(db, index)?;
 
         if self.len == 1 {
             while self.tuple.len() > 0 {
-                self.tuple.pop(db);
+                self.tuple.pop(db)?;
             }
         } else {
             let last_index = index - 1;
 
             let (covering_base, covering_ranges) = coverings::<H, V>(index);
             while self.tuple.len() > covering_base + covering_ranges.len() {
-                self.tuple.pop(db);
+                self.tuple.pop(db)?;
             }
 
-            let last_value = self.get(db, last_index);
-            self.tuple.pop(db);
-            self.tuple.push(db, Default::default());
-            self.set(db, last_index, last_value);
+            let last_value = self.get(db, last_index)?;
+            self.tuple.pop(db)?;
+            self.tuple.push(db, Default::default())?;
+            self.set(db, last_index, last_value)?;
         }
 
         self.len -= 1;
-        Some(ret)
+        Ok(Some(ret))
     }
 
     /// Get the length of the tuple.
@@ -161,7 +164,7 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Create a new tuple.
-    pub fn create(db: &mut DB, value_len: usize) -> Self {
+    pub fn create(db: &mut DB, value_len: usize) -> Result<Self, Error<DB::Error>> {
         let host_len = if value_len == 0 {
             0
         } else {
@@ -169,12 +172,12 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<
             covering_base + covering_ranges.len()
         };
 
-        let tuple = MerkleTuple::create(db, host_len);
-        Self {
+        let tuple = MerkleTuple::create(db, host_len)?;
+        Ok(Self {
             tuple,
             len: value_len,
             _marker: PhantomData,
-        }
+        })
     }
 }
 
@@ -197,20 +200,22 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Mer
     EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
-    fn update_metadata(&mut self, db: &mut DB) {
-        self.raw.set(db, ITEM_ROOT_INDEX, self.tuple.root());
-        self.raw.set(db, LEN_INDEX, Value::End(self.tuple.len().into()));
+    fn update_metadata(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+        self.raw.set(db, ITEM_ROOT_INDEX, self.tuple.root())?;
+        self.raw.set(db, LEN_INDEX, Value::End(self.tuple.len().into()))?;
+        Ok(())
     }
 
     /// Get value at index.
-    pub fn get(&self, db: &DB, index: usize) -> T {
+    pub fn get(&self, db: &DB, index: usize) -> Result<T, Error<DB::Error>> {
         self.tuple.get(db, index)
     }
 
     /// Set value at index.
-    pub fn set(&mut self, db: &mut DB, index: usize, value: T) {
-        self.tuple.set(db, index, value);
-        self.update_metadata(db);
+    pub fn set(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
+        self.tuple.set(db, index, value)?;
+        self.update_metadata(db)?;
+        Ok(())
     }
 
     /// Root of the current merkle vector.
@@ -219,16 +224,17 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Mer
     }
 
     /// Push a new value to the vector.
-    pub fn push(&mut self, db: &mut DB, value: T) {
-        self.tuple.push(db, value);
-        self.update_metadata(db);
+    pub fn push(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
+        self.tuple.push(db, value)?;
+        self.update_metadata(db)?;
+        Ok(())
     }
 
     /// Pop a value from the vector.
-    pub fn pop(&mut self, db: &mut DB) -> Option<T> {
-        let ret = self.tuple.pop(db);
-        self.update_metadata(db);
-        ret
+    pub fn pop(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
+        let ret = self.tuple.pop(db)?;
+        self.update_metadata(db)?;
+        Ok(ret)
     }
 
     /// Length of the vector.
@@ -267,17 +273,17 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedVec<Ow
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Create a new vector.
-    pub fn create(db: &mut DB) -> Self {
-        let tuple = MerklePackedTuple::<OwnedRoot, DB, T, H, V>::create(db, 0);
+    pub fn create(db: &mut DB) -> Result<Self, Error<DB::Error>> {
+        let tuple = MerklePackedTuple::<OwnedRoot, DB, T, H, V>::create(db, 0)?;
         let mut raw = MerkleRaw::default();
 
-        raw.set(db, ITEM_ROOT_INDEX, tuple.root());
-        raw.set(db, LEN_INDEX, Value::End(tuple.len().into()));
+        raw.set(db, ITEM_ROOT_INDEX, tuple.root())?;
+        raw.set(db, LEN_INDEX, Value::End(tuple.len().into()))?;
         let metadata = tuple.metadata();
         tuple.drop(db);
         let dangling_tuple = MerklePackedTuple::from_leaked(metadata);
 
-        Self { raw, tuple: dangling_tuple }
+        Ok(Self { raw, tuple: dangling_tuple })
     }
 }
 
@@ -339,16 +345,16 @@ mod tests {
     #[test]
     fn test_tuple() {
         let mut db = InMemory::default();
-        let mut tuple = MerklePackedTuple::<OwnedRoot, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, 0);
+        let mut tuple = MerklePackedTuple::<OwnedRoot, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, 0).unwrap();
 
         for i in 0..100 {
             let mut value = GenericArray::<u8, U32>::default();
             value[0] = i as u8;
-            tuple.push(&mut db, value);
+            tuple.push(&mut db, value).unwrap();
         }
 
         for i in 0..100 {
-            let value = tuple.get(&db, i);
+            let value = tuple.get(&db, i).unwrap();
             assert_eq!(value.as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
@@ -356,7 +362,7 @@ mod tests {
         }
 
         for i in (0..100).rev() {
-            let value = tuple.pop(&mut db);
+            let value = tuple.pop(&mut db).unwrap();
             assert_eq!(value.unwrap().as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
                                                   0, 0, 0, 0, 0, 0, 0, 0,
                                                   0, 0, 0, 0, 0, 0, 0, 0,
@@ -367,16 +373,16 @@ mod tests {
     #[test]
     fn test_vec() {
         let mut db = InMemory::default();
-        let mut vec = MerklePackedVec::<OwnedRoot, _, GenericArray<u8, U32>, U8, U32>::create(&mut db);
+        let mut vec = MerklePackedVec::<OwnedRoot, _, GenericArray<u8, U32>, U8, U32>::create(&mut db).unwrap();
 
         for i in 0..100 {
             let mut value = GenericArray::<u8, U32>::default();
             value[0] = i as u8;
-            vec.push(&mut db, value);
+            vec.push(&mut db, value).unwrap();
         }
 
         for i in 0..100 {
-            let value = vec.get(&db, i);
+            let value = vec.get(&db, i).unwrap();
             assert_eq!(value.as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
@@ -384,7 +390,7 @@ mod tests {
         }
 
         for i in (0..100).rev() {
-            let value = vec.pop(&mut db);
+            let value = vec.pop(&mut db).unwrap();
             assert_eq!(value.unwrap().as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
                                                   0, 0, 0, 0, 0, 0, 0, 0,
                                                   0, 0, 0, 0, 0, 0, 0, 0,

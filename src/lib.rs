@@ -11,7 +11,7 @@ mod tuple;
 mod vec;
 mod packed;
 
-pub use crate::traits::{MerkleDB, InMemoryMerkleDB, Value, ValueOf, IntermediateOf, IntermediateSizeOf, EndOf, DanglingRoot, OwnedRoot, RootStatus};
+pub use crate::traits::{MerkleDB, InMemoryMerkleDB, Value, ValueOf, IntermediateOf, IntermediateSizeOf, EndOf, DanglingRoot, OwnedRoot, RootStatus, Error};
 pub use crate::raw::{MerkleRaw, OwnedMerkleRaw, DanglingMerkleRaw};
 pub use crate::index::{MerkleIndex, MerkleSelection, MerkleRoute};
 pub use crate::empty::{MerkleEmpty, OwnedMerkleEmpty, DanglingMerkleEmpty};

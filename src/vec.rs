@@ -1,4 +1,4 @@
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, DanglingRoot, OwnedRoot, Leak};
+use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, DanglingRoot, OwnedRoot, Leak, Error};
 use crate::tuple::MerkleTuple;
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
@@ -21,20 +21,22 @@ pub struct MerkleVec<R: RootStatus, DB: MerkleDB> {
 impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
     EndOf<DB>: From<usize> + Into<usize>,
 {
-    fn update_metadata(&mut self, db: &mut DB) {
-        self.raw.set(db, ITEM_ROOT_INDEX, self.tuple.root());
-        self.raw.set(db, LEN_INDEX, Value::End(self.tuple.len().into()));
+    fn update_metadata(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+        self.raw.set(db, ITEM_ROOT_INDEX, self.tuple.root())?;
+        self.raw.set(db, LEN_INDEX, Value::End(self.tuple.len().into()))?;
+        Ok(())
     }
 
     /// Get value at index.
-    pub fn get(&self, db: &DB, index: usize) -> EndOf<DB> {
+    pub fn get(&self, db: &DB, index: usize) -> Result<EndOf<DB>, Error<DB::Error>> {
         self.tuple.get(db, index)
     }
 
     /// Set value at index.
-    pub fn set(&mut self, db: &mut DB, index: usize, value: EndOf<DB>) {
-        self.tuple.set(db, index, value);
-        self.update_metadata(db);
+    pub fn set(&mut self, db: &mut DB, index: usize, value: EndOf<DB>) -> Result<(), Error<DB::Error>> {
+        self.tuple.set(db, index, value)?;
+        self.update_metadata(db)?;
+        Ok(())
     }
 
     /// Root of the current merkle vector.
@@ -43,15 +45,16 @@ impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
     }
 
     /// Push a new value to the vector.
-    pub fn push(&mut self, db: &mut DB, value: EndOf<DB>) {
-        self.tuple.push(db, value);
-        self.update_metadata(db);
+    pub fn push(&mut self, db: &mut DB, value: EndOf<DB>) -> Result<(), Error<DB::Error>> {
+        self.tuple.push(db, value)?;
+        self.update_metadata(db)?;
+        Ok(())
     }
 
     /// Pop a value from the vector.
-    pub fn pop(&mut self, db: &mut DB) -> Option<EndOf<DB>> {
+    pub fn pop(&mut self, db: &mut DB) -> Result<Option<EndOf<DB>>, Error<DB::Error>> {
         let ret = self.tuple.pop(db);
-        self.update_metadata(db);
+        self.update_metadata(db)?;
         ret
     }
 
@@ -89,17 +92,17 @@ impl<DB: MerkleDB> MerkleVec<OwnedRoot, DB> where
     EndOf<DB>: From<usize> + Into<usize>
 {
     /// Create a new vector.
-    pub fn create(db: &mut DB) -> Self {
-        let tuple = MerkleTuple::create(db, 0);
+    pub fn create(db: &mut DB) -> Result<Self, Error<DB::Error>> {
+        let tuple = MerkleTuple::create(db, 0)?;
         let mut raw = MerkleRaw::default();
 
-        raw.set(db, ITEM_ROOT_INDEX, tuple.root());
-        raw.set(db, LEN_INDEX, Value::End(tuple.len().into()));
+        raw.set(db, ITEM_ROOT_INDEX, tuple.root())?;
+        raw.set(db, LEN_INDEX, Value::End(tuple.len().into()))?;
         let metadata = tuple.metadata();
         tuple.drop(db);
         let dangling_tuple = MerkleTuple::from_leaked(metadata);
 
-        Self { raw, tuple: dangling_tuple }
+        Ok(Self { raw, tuple: dangling_tuple })
     }
 }
 
@@ -136,15 +139,15 @@ mod tests {
     #[test]
     fn test_push_pop() {
         let mut db = InMemory::default();
-        let mut vec = MerkleVec::create(&mut db);
+        let mut vec = MerkleVec::create(&mut db).unwrap();
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
-            vec.push(&mut db, i.into());
+            vec.push(&mut db, i.into()).unwrap();
         }
         assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
-            let value = vec.pop(&mut db);
+            let value = vec.pop(&mut db).unwrap();
             assert_eq!(value, Some(i.into()));
             assert_eq!(vec.len(), i);
         }
@@ -154,18 +157,18 @@ mod tests {
     #[test]
     fn test_set() {
         let mut db = InMemory::default();
-        let mut vec = MerkleVec::create(&mut db);
+        let mut vec = MerkleVec::create(&mut db).unwrap();
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
-            vec.push(&mut db, Default::default());
+            vec.push(&mut db, Default::default()).unwrap();
         }
 
         for i in 0..100 {
-            vec.set(&mut db, i, i.into());
+            vec.set(&mut db, i, i.into()).unwrap();
         }
         for i in 0..100 {
-            assert_eq!(vec.get(&db, i), i.into());
+            assert_eq!(vec.get(&db, i).unwrap(), i.into());
         }
     }
 }
