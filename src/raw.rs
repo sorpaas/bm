@@ -170,7 +170,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
         match &self.root {
             Value::Intermediate(ref key) => {
                 if R::is_owned() {
-                    db.unrootify(key);
+                    db.unrootify(key)?;
                 }
             }
             Value::End(_) => (),
@@ -181,12 +181,13 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
     }
 
     /// Drop the current tree.
-    pub fn drop(self, db: &mut DB) {
+    pub fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         if R::is_owned() {
-            self.root().intermediate().map(|key| {
-                db.unrootify(&key);
-            });
+            if let Some(key) = self.root().intermediate() {
+                db.unrootify(&key)?;
+            }
         }
+        Ok(())
     }
 }
 

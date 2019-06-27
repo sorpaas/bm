@@ -101,7 +101,7 @@ pub trait MerkleDB {
     /// Rootify a key.
     fn rootify(&mut self, key: &IntermediateOf<Self>) -> Result<(), Self::Error>;
     /// Unrootify a key.
-    fn unrootify(&mut self, key: &IntermediateOf<Self>);
+    fn unrootify(&mut self, key: &IntermediateOf<Self>) -> Result<(), Self::Error>;
     /// Insert a new internal item.
     fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>)) -> Result<(), Self::Error>;
 }
@@ -122,26 +122,28 @@ pub struct InMemoryMerkleDB<D: Digest, T: AsRef<[u8]> + Clone + Default>(
 );
 
 impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryMerkleDB<D, T> {
-    fn remove(&mut self, old_key: &IntermediateOf<Self>) {
+    fn remove(&mut self, old_key: &IntermediateOf<Self>) -> Result<(), InMemoryMerkleDBError> {
         let (old_value, to_remove) = {
-            let value = self.0.get_mut(old_key).expect("Set key does not exist");
+            let value = self.0.get_mut(old_key).ok_or(InMemoryMerkleDBError::SetIntermediateNotExist)?;
             value.1 -= 1;
             (value.0.clone(), value.1 == 0)
         };
 
         if to_remove {
             match old_value.0 {
-                Value::Intermediate(subkey) => { self.remove(&subkey); },
+                Value::Intermediate(subkey) => { self.remove(&subkey)?; },
                 Value::End(_) => (),
             }
 
             match old_value.1 {
-                Value::Intermediate(subkey) => { self.remove(&subkey); },
+                Value::Intermediate(subkey) => { self.remove(&subkey)?; },
                 Value::End(_) => (),
             }
 
             self.0.remove(old_key);
         }
+
+        Ok(())
     }
 }
 
@@ -171,8 +173,9 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<
         Ok(())
     }
 
-    fn unrootify(&mut self, key: &IntermediateOf<Self>) {
-        self.remove(key);
+    fn unrootify(&mut self, key: &IntermediateOf<Self>) -> Result<(), Self::Error> {
+        self.remove(key)?;
+        Ok(())
     }
 
     fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>)) -> Result<(), Self::Error> {

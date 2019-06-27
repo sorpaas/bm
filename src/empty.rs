@@ -50,7 +50,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleEmpty<R, DB> {
     }
 
     /// Drop the merkle tree.
-    pub fn drop(self, db: &mut DB) {
+    pub fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         self.raw.drop(db)
     }
 }

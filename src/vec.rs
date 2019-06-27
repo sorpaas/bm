@@ -64,9 +64,10 @@ impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
     }
 
     /// Drop the current vector.
-    pub fn drop(self, db: &mut DB) {
-        self.raw.drop(db);
-        self.tuple.drop(db);
+    pub fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+        self.raw.drop(db)?;
+        self.tuple.drop(db)?;
+        Ok(())
     }
 }
 
@@ -99,7 +100,7 @@ impl<DB: MerkleDB> MerkleVec<OwnedRoot, DB> where
         raw.set(db, ITEM_ROOT_INDEX, tuple.root())?;
         raw.set(db, LEN_INDEX, Value::End(tuple.len().into()))?;
         let metadata = tuple.metadata();
-        tuple.drop(db);
+        tuple.drop(db)?;
         let dangling_tuple = MerkleTuple::from_leaked(metadata);
 
         Ok(Self { raw, tuple: dangling_tuple })

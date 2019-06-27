@@ -118,9 +118,10 @@ impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
     }
 
     /// Drop the current tuple.
-    pub fn drop(self, db: &mut DB) {
-        self.raw.drop(db);
-        self.empty.drop(db);
+    pub fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+        self.raw.drop(db)?;
+        self.empty.drop(db)?;
+        Ok(())
     }
 }
 
