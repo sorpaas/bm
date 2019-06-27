@@ -1,4 +1,4 @@
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot};
+use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak};
 use crate::empty::MerkleEmpty;
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
@@ -116,15 +116,17 @@ impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
         self.raw.drop(db);
         self.empty.drop(db);
     }
+}
 
-    /// Leak the current tuple.
-    pub fn leak(self) -> (ValueOf<DB>, ValueOf<DB>, usize) {
+impl<R: RootStatus, DB: MerkleDB> Leak for MerkleTuple<R, DB> {
+    type Metadata = (ValueOf<DB>, ValueOf<DB>, usize);
+
+    fn metadata(&self) -> Self::Metadata {
         let len = self.len();
-        (self.raw.leak(), self.empty.leak(), len)
+        (self.raw.metadata(), self.empty.metadata(), len)
     }
 
-    /// Initialize from a previously leaked one.
-    pub fn from_leaked(raw_root: ValueOf<DB>, empty_root: ValueOf<DB>, len: usize) -> Self {
+    fn from_leaked((raw_root, empty_root, len): Self::Metadata) -> Self {
         Self {
             raw: MerkleRaw::from_leaked(raw_root),
             empty: MerkleEmpty::from_leaked(empty_root),
@@ -146,7 +148,7 @@ impl<DB: MerkleDB> MerkleTuple<OwnedRoot, DB> {
             max_len *= 2;
         }
 
-        let root = raw.leak();
+        let root = raw.metadata();
 
         Self {
             raw: MerkleRaw::<OwnedRoot, DB>::from_leaked(root),

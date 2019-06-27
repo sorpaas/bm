@@ -1,4 +1,4 @@
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, DanglingRoot, OwnedRoot};
+use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, DanglingRoot, OwnedRoot, Leak};
 use crate::tuple::MerkleTuple;
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
@@ -65,18 +65,22 @@ impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
         self.raw.drop(db);
         self.tuple.drop(db);
     }
+}
 
-    /// Leak the current vector.
-    pub fn leak(self) -> (ValueOf<DB>, ValueOf<DB>, ValueOf<DB>, usize) {
-        let (tuple, empty, len) = self.tuple.leak();
-        (self.raw.leak(), tuple, empty, len)
+impl<R: RootStatus, DB: MerkleDB> Leak for MerkleVec<R, DB> where
+    EndOf<DB>: From<usize> + Into<usize>,
+{
+    type Metadata = (ValueOf<DB>, ValueOf<DB>, ValueOf<DB>, usize);
+
+    fn metadata(&self) -> Self::Metadata {
+        let (tuple, empty, len) = self.tuple.metadata();
+        (self.raw.metadata(), tuple, empty, len)
     }
 
-    /// Initialize from a previously leaked one.
-    pub fn from_leaked(raw_root: ValueOf<DB>, tuple_root: ValueOf<DB>, empty_root: ValueOf<DB>, len: usize) -> Self {
+    fn from_leaked((raw_root, tuple_root, empty_root, len): Self::Metadata) -> Self {
         Self {
             raw: MerkleRaw::from_leaked(raw_root),
-            tuple: MerkleTuple::from_leaked(tuple_root, empty_root, len),
+            tuple: MerkleTuple::from_leaked((tuple_root, empty_root, len)),
         }
     }
 }
@@ -91,12 +95,9 @@ impl<DB: MerkleDB> MerkleVec<OwnedRoot, DB> where
 
         raw.set(db, ITEM_ROOT_INDEX, tuple.root());
         raw.set(db, LEN_INDEX, Value::End(tuple.len().into()));
-        let tuple_root = tuple.root();
-        let empty_root = tuple.empty_root();
-        let tuple_len = tuple.len();
-
+        let metadata = tuple.metadata();
         tuple.drop(db);
-        let dangling_tuple = MerkleTuple::from_leaked(tuple_root, empty_root, tuple_len);
+        let dangling_tuple = MerkleTuple::from_leaked(metadata);
 
         Self { raw, tuple: dangling_tuple }
     }

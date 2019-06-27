@@ -2,7 +2,7 @@ use digest::Digest;
 use core::marker::PhantomData;
 
 use crate::index::{MerkleIndex, MerkleSelection, MerkleRoute};
-use crate::traits::{MerkleDB, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot};
+use crate::traits::{MerkleDB, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak};
 
 /// `MerkleRaw` with owned root.
 pub type OwnedMerkleRaw<DB> = MerkleRaw<OwnedRoot, DB>;
@@ -179,14 +179,16 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
             });
         }
     }
+}
 
-    /// Leak this tree and return the root.
-    pub fn leak(self) -> ValueOf<DB> {
+impl<R: RootStatus, DB: MerkleDB> Leak for MerkleRaw<R, DB> {
+    type Metadata = ValueOf<DB>;
+
+    fn metadata(&self) -> Self::Metadata {
         self.root()
     }
 
-    /// Create from leaked value.
-    pub fn from_leaked(root: ValueOf<DB>) -> Self {
+    fn from_leaked(root: Self::Metadata) -> Self {
         Self {
             root,
             _marker: PhantomData,

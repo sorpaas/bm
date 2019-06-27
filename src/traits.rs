@@ -168,3 +168,14 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<
         self.0.insert(key, ((left, right), 0));
     }
 }
+
+/// Leakable value, whose default behavior of drop is to leak.
+pub trait Leak {
+    /// Metadata to represent this merkle struct.
+    type Metadata;
+
+    /// Initialize from a previously leaked value.
+    fn from_leaked(metadata: Self::Metadata) -> Self;
+    /// Metadata of the value.
+    fn metadata(&self) -> Self::Metadata;
+}

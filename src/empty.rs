@@ -1,4 +1,4 @@
-use crate::traits::{MerkleDB, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot};
+use crate::traits::{MerkleDB, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak};
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
 
@@ -50,14 +50,16 @@ impl<R: RootStatus, DB: MerkleDB> MerkleEmpty<R, DB> {
     pub fn drop(self, db: &mut DB) {
         self.raw.drop(db)
     }
+}
 
-    /// Leak the merkle tree.
-    pub fn leak(self) -> ValueOf<DB> {
-        self.raw.leak()
+impl<R: RootStatus, DB: MerkleDB> Leak for MerkleEmpty<R, DB> {
+    type Metadata = ValueOf<DB>;
+
+    fn metadata(&self) -> Self::Metadata {
+        self.raw.metadata()
     }
 
-    /// Initialize this merkle tree from a previously leaked one.
-    pub fn from_leaked(root: ValueOf<DB>) -> Self {
+    fn from_leaked(root: Self::Metadata) -> Self {
         Self {
             raw: MerkleRaw::from_leaked(root)
         }
