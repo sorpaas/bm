@@ -2,7 +2,13 @@ use digest::Digest;
 use core::marker::PhantomData;
 
 use crate::index::{MerkleIndex, MerkleSelection, MerkleRoute};
-use crate::traits::{MerkleDB, Value, ValueOf, RootStatus};
+use crate::traits::{MerkleDB, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot};
+
+/// `MerkleRaw` with owned root.
+pub type OwnedMerkleRaw<DB> = MerkleRaw<OwnedRoot, DB>;
+
+/// `MerkleRaw` with dangling root.
+pub type DanglingMerkleRaw<DB> = MerkleRaw<DanglingRoot, DB>;
 
 /// Raw merkle tree.
 pub struct MerkleRaw<R: RootStatus, DB: MerkleDB> {

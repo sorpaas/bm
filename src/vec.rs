@@ -6,6 +6,12 @@ use crate::index::MerkleIndex;
 const LEN_INDEX: MerkleIndex = MerkleIndex::root().right();
 const ITEM_ROOT_INDEX: MerkleIndex = MerkleIndex::root().left();
 
+/// `MerkleVec` with owned root.
+pub type OwnedMerkleVec<DB> = MerkleVec<OwnedRoot, DB>;
+
+/// `MerkleVec` with dangling root.
+pub type DanglingMerkleVec<DB> = MerkleVec<DanglingRoot, DB>;
+
 /// Binary merkle vector.
 pub struct MerkleVec<R: RootStatus, DB: MerkleDB> {
     raw: MerkleRaw<R, DB>,

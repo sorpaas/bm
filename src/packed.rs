@@ -29,6 +29,12 @@ pub fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usi
     (host_index, ranges)
 }
 
+/// `MerklePackedTuple` with owned root.
+pub type OwnedMerklePackedTuple<DB, T, H, V> = MerklePackedTuple<OwnedRoot, DB, T, H, V>;
+
+/// `MerklePackedTuple` with dangling root.
+pub type DanglingMerklePackedTuple<DB, T, H, V> = MerklePackedTuple<DanglingRoot, DB, T, H, V>;
+
 /// Packed merkle tuple.
 pub struct MerklePackedTuple<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {
     tuple: MerkleTuple<R, DB>,
@@ -166,6 +172,12 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<
         }
     }
 }
+
+/// `MerklePackedVec` with owned root.
+pub type OwnedMerklePackedVec<DB, T, H, V> = MerklePackedVec<OwnedRoot, DB, T, H, V>;
+
+/// `MerklePackedVec` with dangling root.
+pub type DanglingMerklePackedVec<DB, T, H, V> = MerklePackedVec<DanglingRoot, DB, T, H, V>;
 
 /// Packed merkle vector.
 pub struct MerklePackedVec<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {

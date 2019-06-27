@@ -1,10 +1,16 @@
-use crate::traits::{MerkleDB, Value, ValueOf, RootStatus};
+use crate::traits::{MerkleDB, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot};
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
 
 const ROOT_INDEX: MerkleIndex = MerkleIndex::root();
 const LEFT_INDEX: MerkleIndex = MerkleIndex::root().left();
 const RIGHT_INDEX: MerkleIndex = MerkleIndex::root().right();
+
+/// `MerkleEmpty` with owned root.
+pub type OwnedMerkleEmpty<DB> = MerkleEmpty<OwnedRoot, DB>;
+
+/// `MerkleEmpty` with dangling root.
+pub type DanglingMerkleEmpty<DB> = MerkleEmpty<DanglingRoot, DB>;
 
 /// Merkle structure storing hashes of empty roots.
 pub struct MerkleEmpty<R: RootStatus, DB: MerkleDB> {

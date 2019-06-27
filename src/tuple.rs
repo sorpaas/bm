@@ -1,10 +1,16 @@
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, OwnedRoot};
+use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot};
 use crate::empty::MerkleEmpty;
 use crate::raw::MerkleRaw;
 use crate::index::MerkleIndex;
 
 const ROOT_INDEX: MerkleIndex = MerkleIndex::root();
 const EXTEND_INDEX: MerkleIndex = MerkleIndex::root().left();
+
+/// `MerkleTuple` with owned root.
+pub type OwnedMerkleTuple<DB> = MerkleTuple<OwnedRoot, DB>;
+
+/// `MerkleTuple` with dangling root.
+pub type DanglingMerkleTuple<DB> = MerkleTuple<DanglingRoot, DB>;
 
 /// Binary merkle tuple.
 pub struct MerkleTuple<R: RootStatus, DB: MerkleDB> {
