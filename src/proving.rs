@@ -9,6 +9,25 @@ pub struct ProvingMerkleDB<'a, DB: MerkleDB> {
     inserts: HashSet<IntermediateOf<Self>>,
 }
 
+impl<'a, DB: MerkleDB> ProvingMerkleDB<'a, DB> {
+    /// Create a new proving database.
+    pub fn new(db: &'a mut DB) -> Self {
+        Self {
+            db,
+            proofs: Mutex::new(Default::default()),
+            inserts: Default::default(),
+        }
+    }
+
+    /// Reset the proving database and get all the proofs.
+    pub fn reset(&mut self) -> HashMap<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)> {
+        let proofs = self.proofs.lock().expect("Lock is poisoned").clone();
+        self.proofs = Mutex::new(Default::default());
+        self.inserts = Default::default();
+        proofs
+    }
+}
+
 impl<'a, DB: MerkleDB> MerkleDB for ProvingMerkleDB<'a, DB> {
     type Digest = DB::Digest;
     type End = DB::End;

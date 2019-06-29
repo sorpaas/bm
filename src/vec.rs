@@ -1,6 +1,7 @@
 use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, DanglingRoot, OwnedRoot, Leak, Error};
 use crate::tuple::MerkleTuple;
 use crate::raw::MerkleRaw;
+use crate::empty::MerkleEmpty;
 use crate::index::MerkleIndex;
 
 const LEN_INDEX: MerkleIndex = MerkleIndex::root().right();
@@ -68,6 +69,40 @@ impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
         self.raw.drop(db)?;
         self.tuple.drop(db)?;
         Ok(())
+    }
+
+    /// Deconstruct the vector into one single hash value, and leak only the hash value.
+    pub fn deconstruct(self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        self.tuple.deconstruct(db)?;
+        self.raw.get(db, LEN_INDEX)?;
+        self.raw.get(db, ITEM_ROOT_INDEX)?;
+        Ok(self.raw.metadata())
+    }
+
+    /// Reconstruct the vector from a single hash value.
+    pub fn reconstruct(root: ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
+        let raw = MerkleRaw::<R, DB>::from_leaked(root);
+        let len: usize = raw.get(db, LEN_INDEX)?
+            .ok_or(Error::CorruptedDatabase)?
+            .end()
+            .ok_or(Error::CorruptedDatabase)?
+            .into();
+        let tuple_root = raw.get(db, ITEM_ROOT_INDEX)?
+            .ok_or(Error::CorruptedDatabase)?;
+        let mut empty = MerkleEmpty::<OwnedRoot, DB>::default();
+        let mut max_len = 1;
+        while max_len < len {
+            empty.extend(db)?;
+            max_len *= 2;
+        }
+        let empty_root = empty.metadata();
+
+        let tuple = MerkleTuple::<DanglingRoot, DB>::from_leaked((tuple_root, empty_root, len));
+
+        Ok(Self {
+            raw,
+            tuple,
+        })
     }
 }
 
@@ -169,6 +204,24 @@ mod tests {
             vec.set(&mut db, i, i.into()).unwrap();
         }
         for i in 0..100 {
+            assert_eq!(vec.get(&db, i).unwrap(), i.into());
+        }
+    }
+
+    #[test]
+    fn test_deconstruct_reconstruct() {
+        let mut db = InMemory::default();
+        let mut vec = OwnedMerkleVec::create(&mut db).unwrap();
+
+        for i in 0..100 {
+            assert_eq!(vec.len(), i);
+            vec.push(&mut db, i.into()).unwrap();
+        }
+        let vec_hash = vec.deconstruct(&mut db).unwrap();
+
+        let vec = OwnedMerkleVec::reconstruct(vec_hash, &mut db).unwrap();
+        assert_eq!(vec.len(), 100);
+        for i in (0..100).rev() {
             assert_eq!(vec.get(&db, i).unwrap(), i.into());
         }
     }

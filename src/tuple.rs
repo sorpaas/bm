@@ -123,6 +123,12 @@ impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
         self.empty.drop(db)?;
         Ok(())
     }
+
+    /// Deconstruct the vector into one single hash value, and leak only the hash value.
+    pub fn deconstruct(self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        self.empty.drop(db)?;
+        Ok(self.raw.metadata())
+    }
 }
 
 impl<R: RootStatus, DB: MerkleDB> Leak for MerkleTuple<R, DB> {
