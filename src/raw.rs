@@ -44,14 +44,10 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
                         Value::End(_) => return Ok(None),
                     };
 
-                    current = match db.get(&intermediate)? {
-                        Some(pair) => {
-                            match selection {
-                                MerkleSelection::Left => pair.0.clone(),
-                                MerkleSelection::Right => pair.1.clone(),
-                            }
-                        },
-                        None => return Err(Error::CorruptedDatabase),
+                    let pair = db.get(&intermediate)?;
+                    current = match selection {
+                        MerkleSelection::Left => pair.0.clone(),
+                        MerkleSelection::Right => pair.1.clone(),
                     };
                 }
 
@@ -72,10 +68,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
         match set.clone() {
             Value::End(_) => (),
             Value::Intermediate(key) => {
-                let value = match db.get(&key)? {
-                    Some(value) => value,
-                    None => return Err(Error::IntermediateNotFound),
-                };
+                let value = db.get(&key)?;
                 db.insert(key, value)?;
             },
         };
@@ -116,10 +109,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
                 };
                 match current.clone() {
                     Some(cur) => {
-                        let value = match db.get(&cur)? {
-                            Some(value) => value.clone(),
-                            None => return Err(Error::CorruptedDatabase),
-                        };
+                        let value = db.get(&cur)?;
                         values.push((sel, value.clone()));
                         current = match sel {
                             MerkleSelection::Left => value.0.intermediate(),
