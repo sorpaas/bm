@@ -61,6 +61,20 @@ impl MerkleIndex {
         }
     }
 
+    /// Whether this index has given descendant.
+    pub fn has_descendant(&self, other: &MerkleIndex) -> bool {
+        match other.parent() {
+            Some(parent) => {
+                if parent == *self {
+                    true
+                } else {
+                    self.has_descendant(&parent)
+                }
+            }
+            None => false,
+        }
+    }
+
     /// From one-based index.
     pub fn from_one(value: usize) -> Option<Self> {
         if value == 0 {
@@ -101,5 +115,16 @@ impl MerkleIndex {
 
             value = value >> 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_descendant() {
+        assert!(MerkleIndex::root().left().has_descendant(&MerkleIndex::root().left().right().left().right().right()));
+        assert!(!MerkleIndex::root().left().has_descendant(&MerkleIndex::root().right().right().left().right().right()));
     }
 }
