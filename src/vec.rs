@@ -163,9 +163,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_push_pop() {
-        let mut db = InMemory::default();
+    fn assert_push_pop_with_db(mut db: InMemory) {
         let mut vec = MerkleVec::create(&mut db).unwrap();
         let mut roots = Vec::new();
 
@@ -182,6 +180,16 @@ mod tests {
             assert_eq!(vec.len(), i);
         }
         assert_eq!(vec.len(), 0);
+    }
+
+    #[test]
+    fn test_push_pop_inherited() {
+        assert_push_pop_with_db(InMemory::default());
+    }
+
+    #[test]
+    fn test_push_pop_unit() {
+        assert_push_pop_with_db(InMemory::new_with_unit_empty(VecValue(vec![255])))
     }
 
     #[test]

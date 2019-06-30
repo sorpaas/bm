@@ -120,7 +120,8 @@ pub enum InMemoryMerkleDBError {
 #[derive(Clone)]
 /// In-memory merkle database.
 pub struct InMemoryMerkleDB<D: Digest, T: AsRef<[u8]> + Clone + Default>(
-    HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>
+    HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>,
+    Option<EndOf<Self>>,
 );
 
 impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryMerkleDB<D, T> {
@@ -147,6 +148,16 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryMerkleDB<D, T> {
 
         Ok(())
     }
+
+    /// Create an in-memory database with unit empty value.
+    pub fn new_with_unit_empty(value: EndOf<Self>) -> Self {
+        Self(Default::default(), Some(value))
+    }
+
+    /// Create an in-memory database with inherited empty value.
+    pub fn new_with_inherited_empty() -> Self {
+        Self(Default::default(), None)
+    }
 }
 
 impl<D: Digest, T: AsRef<[u8]> + Clone + Default> From<HashMap<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)>> for InMemoryMerkleDB<D, T> {
@@ -161,7 +172,7 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> From<HashMap<IntermediateOf<Se
 
 impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Default for InMemoryMerkleDB<D, T> {
     fn default() -> Self {
-        Self(Default::default())
+        Self(Default::default(), None)
     }
 }
 
@@ -184,14 +195,19 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<
     }
 
     fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self>, Self::Error> {
-        let mut current = Value::End(Default::default());
-        for _ in 0..depth_to_bottom {
-            let value = (current.clone(), current);
-            let key = self.intermediate_of(&value.0, &value.1);
-            self.0.insert(key.clone(), (value, None));
-            current = Value::Intermediate(key);
+        match &self.1 {
+            Some(end) => Ok(Value::End(end.clone())),
+            None => {
+                let mut current = Value::End(Default::default());
+                for _ in 0..depth_to_bottom {
+                    let value = (current.clone(), current);
+                    let key = self.intermediate_of(&value.0, &value.1);
+                    self.0.insert(key.clone(), (value, None));
+                    current = Value::Intermediate(key);
+                }
+                Ok(current)
+            }
         }
-        Ok(current)
     }
 
     fn get(&self, key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error> {

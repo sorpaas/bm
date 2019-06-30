@@ -107,8 +107,23 @@ impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
             Some(value) => value.end().ok_or(Error::CorruptedDatabase)?,
             None => return Err(Error::CorruptedDatabase),
         };
-        let empty = db.empty_at(0)?;
-        self.raw.set(db, raw_index, empty)?;
+
+        let mut empty_depth_to_bottom = 0;
+        let mut replace_index = raw_index;
+        loop {
+            if let Some(parent) = replace_index.parent() {
+                if parent.left() == replace_index {
+                    replace_index = parent;
+                    empty_depth_to_bottom += 1;
+                } else {
+                    break
+                }
+            } else {
+                break
+            }
+        }
+        let empty = db.empty_at(empty_depth_to_bottom)?;
+        self.raw.set(db, replace_index, empty)?;
 
         if len <= self.max_len() / 2 {
             self.shrink(db)?;
