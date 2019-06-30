@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn test_push_pop_inherited() {
-        assert_push_pop_with_db(InMemory::default());
+        assert_push_pop_with_db(InMemory::new_with_inherited_empty());
     }
 
     #[test]
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn test_set() {
-        let mut db = InMemory::default();
+        let mut db = InMemory::new_with_inherited_empty();
         let mut vec = MerkleVec::create(&mut db).unwrap();
 
         for i in 0..100 {
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn test_deconstruct_reconstruct() {
-        let mut db = InMemory::default();
+        let mut db = InMemory::new_with_inherited_empty();
         let mut vec = OwnedMerkleVec::create(&mut db).unwrap();
 
         for i in 0..100 {

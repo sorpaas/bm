@@ -240,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_set_empty() {
-        let mut db = InMemory::default();
+        let mut db = InMemory::new_with_inherited_empty();
         let mut list = MerkleRaw::<OwnedRoot, InMemory>::default();
 
         let mut last_root = list.root();
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn test_set_skip() {
-        let mut db = InMemory::default();
+        let mut db = InMemory::new_with_inherited_empty();
         let mut list = MerkleRaw::<OwnedRoot, InMemory>::default();
 
         list.set(&mut db, MerkleIndex::from_one(4).unwrap(), Value::End(vec![2])).unwrap();
@@ -264,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_set_basic() {
-        let mut db = InMemory::default();
+        let mut db = InMemory::new_with_inherited_empty();
         let mut list = MerkleRaw::<OwnedRoot, InMemory>::default();
 
         for i in 4..8 {
@@ -274,8 +274,8 @@ mod tests {
 
     #[test]
     fn test_set_only() {
-        let mut db1 = InMemory::default();
-        let mut db2 = InMemory::default();
+        let mut db1 = InMemory::new_with_inherited_empty();
+        let mut db2 = InMemory::new_with_inherited_empty();
         let mut list1 = MerkleRaw::<OwnedRoot, InMemory>::default();
         let mut list2 = MerkleRaw::<OwnedRoot, InMemory>::default();
 
@@ -299,7 +299,7 @@ mod tests {
 
     #[test]
     fn test_intermediate() {
-        let mut db = InMemory::default();
+        let mut db = InMemory::new_with_inherited_empty();
         let mut list = MerkleRaw::<OwnedRoot, InMemory>::default();
         list.set(&mut db, MerkleIndex::from_one(2).unwrap(), Value::End(vec![])).unwrap();
         assert_eq!(list.get(&mut db, MerkleIndex::from_one(3).unwrap()).unwrap().unwrap(), Value::End(vec![]));

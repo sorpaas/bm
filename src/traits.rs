@@ -158,21 +158,12 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryMerkleDB<D, T> {
     pub fn new_with_inherited_empty() -> Self {
         Self(Default::default(), None)
     }
-}
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> From<HashMap<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)>> for InMemoryMerkleDB<D, T> {
-    fn from(proofs: HashMap<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)>) -> Self {
-        let mut db = Self::default();
+    /// Populate the database with proofs.
+    pub fn populate(&mut self, proofs: HashMap<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)>) {
         for (key, value) in proofs {
-            db.0.insert(key, (value, None));
+            self.0.insert(key, (value, None));
         }
-        db
-    }
-}
-
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Default for InMemoryMerkleDB<D, T> {
-    fn default() -> Self {
-        Self(Default::default(), None)
     }
 }
 

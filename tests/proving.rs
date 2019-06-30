@@ -39,7 +39,7 @@ type InMemory = bm::InMemoryMerkleDB<Sha256, VecValue>;
 
 #[test]
 fn basic_proving_vec() {
-    let mut db = InMemory::default();
+    let mut db = InMemory::new_with_inherited_empty();
     let mut proving = ProvingMerkleDB::new(&mut db);
     let mut vec = OwnedMerkleVec::create(&mut proving).unwrap();
 
@@ -54,7 +54,8 @@ fn basic_proving_vec() {
     let vec_hash = vec.deconstruct(&mut proving).unwrap();
     let proofs = proving.reset();
 
-    let mut proved = InMemory::from(proofs);
+    let mut proved = InMemory::new_with_inherited_empty();
+    proved.populate(proofs);
     let proved_vec = OwnedMerkleVec::reconstruct(vec_hash, &mut proved).unwrap();
     assert_eq!(proved_vec.get(&proved, 5usize.into()).unwrap(), 5usize.into());
     assert_eq!(proved_vec.get(&proved, 7usize.into()).unwrap(), 7usize.into());

@@ -342,7 +342,7 @@ mod tests {
 
     #[test]
     fn test_tuple() {
-        let mut db = InMemory::default();
+        let mut db = InMemory::new_with_inherited_empty();
         let mut tuple = MerklePackedTuple::<OwnedRoot, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, 0).unwrap();
 
         for i in 0..100 {
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn test_vec() {
-        let mut db = InMemory::default();
+        let mut db = InMemory::new_with_inherited_empty();
         let mut vec = MerklePackedVec::<OwnedRoot, _, GenericArray<u8, U32>, U8, U32>::create(&mut db).unwrap();
 
         for i in 0..100 {
