@@ -107,6 +107,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
             Some(value) => value.end().ok_or(Error::CorruptedDatabase)?,
             None => return Err(Error::CorruptedDatabase),
         };
+        self.raw.set(db, raw_index, Value::End(Default::default()))?;
 
         if len <= self.max_len() / 2 {
             self.shrink(db)?;

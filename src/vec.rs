@@ -167,13 +167,16 @@ mod tests {
     fn test_push_pop() {
         let mut db = InMemory::default();
         let mut vec = MerkleVec::create(&mut db).unwrap();
+        let mut roots = Vec::new();
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
             vec.push(&mut db, i.into()).unwrap();
+            roots.push(vec.root());
         }
         assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
+            assert_eq!(vec.root(), roots.pop().unwrap());
             let value = vec.pop(&mut db).unwrap();
             assert_eq!(value, Some(i.into()));
             assert_eq!(vec.len(), i);
