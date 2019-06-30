@@ -62,13 +62,11 @@ impl RootStatus for OwnedRoot {
 }
 
 /// Intermediate value of a database.
-pub type IntermediateOf<DB> = GenericArray<u8, IntermediateSizeOf<DB>>;
+pub type IntermediateOf<DB> = <DB as MerkleDB>::Intermediate;
 /// End value of a database.
 pub type EndOf<DB> = <DB as MerkleDB>::End;
 /// Value of a database.
 pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
-/// Length of the digest.
-pub type IntermediateSizeOf<DB> = <<DB as MerkleDB>::Digest as Digest>::OutputSize;
 
 /// Set error.
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -87,13 +85,17 @@ impl<DBError> From<DBError> for Error<DBError> {
 
 /// Traits for a merkle database.
 pub trait MerkleDB {
-    /// Hash function for merkle tree.
-    type Digest: Digest;
+    /// Intermediate value stored in this merkle database.
+    type Intermediate: AsRef<[u8]> + Clone;
     /// End value stored in this merkle database.
     type End: AsRef<[u8]> + Clone + Default;
     /// Error type for DB access.
     type Error;
 
+    /// Get the intermediate value of given left and right child.
+    fn intermediate_of(&self, left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self>;
+    /// Get or create the empty value at given depth-to-bottom.
+    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self>, Self::Error>;
     /// Get an internal item by key.
     fn get(&self, key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error>;
     /// Rootify a key.
@@ -170,9 +172,27 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<S
 }
 
 impl<D: Digest, V: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<D, V> {
-    type Digest = D;
+    type Intermediate = GenericArray<u8, D::OutputSize>;
     type End = V;
     type Error = InMemoryMerkleDBError;
+
+    fn intermediate_of(&self, left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
+        let mut digest = D::new();
+        digest.input(&left.as_ref()[..]);
+        digest.input(&right.as_ref()[..]);
+        digest.result()
+    }
+
+    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self>, Self::Error> {
+        let mut current = Value::End(Default::default());
+        for _ in 0..depth_to_bottom {
+            let value = (current.clone(), current);
+            let key = self.intermediate_of(&value.0, &value.1);
+            self.0.insert(key.clone(), (value, None));
+            current = Value::Intermediate(key);
+        }
+        Ok(current)
+    }
 
     fn get(&self, key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error> {
         self.0.get(key).map(|v| v.0.clone()).ok_or(InMemoryMerkleDBError::FetchingKeyNotExist)

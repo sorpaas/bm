@@ -1,15 +1,20 @@
 use crate::{MerkleDB, ValueOf, IntermediateOf};
+use core::hash::Hash;
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 /// Proving merkle database.
-pub struct ProvingMerkleDB<'a, DB: MerkleDB> {
+pub struct ProvingMerkleDB<'a, DB: MerkleDB> where
+    IntermediateOf<DB>: Eq + Hash,
+{
     db: &'a mut DB,
     proofs: Mutex<HashMap<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)>>,
     inserts: HashSet<IntermediateOf<Self>>,
 }
 
-impl<'a, DB: MerkleDB> ProvingMerkleDB<'a, DB> {
+impl<'a, DB: MerkleDB> ProvingMerkleDB<'a, DB> where
+    IntermediateOf<DB>: Eq + Hash,
+{
     /// Create a new proving database.
     pub fn new(db: &'a mut DB) -> Self {
         Self {
@@ -28,10 +33,20 @@ impl<'a, DB: MerkleDB> ProvingMerkleDB<'a, DB> {
     }
 }
 
-impl<'a, DB: MerkleDB> MerkleDB for ProvingMerkleDB<'a, DB> {
-    type Digest = DB::Digest;
+impl<'a, DB: MerkleDB> MerkleDB for ProvingMerkleDB<'a, DB> where
+    IntermediateOf<DB>: Eq + Hash,
+{
+    type Intermediate = DB::Intermediate;
     type End = DB::End;
     type Error = DB::Error;
+
+    fn intermediate_of(&self, left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
+        self.db.intermediate_of(left, right)
+    }
+
+    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self>, Self::Error> {
+        self.db.empty_at(depth_to_bottom)
+    }
 
     fn get(
         &self,

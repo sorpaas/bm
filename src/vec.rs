@@ -1,7 +1,6 @@
 use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, DanglingRoot, OwnedRoot, Leak, Error};
 use crate::tuple::MerkleTuple;
 use crate::raw::MerkleRaw;
-use crate::empty::MerkleEmpty;
 use crate::index::MerkleIndex;
 
 const LEN_INDEX: MerkleIndex = MerkleIndex::root().right();
@@ -73,7 +72,6 @@ impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
 
     /// Deconstruct the vector into one single hash value, and leak only the hash value.
     pub fn deconstruct(self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        self.tuple.deconstruct(db)?;
         self.raw.get(db, LEN_INDEX)?;
         self.raw.get(db, ITEM_ROOT_INDEX)?;
         Ok(self.raw.metadata())
@@ -89,15 +87,8 @@ impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
             .into();
         let tuple_root = raw.get(db, ITEM_ROOT_INDEX)?
             .ok_or(Error::CorruptedDatabase)?;
-        let mut empty = MerkleEmpty::<OwnedRoot, DB>::default();
-        let mut max_len = 1;
-        while max_len < len {
-            empty.extend(db)?;
-            max_len *= 2;
-        }
-        let empty_root = empty.metadata();
 
-        let tuple = MerkleTuple::<DanglingRoot, DB>::from_leaked((tuple_root, empty_root, len));
+        let tuple = MerkleTuple::<DanglingRoot, DB>::from_leaked((tuple_root, len));
 
         Ok(Self {
             raw,
@@ -109,17 +100,17 @@ impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
 impl<R: RootStatus, DB: MerkleDB> Leak for MerkleVec<R, DB> where
     EndOf<DB>: From<usize> + Into<usize>,
 {
-    type Metadata = (ValueOf<DB>, ValueOf<DB>, ValueOf<DB>, usize);
+    type Metadata = (ValueOf<DB>, ValueOf<DB>, usize);
 
     fn metadata(&self) -> Self::Metadata {
-        let (tuple, empty, len) = self.tuple.metadata();
-        (self.raw.metadata(), tuple, empty, len)
+        let (tuple, len) = self.tuple.metadata();
+        (self.raw.metadata(), tuple, len)
     }
 
-    fn from_leaked((raw_root, tuple_root, empty_root, len): Self::Metadata) -> Self {
+    fn from_leaked((raw_root, tuple_root, len): Self::Metadata) -> Self {
         Self {
             raw: MerkleRaw::from_leaked(raw_root),
-            tuple: MerkleTuple::from_leaked((tuple_root, empty_root, len)),
+            tuple: MerkleTuple::from_leaked((tuple_root, len)),
         }
     }
 }

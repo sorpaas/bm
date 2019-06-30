@@ -1,4 +1,3 @@
-use digest::Digest;
 use core::marker::PhantomData;
 
 use crate::index::{MerkleIndex, MerkleSelection, MerkleRoute};
@@ -138,12 +137,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
                 MerkleSelection::Right => { value.1 = update.clone(); }
             }
 
-            let intermediate = {
-                let mut digest = <DB::Digest as Digest>::new();
-                digest.input(&value.0.as_ref()[..]);
-                digest.input(&value.1.as_ref()[..]);
-                digest.result()
-            };
+            let intermediate = db.intermediate_of(&value.0, &value.1);
 
             db.insert(intermediate.clone(), value)?;
             update = Value::Intermediate(intermediate);

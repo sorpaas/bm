@@ -80,9 +80,6 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Mer
     /// Root of the current merkle packed tuple.
     pub fn root(&self) -> ValueOf<DB> { self.tuple.root() }
 
-    /// Root of empty merkle.
-    pub fn empty_root(&self) -> ValueOf<DB> { self.tuple.empty_root() }
-
     /// Push a new value to the tuple.
     pub fn push(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
         let index = self.len;
@@ -142,17 +139,17 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Lea
     EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
-    type Metadata = (ValueOf<DB>, ValueOf<DB>, usize, usize);
+    type Metadata = (ValueOf<DB>, usize, usize);
 
     fn metadata(&self) -> Self::Metadata {
         let value_len = self.len();
-        let (tuple_root, empty_root, host_len) = self.tuple.metadata();
-        (tuple_root, empty_root, host_len, value_len)
+        let (tuple_root, host_len) = self.tuple.metadata();
+        (tuple_root, host_len, value_len)
     }
 
-    fn from_leaked((raw_root, empty_root, len, value_len): Self::Metadata) -> Self {
+    fn from_leaked((raw_root, len, value_len): Self::Metadata) -> Self {
         Self {
-            tuple: MerkleTuple::from_leaked((raw_root, empty_root, len)),
+            tuple: MerkleTuple::from_leaked((raw_root, len)),
             len: value_len,
             _marker: PhantomData,
         }
@@ -254,17 +251,17 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Lea
     EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
-    type Metadata = (ValueOf<DB>, ValueOf<DB>, ValueOf<DB>, usize, usize);
+    type Metadata = (ValueOf<DB>, ValueOf<DB>, usize, usize);
 
     fn metadata(&self) -> Self::Metadata {
-        let (tuple, empty, host_len, len) = self.tuple.metadata();
-        (self.raw.metadata(), tuple, empty, host_len, len)
+        let (tuple, host_len, len) = self.tuple.metadata();
+        (self.raw.metadata(), tuple, host_len, len)
     }
 
-    fn from_leaked((raw_root, tuple_root, empty_root, host_len, len): Self::Metadata) -> Self {
+    fn from_leaked((raw_root, tuple_root, host_len, len): Self::Metadata) -> Self {
         Self {
             raw: MerkleRaw::from_leaked(raw_root),
-            tuple: MerklePackedTuple::from_leaked((tuple_root, empty_root, host_len, len)),
+            tuple: MerklePackedTuple::from_leaked((tuple_root, host_len, len)),
         }
     }
 }
