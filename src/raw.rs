@@ -95,7 +95,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
                             return Ok(())
                         },
                     };
-                    values.push((sel, (Value::End(Default::default()), Value::End(Default::default()))));
+                    values.push((sel, (db.empty_at(0)?, db.empty_at(0)?)));
                     depth += 1;
                     None
                 },
@@ -116,7 +116,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleRaw<R, DB> {
                         };
                     },
                     None => {
-                        values.push((sel, (Value::End(Default::default()), Value::End(Default::default()))));
+                        values.push((sel, (db.empty_at(0)?, db.empty_at(0)?)));
                     },
                 }
                 depth += 1;
