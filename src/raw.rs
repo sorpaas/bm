@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
 use crate::index::{Index, IndexSelection, IndexRoute};
-use crate::traits::{Backend, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error};
+use crate::traits::{Backend, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree};
 
 /// `Raw` with owned root.
 pub type OwnedRaw<DB> = Raw<Owned, DB>;
@@ -24,12 +24,29 @@ impl<R: RootStatus, DB: Backend> Default for Raw<R, DB> {
     }
 }
 
-impl<R: RootStatus, DB: Backend> Raw<R, DB> {
-    /// Return the root of the tree.
-    pub fn root(&self) -> ValueOf<DB> {
+impl<R: RootStatus, DB: Backend> Tree for Raw<R, DB> {
+    type RootStatus = R;
+    type Backend = DB;
+
+    fn root(&self) -> ValueOf<DB> {
         self.root.clone()
     }
 
+    fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+        if R::is_owned() {
+            if let Some(key) = self.root().intermediate() {
+                db.unrootify(&key)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn into_raw(self) -> Raw<R, DB> {
+        self
+    }
+}
+
+impl<R: RootStatus, DB: Backend> Raw<R, DB> {
     /// Return a reference to a subtree.
     pub fn subtree(&self, db: &DB, index: Index) -> Result<DanglingRaw<DB>, Error<DB::Error>> {
         let subroot = self.get(db, index)?.ok_or(Error::CorruptedDatabase)?;
@@ -170,16 +187,6 @@ impl<R: RootStatus, DB: Backend> Raw<R, DB> {
         }
 
         self.root = update;
-        Ok(())
-    }
-
-    /// Drop the current tree.
-    pub fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
-        if R::is_owned() {
-            if let Some(key) = self.root().intermediate() {
-                db.unrootify(&key)?;
-            }
-        }
         Ok(())
     }
 }

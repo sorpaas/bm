@@ -1,7 +1,6 @@
-use crate::traits::{Backend, EndOf, Value, ValueOf, RootStatus, Dangling, Owned, Leak, Error, Tree, Sequence};
+use crate::traits::{Backend, EndOf, ValueOf, RootStatus, Dangling, Owned, Leak, Error, Tree, Sequence};
 use crate::vector::Vector;
 use crate::raw::Raw;
-use crate::index::Index;
 use crate::length::LengthMixed;
 
 /// `List` with owned root.

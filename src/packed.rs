@@ -3,10 +3,10 @@ use core::ops::Range;
 use core::cmp;
 use core::marker::PhantomData;
 
+use crate::length::LengthMixed;
 use crate::vector::Vector;
 use crate::raw::Raw;
-use crate::index::Index;
-use crate::traits::{EndOf, Value, Backend, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree};
+use crate::traits::{EndOf, Backend, ValueOf, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
 
 fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
     let host_len = Host::to_usize();
@@ -54,12 +54,6 @@ pub struct PackedVector<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: Ar
     _marker: PhantomData<(T, H, V)>,
 }
 
-impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> From<PackedVector<R, DB, T, H, V>> for Raw<R, DB> {
-    fn from(packed: PackedVector<R, DB, T, H, V>) -> Self {
-        packed.tuple.into_raw()
-    }
-}
-
 impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<R, DB, T, H, V> where
     EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
@@ -94,9 +88,6 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
 
         Ok(())
     }
-
-    /// Root of the current merkle packed tuple.
-    pub fn root(&self) -> ValueOf<DB> { self.tuple.root() }
 
     /// Push a new value to the tuple.
     pub fn push(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
@@ -142,16 +133,6 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
         Ok(Some(ret))
     }
 
-    /// Get the length of the tuple.
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    /// Drop the current tuple.
-    pub fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
-        self.tuple.drop(db)
-    }
-
     /// Create a packed tuple from raw merkle tree.
     pub fn from_raw(raw: Raw<R, DB>, len: usize) -> Self {
         let host_len = host_len::<H, V>(len);
@@ -160,6 +141,35 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
             len,
             _marker: PhantomData,
         }
+    }
+}
+
+impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tree for PackedVector<R, DB, T, H, V> where
+    EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+{
+    type RootStatus = R;
+    type Backend = DB;
+
+    fn root(&self) -> ValueOf<DB> {
+        self.tuple.root()
+    }
+
+    fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+        self.tuple.drop(db)
+    }
+
+    fn into_raw(self) -> Raw<R, DB> {
+        self.tuple.into_raw()
+    }
+}
+
+impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Sequence for PackedVector<R, DB, T, H, V> where
+    EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+{
+    fn len(&self) -> usize {
+        self.len
     }
 }
 
@@ -213,65 +223,63 @@ pub type OwnedPackedList<DB, T, H, V> = PackedList<Owned, DB, T, H, V>;
 pub type DanglingPackedList<DB, T, H, V> = PackedList<Dangling, DB, T, H, V>;
 
 /// Packed merkle vector.
-pub struct PackedList<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {
-    tuple: PackedVector<Dangling, DB, T, H, V>,
-    raw: Raw<R, DB>,
-}
-
-const LEN_INDEX: Index = Index::root().right();
-const ITEM_ROOT_INDEX: Index = Index::root().left();
+pub struct PackedList<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>>(
+    LengthMixed<R, DB, PackedVector<Dangling, DB, T, H, V>>,
+) where
+    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+    EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>;
 
 impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<R, DB, T, H, V> where
     EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
-    fn update_metadata(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
-        self.raw.set(db, ITEM_ROOT_INDEX, self.tuple.root())?;
-        self.raw.set(db, LEN_INDEX, Value::End(self.tuple.len().into()))?;
-        Ok(())
-    }
-
     /// Get value at index.
     pub fn get(&self, db: &DB, index: usize) -> Result<T, Error<DB::Error>> {
-        self.tuple.get(db, index)
+        self.0.with(db, |tuple, db| tuple.get(db, index))
     }
 
     /// Set value at index.
     pub fn set(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
-        self.tuple.set(db, index, value)?;
-        self.update_metadata(db)?;
-        Ok(())
-    }
-
-    /// Root of the current merkle vector.
-    pub fn root(&self) -> ValueOf<DB> {
-        self.raw.root()
+        self.0.with_mut(db, |tuple, db| tuple.set(db, index, value))
     }
 
     /// Push a new value to the vector.
     pub fn push(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
-        self.tuple.push(db, value)?;
-        self.update_metadata(db)?;
-        Ok(())
+        self.0.with_mut(db, |tuple, db| tuple.push(db, value))
     }
 
     /// Pop a value from the vector.
     pub fn pop(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
-        let ret = self.tuple.pop(db)?;
-        self.update_metadata(db)?;
-        Ok(ret)
+        self.0.with_mut(db, |tuple, db| tuple.pop(db))
+    }
+}
+
+impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tree for PackedList<R, DB, T, H, V> where
+    EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+{
+    type RootStatus = R;
+    type Backend = DB;
+
+    fn root(&self) -> ValueOf<DB> {
+        self.0.root()
     }
 
-    /// Length of the vector.
-    pub fn len(&self) -> usize {
-        self.tuple.len()
+    fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+        self.0.drop(db)
     }
 
-    /// Drop the current vector.
-    pub fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
-        self.raw.drop(db)?;
-        self.tuple.drop(db)?;
-        Ok(())
+    fn into_raw(self) -> Raw<R, DB> {
+        self.0.into_raw()
+    }
+}
+
+impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Sequence for PackedList<R, DB, T, H, V> where
+    EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+{
+    fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -279,18 +287,14 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak
     EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
-    type Metadata = (ValueOf<DB>, ValueOf<DB>, usize);
+    type Metadata = <LengthMixed<R, DB, Vector<Dangling, DB>> as Leak>::Metadata;
 
     fn metadata(&self) -> Self::Metadata {
-        let (tuple, len) = self.tuple.metadata();
-        (self.raw.metadata(), tuple, len)
+        self.0.metadata()
     }
 
-    fn from_leaked((raw_root, tuple_root, len): Self::Metadata) -> Self {
-        Self {
-            raw: Raw::from_leaked(raw_root),
-            tuple: PackedVector::from_leaked((tuple_root, len)),
-        }
+    fn from_leaked(metadata: Self::Metadata) -> Self {
+        Self(LengthMixed::from_leaked(metadata))
     }
 }
 
@@ -300,16 +304,7 @@ impl<DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<Owned, D
 {
     /// Create a new vector.
     pub fn create(db: &mut DB) -> Result<Self, Error<DB::Error>> {
-        let tuple = PackedVector::<Owned, DB, T, H, V>::create(db, 0)?;
-        let mut raw = Raw::default();
-
-        raw.set(db, ITEM_ROOT_INDEX, tuple.root())?;
-        raw.set(db, LEN_INDEX, Value::End(tuple.len().into()))?;
-        let metadata = tuple.metadata();
-        tuple.drop(db)?;
-        let dangling_tuple = PackedVector::from_leaked(metadata);
-
-        Ok(Self { raw, tuple: dangling_tuple })
+        Ok(Self(LengthMixed::create(db, |db| PackedVector::<Owned, _, T, H, V>::create(db, 0))?))
     }
 }
 
