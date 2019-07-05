@@ -1,4 +1,4 @@
-use bm::{List, Vector, PackedList, Owned};
+use bm::{List, Vector, PackedList, Owned, Tree};
 use sha2::Sha256;
 use digest::Digest;
 

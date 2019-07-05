@@ -1,4 +1,4 @@
-use bm::{OwnedList, ProvingBackend};
+use bm::{OwnedList, ProvingBackend, Sequence};
 use sha2::Sha256;
 
 #[derive(Clone, PartialEq, Eq, Debug)]

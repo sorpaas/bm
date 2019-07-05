@@ -39,6 +39,27 @@ impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
     }
 }
 
+/// Represents a basic merkle tree with a known root.
+pub trait Tree {
+    /// Root status of the tree.
+    type RootStatus: RootStatus;
+    /// Backend of the tree.
+    type Backend: Backend;
+
+    /// Root of the merkle tree.
+    fn root(&self) -> ValueOf<Self::Backend>;
+    /// Drop the merkle tree.
+    fn drop(self, db: &mut Self::Backend) -> Result<(), Error<<Self::Backend as Backend>::Error>>;
+    /// Convert the tree into a raw tree.
+    fn into_raw(self) -> crate::Raw<Self::RootStatus, Self::Backend>;
+}
+
+/// A merkle tree that is similar to a vector.
+pub trait Sequence: Tree {
+    /// The length of the tree.
+    fn len(&self) -> usize;
+}
+
 /// Root status of a merkle tree.
 pub trait RootStatus {
     /// Whether it is a dangling root.

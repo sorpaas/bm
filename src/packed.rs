@@ -6,7 +6,7 @@ use core::marker::PhantomData;
 use crate::vector::Vector;
 use crate::raw::Raw;
 use crate::index::Index;
-use crate::traits::{EndOf, Value, Backend, ValueOf, RootStatus, Owned, Dangling, Leak, Error};
+use crate::traits::{EndOf, Value, Backend, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree};
 
 fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
     let host_len = Host::to_usize();
@@ -56,7 +56,7 @@ pub struct PackedVector<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: Ar
 
 impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> From<PackedVector<R, DB, T, H, V>> for Raw<R, DB> {
     fn from(packed: PackedVector<R, DB, T, H, V>) -> Self {
-        packed.tuple.into()
+        packed.tuple.into_raw()
     }
 }
 

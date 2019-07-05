@@ -1,4 +1,4 @@
-use crate::traits::{Backend, EndOf, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error};
+use crate::traits::{Backend, EndOf, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree, Sequence};
 use crate::raw::Raw;
 use crate::index::Index;
 
@@ -16,12 +16,6 @@ pub type DanglingVector<DB> = Vector<Dangling, DB>;
 pub struct Vector<R: RootStatus, DB: Backend> {
     raw: Raw<R, DB>,
     len: usize,
-}
-
-impl<R: RootStatus, DB: Backend> From<Vector<R, DB>> for Raw<R, DB> {
-    fn from(tuple: Vector<R, DB>) -> Self {
-        tuple.raw
-    }
 }
 
 impl<R: RootStatus, DB: Backend> Vector<R, DB> {
@@ -143,20 +137,33 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
         self.len
     }
 
-    /// Root of the current merkle tuple.
-    pub fn root(&self) -> ValueOf<DB> {
+    /// Create a tuple from raw merkle tree.
+    pub fn from_raw(raw: Raw<R, DB>, len: usize) -> Self {
+        Self { raw, len }
+    }
+}
+
+impl<R: RootStatus, DB: Backend> Tree for Vector<R, DB> {
+    type RootStatus = R;
+    type Backend = DB;
+
+    fn root(&self) -> ValueOf<DB> {
         self.raw.root()
     }
 
-    /// Drop the current tuple.
-    pub fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         self.raw.drop(db)?;
         Ok(())
     }
 
-    /// Create a tuple from raw merkle tree.
-    pub fn from_raw(raw: Raw<R, DB>, len: usize) -> Self {
-        Self { raw, len }
+    fn into_raw(self) -> Raw<R, DB> {
+        self.raw
+    }
+}
+
+impl<R: RootStatus, DB: Backend> Sequence for Vector<R, DB> {
+    fn len(&self) -> usize {
+        self.len
     }
 }
 
