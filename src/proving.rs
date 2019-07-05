@@ -1,10 +1,10 @@
-use crate::{MerkleDB, ValueOf, IntermediateOf};
+use crate::{Backend, ValueOf, IntermediateOf};
 use core::hash::Hash;
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 /// Proving merkle database.
-pub struct ProvingMerkleDB<'a, DB: MerkleDB> where
+pub struct ProvingBackend<'a, DB: Backend> where
     IntermediateOf<DB>: Eq + Hash,
 {
     db: &'a mut DB,
@@ -12,7 +12,7 @@ pub struct ProvingMerkleDB<'a, DB: MerkleDB> where
     inserts: HashSet<IntermediateOf<Self>>,
 }
 
-impl<'a, DB: MerkleDB> ProvingMerkleDB<'a, DB> where
+impl<'a, DB: Backend> ProvingBackend<'a, DB> where
     IntermediateOf<DB>: Eq + Hash,
 {
     /// Create a new proving database.
@@ -33,7 +33,7 @@ impl<'a, DB: MerkleDB> ProvingMerkleDB<'a, DB> where
     }
 }
 
-impl<'a, DB: MerkleDB> MerkleDB for ProvingMerkleDB<'a, DB> where
+impl<'a, DB: Backend> Backend for ProvingBackend<'a, DB> where
     IntermediateOf<DB>: Eq + Hash,
 {
     type Intermediate = DB::Intermediate;

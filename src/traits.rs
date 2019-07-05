@@ -48,23 +48,23 @@ pub trait RootStatus {
 }
 
 /// Dangling root status.
-pub struct DanglingRoot;
+pub struct Dangling;
 
-impl RootStatus for DanglingRoot {
+impl RootStatus for Dangling {
     fn is_dangling() -> bool { true }
 }
 
 /// Owned root status.
-pub struct OwnedRoot;
+pub struct Owned;
 
-impl RootStatus for OwnedRoot {
+impl RootStatus for Owned {
     fn is_dangling() -> bool { false }
 }
 
 /// Intermediate value of a database.
-pub type IntermediateOf<DB> = <DB as MerkleDB>::Intermediate;
+pub type IntermediateOf<DB> = <DB as Backend>::Intermediate;
 /// End value of a database.
-pub type EndOf<DB> = <DB as MerkleDB>::End;
+pub type EndOf<DB> = <DB as Backend>::End;
 /// Value of a database.
 pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
 
@@ -84,7 +84,7 @@ impl<DBError> From<DBError> for Error<DBError> {
 }
 
 /// Traits for a merkle database.
-pub trait MerkleDB {
+pub trait Backend {
     /// Intermediate value stored in this merkle database.
     type Intermediate: AsRef<[u8]> + Clone;
     /// End value stored in this merkle database.
@@ -108,7 +108,7 @@ pub trait MerkleDB {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 /// In-memory DB error.
-pub enum InMemoryMerkleDBError {
+pub enum InMemoryBackendError {
     /// Fetching key not exist.
     FetchingKeyNotExist,
     /// Trying to rootify a non-existing key.
@@ -119,15 +119,15 @@ pub enum InMemoryMerkleDBError {
 
 #[derive(Clone)]
 /// In-memory merkle database.
-pub struct InMemoryMerkleDB<D: Digest, T: AsRef<[u8]> + Clone + Default>(
+pub struct InMemoryBackend<D: Digest, T: AsRef<[u8]> + Clone + Default>(
     HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>,
     Option<EndOf<Self>>,
 );
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryMerkleDB<D, T> {
-    fn remove(&mut self, old_key: &IntermediateOf<Self>) -> Result<(), InMemoryMerkleDBError> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryBackend<D, T> {
+    fn remove(&mut self, old_key: &IntermediateOf<Self>) -> Result<(), InMemoryBackendError> {
         let (old_value, to_remove) = {
-            let value = self.0.get_mut(old_key).ok_or(InMemoryMerkleDBError::SetIntermediateNotExist)?;
+            let value = self.0.get_mut(old_key).ok_or(InMemoryBackendError::SetIntermediateNotExist)?;
             value.1.as_mut().map(|v| *v -= 1);
             (value.0.clone(), value.1.map(|v| v == 0).unwrap_or(false))
         };
@@ -167,16 +167,16 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryMerkleDB<D, T> {
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>> for InMemoryMerkleDB<D, T> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>> for InMemoryBackend<D, T> {
     fn as_ref(&self) -> &HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)> {
         &self.0
     }
 }
 
-impl<D: Digest, V: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<D, V> {
+impl<D: Digest, V: AsRef<[u8]> + Clone + Default> Backend for InMemoryBackend<D, V> {
     type Intermediate = GenericArray<u8, D::OutputSize>;
     type End = V;
-    type Error = InMemoryMerkleDBError;
+    type Error = InMemoryBackendError;
 
     fn intermediate_of(&self, left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
         let mut digest = D::new();
@@ -202,11 +202,11 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<
     }
 
     fn get(&self, key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error> {
-        self.0.get(key).map(|v| v.0.clone()).ok_or(InMemoryMerkleDBError::FetchingKeyNotExist)
+        self.0.get(key).map(|v| v.0.clone()).ok_or(InMemoryBackendError::FetchingKeyNotExist)
     }
 
     fn rootify(&mut self, key: &IntermediateOf<Self>) -> Result<(), Self::Error> {
-        self.0.get_mut(key).ok_or(InMemoryMerkleDBError::RootifyKeyNotExist)?.1
+        self.0.get_mut(key).ok_or(InMemoryBackendError::RootifyKeyNotExist)?.1
             .as_mut().map(|v| *v += 1);
         Ok(())
     }
@@ -225,14 +225,14 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> MerkleDB for InMemoryMerkleDB<
 
         match &left {
             Value::Intermediate(ref subkey) => {
-                self.0.get_mut(subkey).ok_or(InMemoryMerkleDBError::SetIntermediateNotExist)?.1
+                self.0.get_mut(subkey).ok_or(InMemoryBackendError::SetIntermediateNotExist)?.1
                     .as_mut().map(|v| *v += 1);
             },
             Value::End(_) => (),
         }
         match &right {
             Value::Intermediate(ref subkey) => {
-                self.0.get_mut(subkey).ok_or(InMemoryMerkleDBError::SetIntermediateNotExist)?.1
+                self.0.get_mut(subkey).ok_or(InMemoryBackendError::SetIntermediateNotExist)?.1
                     .as_mut().map(|v| *v += 1);
             },
             Value::End(_) => (),

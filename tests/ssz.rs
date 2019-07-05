@@ -1,4 +1,4 @@
-use bm::{MerkleVec, MerkleTuple, MerklePackedVec, OwnedRoot};
+use bm::{List, Vector, PackedList, Owned};
 use sha2::Sha256;
 use digest::Digest;
 
@@ -79,7 +79,7 @@ impl Into<GenericArray<u8, U32>> for VecValue {
     }
 }
 
-type InMemory = bm::InMemoryMerkleDB<Sha256, VecValue>;
+type InMemory = bm::InMemoryBackend<Sha256, VecValue>;
 
 #[test]
 fn ssz_composite_fixed() {
@@ -87,7 +87,7 @@ fn ssz_composite_fixed() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::new_with_inherited_empty();
-    let mut tuple = MerkleTuple::<OwnedRoot, InMemory>::create(&mut db, 3).unwrap();
+    let mut tuple = Vector::<Owned, InMemory>::create(&mut db, 3).unwrap();
 
     tuple.set(&mut db, 0, ssz_value.0.hash::<Sha256Hasher>().into()).unwrap();
     tuple.set(&mut db, 1, ssz_value.1.hash::<Sha256Hasher>().into()).unwrap();
@@ -102,7 +102,7 @@ fn ssz_composite_variable() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::new_with_inherited_empty();
-    let mut vec = MerkleVec::<OwnedRoot, InMemory>::create(&mut db).unwrap();
+    let mut vec = List::<Owned, InMemory>::create(&mut db).unwrap();
 
     for v in ssz_value {
         vec.push(&mut db, v.hash::<Sha256Hasher>().into()).unwrap();
@@ -118,7 +118,7 @@ fn ssz_composite_packed_variable() {
     let ssz_hash = ssz_value.hash::<Sha256Hasher>();
 
     let mut db = InMemory::new_with_inherited_empty();
-    let mut vec = MerklePackedVec::<OwnedRoot, InMemory, GenericArray<u8, U1>, U32, U1>::create(&mut db).unwrap();
+    let mut vec = PackedList::<Owned, InMemory, GenericArray<u8, U1>, U32, U1>::create(&mut db).unwrap();
     for v in ssz_value {
         vec.push(&mut db, {
             let mut arr = GenericArray::<u8, U1>::default();

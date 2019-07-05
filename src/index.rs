@@ -1,6 +1,6 @@
 /// Merkle selection.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub enum MerkleSelection {
+pub enum IndexSelection {
     /// Choose left at current depth.
     Left,
     /// Choose right at current depth.
@@ -9,19 +9,19 @@ pub enum MerkleSelection {
 
 /// Merkle route.
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub enum MerkleRoute {
+pub enum IndexRoute {
     /// Root of the merkle tree.
     Root,
     /// Select items from the root.
-    Select(Vec<MerkleSelection>),
+    Select(Vec<IndexSelection>),
 }
 
-impl MerkleRoute {
+impl IndexRoute {
     /// Get selection at depth, where root is considered depth 0.
-    pub fn at_depth(&self, depth: usize) -> Option<MerkleSelection> {
+    pub fn at_depth(&self, depth: usize) -> Option<IndexSelection> {
         match self {
-            MerkleRoute::Root => None,
-            MerkleRoute::Select(selections) => {
+            IndexRoute::Root => None,
+            IndexRoute::Select(selections) => {
                 if depth == 0 || depth > selections.len() {
                     None
                 } else {
@@ -34,9 +34,9 @@ impl MerkleRoute {
 
 /// Raw merkle index.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub struct MerkleIndex(usize);
+pub struct Index(usize);
 
-impl MerkleIndex {
+impl Index {
     /// Root merkle index.
     pub const fn root() -> Self {
         Self(1)
@@ -62,7 +62,7 @@ impl MerkleIndex {
     }
 
     /// Whether this index has given descendant.
-    pub fn has_descendant(&self, other: &MerkleIndex) -> bool {
+    pub fn has_descendant(&self, other: &Index) -> bool {
         match other.parent() {
             Some(parent) => {
                 if parent == *self {
@@ -90,27 +90,27 @@ impl MerkleIndex {
     }
 
     /// Get selections from current index.
-    pub fn route(&self) -> MerkleRoute {
+    pub fn route(&self) -> IndexRoute {
         let mut value = self.0;
-        let mut selections = Vec::<MerkleSelection>::new();
+        let mut selections = Vec::<IndexSelection>::new();
 
         loop {
             if value >> 1 == 0 {
                 debug_assert!(value == 1);
 
                 if selections.is_empty() {
-                    return MerkleRoute::Root
+                    return IndexRoute::Root
                 } else {
                     selections.reverse();
-                    return MerkleRoute::Select(selections)
+                    return IndexRoute::Select(selections)
                 }
             }
 
             let sel = value & 0b1;
             if sel == 0 {
-                selections.push(MerkleSelection::Left)
+                selections.push(IndexSelection::Left)
             } else {
-                selections.push(MerkleSelection::Right)
+                selections.push(IndexSelection::Right)
             }
 
             value = value >> 1;
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn test_descendant() {
-        assert!(MerkleIndex::root().left().has_descendant(&MerkleIndex::root().left().right().left().right().right()));
-        assert!(!MerkleIndex::root().left().has_descendant(&MerkleIndex::root().right().right().left().right().right()));
+        assert!(Index::root().left().has_descendant(&Index::root().left().right().left().right().right()));
+        assert!(!Index::root().left().has_descendant(&Index::root().right().right().left().right().right()));
     }
 }

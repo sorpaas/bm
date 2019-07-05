@@ -1,4 +1,4 @@
-use bm::{OwnedMerkleVec, ProvingMerkleDB};
+use bm::{OwnedList, ProvingBackend};
 use sha2::Sha256;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -35,13 +35,13 @@ impl Default for VecValue {
     }
 }
 
-type InMemory = bm::InMemoryMerkleDB<Sha256, VecValue>;
+type InMemory = bm::InMemoryBackend<Sha256, VecValue>;
 
 #[test]
 fn basic_proving_vec() {
     let mut db = InMemory::new_with_inherited_empty();
-    let mut proving = ProvingMerkleDB::new(&mut db);
-    let mut vec = OwnedMerkleVec::create(&mut proving).unwrap();
+    let mut proving = ProvingBackend::new(&mut db);
+    let mut vec = OwnedList::create(&mut proving).unwrap();
 
     for i in 0..100 {
         assert_eq!(vec.len(), i);
@@ -56,7 +56,7 @@ fn basic_proving_vec() {
 
     let mut proved = InMemory::new_with_inherited_empty();
     proved.populate(proofs);
-    let proved_vec = OwnedMerkleVec::reconstruct(vec_hash, &mut proved).unwrap();
+    let proved_vec = OwnedList::reconstruct(vec_hash, &mut proved).unwrap();
     assert_eq!(proved_vec.get(&proved, 5usize.into()).unwrap(), 5usize.into());
     assert_eq!(proved_vec.get(&proved, 7usize.into()).unwrap(), 7usize.into());
 }

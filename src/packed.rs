@@ -3,10 +3,10 @@ use core::ops::Range;
 use core::cmp;
 use core::marker::PhantomData;
 
-use crate::tuple::MerkleTuple;
-use crate::raw::MerkleRaw;
-use crate::index::MerkleIndex;
-use crate::traits::{EndOf, Value, MerkleDB, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak, Error};
+use crate::vector::Vector;
+use crate::raw::Raw;
+use crate::index::Index;
+use crate::traits::{EndOf, Value, Backend, ValueOf, RootStatus, Owned, Dangling, Leak, Error};
 
 pub fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
     let host_len = Host::to_usize();
@@ -29,20 +29,20 @@ pub fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usi
     (host_index, ranges)
 }
 
-/// `MerklePackedTuple` with owned root.
-pub type OwnedMerklePackedTuple<DB, T, H, V> = MerklePackedTuple<OwnedRoot, DB, T, H, V>;
+/// `PackedVector` with owned root.
+pub type OwnedPackedVector<DB, T, H, V> = PackedVector<Owned, DB, T, H, V>;
 
-/// `MerklePackedTuple` with dangling root.
-pub type DanglingMerklePackedTuple<DB, T, H, V> = MerklePackedTuple<DanglingRoot, DB, T, H, V>;
+/// `PackedVector` with dangling root.
+pub type DanglingPackedVector<DB, T, H, V> = PackedVector<Dangling, DB, T, H, V>;
 
 /// Packed merkle tuple.
-pub struct MerklePackedTuple<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {
-    tuple: MerkleTuple<R, DB>,
+pub struct PackedVector<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {
+    tuple: Vector<R, DB>,
     len: usize,
     _marker: PhantomData<(T, H, V)>,
 }
 
-impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<R, DB, T, H, V> where
+impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<R, DB, T, H, V> where
     EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
@@ -135,7 +135,7 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Mer
     }
 }
 
-impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for MerklePackedTuple<R, DB, T, H, V> where
+impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for PackedVector<R, DB, T, H, V> where
     EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
@@ -149,14 +149,14 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Lea
 
     fn from_leaked((raw_root, len, value_len): Self::Metadata) -> Self {
         Self {
-            tuple: MerkleTuple::from_leaked((raw_root, len)),
+            tuple: Vector::from_leaked((raw_root, len)),
             len: value_len,
             _marker: PhantomData,
         }
     }
 }
 
-impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<OwnedRoot, DB, T, H, V> where
+impl<DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<Owned, DB, T, H, V> where
     EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
@@ -169,7 +169,7 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<
             covering_base + covering_ranges.len()
         };
 
-        let tuple = MerkleTuple::create(db, host_len)?;
+        let tuple = Vector::create(db, host_len)?;
         Ok(Self {
             tuple,
             len: value_len,
@@ -178,22 +178,22 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedTuple<
     }
 }
 
-/// `MerklePackedVec` with owned root.
-pub type OwnedMerklePackedVec<DB, T, H, V> = MerklePackedVec<OwnedRoot, DB, T, H, V>;
+/// `PackedList` with owned root.
+pub type OwnedPackedList<DB, T, H, V> = PackedList<Owned, DB, T, H, V>;
 
-/// `MerklePackedVec` with dangling root.
-pub type DanglingMerklePackedVec<DB, T, H, V> = MerklePackedVec<DanglingRoot, DB, T, H, V>;
+/// `PackedList` with dangling root.
+pub type DanglingPackedList<DB, T, H, V> = PackedList<Dangling, DB, T, H, V>;
 
 /// Packed merkle vector.
-pub struct MerklePackedVec<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {
-    tuple: MerklePackedTuple<DanglingRoot, DB, T, H, V>,
-    raw: MerkleRaw<R, DB>,
+pub struct PackedList<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {
+    tuple: PackedVector<Dangling, DB, T, H, V>,
+    raw: Raw<R, DB>,
 }
 
-const LEN_INDEX: MerkleIndex = MerkleIndex::root().right();
-const ITEM_ROOT_INDEX: MerkleIndex = MerkleIndex::root().left();
+const LEN_INDEX: Index = Index::root().right();
+const ITEM_ROOT_INDEX: Index = Index::root().left();
 
-impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedVec<R, DB, T, H, V> where
+impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<R, DB, T, H, V> where
     EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
@@ -247,7 +247,7 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Mer
     }
 }
 
-impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for MerklePackedVec<R, DB, T, H, V> where
+impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for PackedList<R, DB, T, H, V> where
     EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
@@ -260,26 +260,26 @@ impl<R: RootStatus, DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Lea
 
     fn from_leaked((raw_root, tuple_root, host_len, len): Self::Metadata) -> Self {
         Self {
-            raw: MerkleRaw::from_leaked(raw_root),
-            tuple: MerklePackedTuple::from_leaked((tuple_root, host_len, len)),
+            raw: Raw::from_leaked(raw_root),
+            tuple: PackedVector::from_leaked((tuple_root, host_len, len)),
         }
     }
 }
 
-impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedVec<OwnedRoot, DB, T, H, V> where
+impl<DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<Owned, DB, T, H, V> where
     EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Create a new vector.
     pub fn create(db: &mut DB) -> Result<Self, Error<DB::Error>> {
-        let tuple = MerklePackedTuple::<OwnedRoot, DB, T, H, V>::create(db, 0)?;
-        let mut raw = MerkleRaw::default();
+        let tuple = PackedVector::<Owned, DB, T, H, V>::create(db, 0)?;
+        let mut raw = Raw::default();
 
         raw.set(db, ITEM_ROOT_INDEX, tuple.root())?;
         raw.set(db, LEN_INDEX, Value::End(tuple.len().into()))?;
         let metadata = tuple.metadata();
         tuple.drop(db)?;
-        let dangling_tuple = MerklePackedTuple::from_leaked(metadata);
+        let dangling_tuple = PackedVector::from_leaked(metadata);
 
         Ok(Self { raw, tuple: dangling_tuple })
     }
@@ -289,27 +289,27 @@ impl<DB: MerkleDB, T, H: ArrayLength<u8>, V: ArrayLength<u8>> MerklePackedVec<Ow
 mod tests {
     use super::*;
     use sha2::Sha256;
-    use crate::traits::OwnedRoot;
+    use crate::traits::Owned;
     use typenum::{U8, U32};
 
-    type InMemory = crate::traits::InMemoryMerkleDB<Sha256, VecValue>;
+    type InMemory = crate::traits::InMemoryBackend<Sha256, ListValue>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
-    struct VecValue([u8; 8]);
+    struct ListValue([u8; 8]);
 
-    impl AsRef<[u8]> for VecValue {
+    impl AsRef<[u8]> for ListValue {
         fn as_ref(&self) -> &[u8] {
             self.0.as_ref()
         }
     }
 
-    impl From<usize> for VecValue {
+    impl From<usize> for ListValue {
         fn from(value: usize) -> Self {
-            VecValue((value as u64).to_le_bytes())
+            ListValue((value as u64).to_le_bytes())
         }
     }
 
-    impl Into<usize> for VecValue {
+    impl Into<usize> for ListValue {
         fn into(self) -> usize {
             let mut raw = [0u8; 8];
             (&mut raw).copy_from_slice(&self.0[0..8]);
@@ -317,15 +317,15 @@ mod tests {
         }
     }
 
-    impl From<GenericArray<u8, U8>> for VecValue {
-        fn from(arr: GenericArray<u8, U8>) -> VecValue {
+    impl From<GenericArray<u8, U8>> for ListValue {
+        fn from(arr: GenericArray<u8, U8>) -> ListValue {
             let mut raw = [0u8; 8];
             (&mut raw).copy_from_slice(&arr[0..8]);
-            VecValue(raw)
+            ListValue(raw)
         }
     }
 
-    impl Into<GenericArray<u8, U8>> for VecValue {
+    impl Into<GenericArray<u8, U8>> for ListValue {
         fn into(self) -> GenericArray<u8, U8> {
             let mut arr: GenericArray<u8, U8> = Default::default();
             (&mut arr[..]).copy_from_slice(&self.0[..]);
@@ -343,7 +343,7 @@ mod tests {
     #[test]
     fn test_tuple() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut tuple = MerklePackedTuple::<OwnedRoot, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, 0).unwrap();
+        let mut tuple = PackedVector::<Owned, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, 0).unwrap();
 
         for i in 0..100 {
             let mut value = GenericArray::<u8, U32>::default();
@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn test_vec() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut vec = MerklePackedVec::<OwnedRoot, _, GenericArray<u8, U32>, U8, U32>::create(&mut db).unwrap();
+        let mut vec = PackedList::<Owned, _, GenericArray<u8, U32>, U8, U32>::create(&mut db).unwrap();
 
         for i in 0..100 {
             let mut value = GenericArray::<u8, U32>::default();

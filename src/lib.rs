@@ -5,16 +5,16 @@
 mod traits;
 mod raw;
 mod index;
-mod tuple;
-mod vec;
+mod vector;
+mod list;
 mod packed;
 mod proving;
 
-pub use crate::traits::{MerkleDB, InMemoryMerkleDB, Value, ValueOf, IntermediateOf, EndOf, DanglingRoot, OwnedRoot, RootStatus, Error};
-pub use crate::raw::{MerkleRaw, OwnedMerkleRaw, DanglingMerkleRaw};
-pub use crate::index::{MerkleIndex, MerkleSelection, MerkleRoute};
-pub use crate::tuple::{MerkleTuple, OwnedMerkleTuple, DanglingMerkleTuple};
-pub use crate::vec::{MerkleVec, OwnedMerkleVec, DanglingMerkleVec};
-pub use crate::packed::{MerklePackedTuple, OwnedMerklePackedTuple, DanglingMerklePackedTuple,
-                        MerklePackedVec, OwnedMerklePackedVec, DanglingMerklePackedVec};
-pub use crate::proving::ProvingMerkleDB;
+pub use crate::traits::{Backend, InMemoryBackend, InMemoryBackendError, Value, ValueOf, IntermediateOf, EndOf, Dangling, Owned, RootStatus, Error};
+pub use crate::raw::{Raw, OwnedRaw, DanglingRaw};
+pub use crate::index::{Index, IndexSelection, IndexRoute};
+pub use crate::vector::{Vector, OwnedVector, DanglingVector};
+pub use crate::list::{List, OwnedList, DanglingList};
+pub use crate::packed::{PackedVector, OwnedPackedVector, DanglingPackedVector,
+                        PackedList, OwnedPackedList, DanglingPackedList};
+pub use crate::proving::ProvingBackend;

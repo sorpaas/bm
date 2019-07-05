@@ -1,24 +1,24 @@
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, DanglingRoot, OwnedRoot, Leak, Error};
-use crate::tuple::MerkleTuple;
-use crate::raw::MerkleRaw;
-use crate::index::MerkleIndex;
+use crate::traits::{Backend, EndOf, Value, ValueOf, RootStatus, Dangling, Owned, Leak, Error};
+use crate::vector::Vector;
+use crate::raw::Raw;
+use crate::index::Index;
 
-const LEN_INDEX: MerkleIndex = MerkleIndex::root().right();
-const ITEM_ROOT_INDEX: MerkleIndex = MerkleIndex::root().left();
+const LEN_INDEX: Index = Index::root().right();
+const ITEM_ROOT_INDEX: Index = Index::root().left();
 
-/// `MerkleVec` with owned root.
-pub type OwnedMerkleVec<DB> = MerkleVec<OwnedRoot, DB>;
+/// `List` with owned root.
+pub type OwnedList<DB> = List<Owned, DB>;
 
-/// `MerkleVec` with dangling root.
-pub type DanglingMerkleVec<DB> = MerkleVec<DanglingRoot, DB>;
+/// `List` with dangling root.
+pub type DanglingList<DB> = List<Dangling, DB>;
 
 /// Binary merkle vector.
-pub struct MerkleVec<R: RootStatus, DB: MerkleDB> {
-    raw: MerkleRaw<R, DB>,
-    tuple: MerkleTuple<DanglingRoot, DB>,
+pub struct List<R: RootStatus, DB: Backend> {
+    raw: Raw<R, DB>,
+    tuple: Vector<Dangling, DB>,
 }
 
-impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
+impl<R: RootStatus, DB: Backend> List<R, DB> where
     EndOf<DB>: From<usize> + Into<usize>,
 {
     fn update_metadata(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
@@ -79,7 +79,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
 
     /// Reconstruct the vector from a single hash value.
     pub fn reconstruct(root: ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
-        let raw = MerkleRaw::<R, DB>::from_leaked(root);
+        let raw = Raw::<R, DB>::from_leaked(root);
         let len: usize = raw.get(db, LEN_INDEX)?
             .ok_or(Error::CorruptedDatabase)?
             .end()
@@ -88,7 +88,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
         let tuple_root = raw.get(db, ITEM_ROOT_INDEX)?
             .ok_or(Error::CorruptedDatabase)?;
 
-        let tuple = MerkleTuple::<DanglingRoot, DB>::from_leaked((tuple_root, len));
+        let tuple = Vector::<Dangling, DB>::from_leaked((tuple_root, len));
 
         Ok(Self {
             raw,
@@ -97,7 +97,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleVec<R, DB> where
     }
 }
 
-impl<R: RootStatus, DB: MerkleDB> Leak for MerkleVec<R, DB> where
+impl<R: RootStatus, DB: Backend> Leak for List<R, DB> where
     EndOf<DB>: From<usize> + Into<usize>,
 {
     type Metadata = (ValueOf<DB>, ValueOf<DB>, usize);
@@ -109,25 +109,25 @@ impl<R: RootStatus, DB: MerkleDB> Leak for MerkleVec<R, DB> where
 
     fn from_leaked((raw_root, tuple_root, len): Self::Metadata) -> Self {
         Self {
-            raw: MerkleRaw::from_leaked(raw_root),
-            tuple: MerkleTuple::from_leaked((tuple_root, len)),
+            raw: Raw::from_leaked(raw_root),
+            tuple: Vector::from_leaked((tuple_root, len)),
         }
     }
 }
 
-impl<DB: MerkleDB> MerkleVec<OwnedRoot, DB> where
+impl<DB: Backend> List<Owned, DB> where
     EndOf<DB>: From<usize> + Into<usize>
 {
     /// Create a new vector.
     pub fn create(db: &mut DB) -> Result<Self, Error<DB::Error>> {
-        let tuple = MerkleTuple::create(db, 0)?;
-        let mut raw = MerkleRaw::default();
+        let tuple = Vector::create(db, 0)?;
+        let mut raw = Raw::default();
 
         raw.set(db, ITEM_ROOT_INDEX, tuple.root())?;
         raw.set(db, LEN_INDEX, Value::End(tuple.len().into()))?;
         let metadata = tuple.metadata();
         tuple.drop(db)?;
-        let dangling_tuple = MerkleTuple::from_leaked(metadata);
+        let dangling_tuple = Vector::from_leaked(metadata);
 
         Ok(Self { raw, tuple: dangling_tuple })
     }
@@ -138,24 +138,24 @@ mod tests {
     use super::*;
     use sha2::Sha256;
 
-    type InMemory = crate::traits::InMemoryMerkleDB<Sha256, VecValue>;
+    type InMemory = crate::traits::InMemoryBackend<Sha256, ListValue>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
-    struct VecValue(Vec<u8>);
+    struct ListValue(Vec<u8>);
 
-    impl AsRef<[u8]> for VecValue {
+    impl AsRef<[u8]> for ListValue {
         fn as_ref(&self) -> &[u8] {
             self.0.as_ref()
         }
     }
 
-    impl From<usize> for VecValue {
+    impl From<usize> for ListValue {
         fn from(value: usize) -> Self {
-            VecValue((&(value as u64).to_le_bytes()[..]).into())
+            ListValue((&(value as u64).to_le_bytes()[..]).into())
         }
     }
 
-    impl Into<usize> for VecValue {
+    impl Into<usize> for ListValue {
         fn into(self) -> usize {
             let mut raw = [0u8; 8];
             (&mut raw).copy_from_slice(&self.0[0..8]);
@@ -164,7 +164,7 @@ mod tests {
     }
 
     fn assert_push_pop_with_db(mut db: InMemory) {
-        let mut vec = MerkleVec::create(&mut db).unwrap();
+        let mut vec = List::create(&mut db).unwrap();
         let mut roots = Vec::new();
 
         for i in 0..100 {
@@ -189,13 +189,13 @@ mod tests {
 
     #[test]
     fn test_push_pop_unit() {
-        assert_push_pop_with_db(InMemory::new_with_unit_empty(VecValue(vec![255])))
+        assert_push_pop_with_db(InMemory::new_with_unit_empty(ListValue(vec![255])))
     }
 
     #[test]
     fn test_set() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut vec = MerkleVec::create(&mut db).unwrap();
+        let mut vec = List::create(&mut db).unwrap();
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
@@ -213,7 +213,7 @@ mod tests {
     #[test]
     fn test_deconstruct_reconstruct() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut vec = OwnedMerkleVec::create(&mut db).unwrap();
+        let mut vec = OwnedList::create(&mut db).unwrap();
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
@@ -221,7 +221,7 @@ mod tests {
         }
         let vec_hash = vec.deconstruct(&mut db).unwrap();
 
-        let vec = OwnedMerkleVec::reconstruct(vec_hash, &mut db).unwrap();
+        let vec = OwnedList::reconstruct(vec_hash, &mut db).unwrap();
         assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
             assert_eq!(vec.get(&db, i).unwrap(), i.into());

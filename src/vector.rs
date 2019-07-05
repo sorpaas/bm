@@ -1,31 +1,31 @@
-use crate::traits::{MerkleDB, EndOf, Value, ValueOf, RootStatus, OwnedRoot, DanglingRoot, Leak, Error};
-use crate::raw::MerkleRaw;
-use crate::index::MerkleIndex;
+use crate::traits::{Backend, EndOf, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error};
+use crate::raw::Raw;
+use crate::index::Index;
 
-const ROOT_INDEX: MerkleIndex = MerkleIndex::root();
-const EXTEND_INDEX: MerkleIndex = MerkleIndex::root().left();
-const EMPTY_INDEX: MerkleIndex = MerkleIndex::root().right();
+const ROOT_INDEX: Index = Index::root();
+const EXTEND_INDEX: Index = Index::root().left();
+const EMPTY_INDEX: Index = Index::root().right();
 
-/// `MerkleTuple` with owned root.
-pub type OwnedMerkleTuple<DB> = MerkleTuple<OwnedRoot, DB>;
+/// `Vector` with owned root.
+pub type OwnedVector<DB> = Vector<Owned, DB>;
 
-/// `MerkleTuple` with dangling root.
-pub type DanglingMerkleTuple<DB> = MerkleTuple<DanglingRoot, DB>;
+/// `Vector` with dangling root.
+pub type DanglingVector<DB> = Vector<Dangling, DB>;
 
 /// Binary merkle tuple.
-pub struct MerkleTuple<R: RootStatus, DB: MerkleDB> {
-    raw: MerkleRaw<R, DB>,
+pub struct Vector<R: RootStatus, DB: Backend> {
+    raw: Raw<R, DB>,
     len: usize,
 }
 
-impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
-    fn raw_index(&self, i: usize) -> MerkleIndex {
-        MerkleIndex::from_one(self.max_len() + i).expect("max_len returns value equal to or greater than 1; value always >= 1; qed")
+impl<R: RootStatus, DB: Backend> Vector<R, DB> {
+    fn raw_index(&self, i: usize) -> Index {
+        Index::from_one(self.max_len() + i).expect("max_len returns value equal to or greater than 1; value always >= 1; qed")
     }
 
     fn extend(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         let root = self.root();
-        let mut new_raw = MerkleRaw::default();
+        let mut new_raw = Raw::default();
         let empty = db.empty_at(self.depth())?;
         new_raw.set(db, EXTEND_INDEX, root)?;
         new_raw.set(db, EMPTY_INDEX, empty)?;
@@ -149,7 +149,7 @@ impl<R: RootStatus, DB: MerkleDB> MerkleTuple<R, DB> {
     }
 }
 
-impl<R: RootStatus, DB: MerkleDB> Leak for MerkleTuple<R, DB> {
+impl<R: RootStatus, DB: Backend> Leak for Vector<R, DB> {
     type Metadata = (ValueOf<DB>, usize);
 
     fn metadata(&self) -> Self::Metadata {
@@ -159,16 +159,16 @@ impl<R: RootStatus, DB: MerkleDB> Leak for MerkleTuple<R, DB> {
 
     fn from_leaked((raw_root, len): Self::Metadata) -> Self {
         Self {
-            raw: MerkleRaw::from_leaked(raw_root),
+            raw: Raw::from_leaked(raw_root),
             len,
         }
     }
 }
 
-impl<DB: MerkleDB> MerkleTuple<OwnedRoot, DB> {
+impl<DB: Backend> Vector<Owned, DB> {
     /// Create a new tuple.
     pub fn create(db: &mut DB, len: usize) -> Result<Self, Error<DB::Error>> {
-        let mut raw = MerkleRaw::<OwnedRoot, DB>::default();
+        let mut raw = Raw::<Owned, DB>::default();
 
         let mut max_len = 1;
         let mut depth = 0;
