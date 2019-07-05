@@ -8,7 +8,7 @@ use crate::raw::Raw;
 use crate::index::Index;
 use crate::traits::{EndOf, Value, Backend, ValueOf, RootStatus, Owned, Dangling, Leak, Error};
 
-pub fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
+fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
     let host_len = Host::to_usize();
     let value_len = Value::to_usize();
 
@@ -29,6 +29,18 @@ pub fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usi
     (host_index, ranges)
 }
 
+fn host_len<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_len: usize) -> usize {
+    let host_array_len = Host::to_usize();
+    let value_array_len = Value::to_usize();
+
+    let bytes = value_array_len * value_len;
+    if bytes % host_array_len == 0 {
+        bytes / host_array_len
+    } else {
+        bytes / host_array_len + 1
+    }
+}
+
 /// `PackedVector` with owned root.
 pub type OwnedPackedVector<DB, T, H, V> = PackedVector<Owned, DB, T, H, V>;
 
@@ -40,6 +52,12 @@ pub struct PackedVector<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: Ar
     tuple: Vector<R, DB>,
     len: usize,
     _marker: PhantomData<(T, H, V)>,
+}
+
+impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> From<PackedVector<R, DB, T, H, V>> for Raw<R, DB> {
+    fn from(packed: PackedVector<R, DB, T, H, V>) -> Self {
+        packed.tuple.into()
+    }
 }
 
 impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<R, DB, T, H, V> where
@@ -109,7 +127,7 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
         } else {
             let last_index = index - 1;
 
-            let (covering_base, covering_ranges) = coverings::<H, V>(index);
+            let (covering_base, covering_ranges) = coverings::<H, V>(last_index);
             while self.tuple.len() > covering_base + covering_ranges.len() {
                 self.tuple.pop(db)?;
             }
@@ -133,23 +151,33 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
     pub fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         self.tuple.drop(db)
     }
+
+    /// Create a packed tuple from raw merkle tree.
+    pub fn from_raw(raw: Raw<R, DB>, len: usize) -> Self {
+        let host_len = host_len::<H, V>(len);
+        Self {
+            tuple: Vector::from_raw(raw, host_len),
+            len,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for PackedVector<R, DB, T, H, V> where
     EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
-    type Metadata = (ValueOf<DB>, usize, usize);
+    type Metadata = (ValueOf<DB>, usize);
 
     fn metadata(&self) -> Self::Metadata {
         let value_len = self.len();
-        let (tuple_root, host_len) = self.tuple.metadata();
-        (tuple_root, host_len, value_len)
+        let (tuple_root, _host_len) = self.tuple.metadata();
+        (tuple_root, value_len)
     }
 
-    fn from_leaked((raw_root, len, value_len): Self::Metadata) -> Self {
+    fn from_leaked((raw_root, value_len): Self::Metadata) -> Self {
         Self {
-            tuple: Vector::from_leaked((raw_root, len)),
+            tuple: Vector::from_leaked((raw_root, host_len::<H, V>(value_len))),
             len: value_len,
             _marker: PhantomData,
         }
@@ -251,17 +279,17 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak
     EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
-    type Metadata = (ValueOf<DB>, ValueOf<DB>, usize, usize);
+    type Metadata = (ValueOf<DB>, ValueOf<DB>, usize);
 
     fn metadata(&self) -> Self::Metadata {
-        let (tuple, host_len, len) = self.tuple.metadata();
-        (self.raw.metadata(), tuple, host_len, len)
+        let (tuple, len) = self.tuple.metadata();
+        (self.raw.metadata(), tuple, len)
     }
 
-    fn from_leaked((raw_root, tuple_root, host_len, len): Self::Metadata) -> Self {
+    fn from_leaked((raw_root, tuple_root, len): Self::Metadata) -> Self {
         Self {
             raw: Raw::from_leaked(raw_root),
-            tuple: PackedVector::from_leaked((tuple_root, host_len, len)),
+            tuple: PackedVector::from_leaked((tuple_root, len)),
         }
     }
 }

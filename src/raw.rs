@@ -30,6 +30,15 @@ impl<R: RootStatus, DB: Backend> Raw<R, DB> {
         self.root.clone()
     }
 
+    /// Return a reference to a subtree.
+    pub fn subtree(&self, db: &DB, index: Index) -> Result<DanglingRaw<DB>, Error<DB::Error>> {
+        let subroot = self.get(db, index)?.ok_or(Error::CorruptedDatabase)?;
+        Ok(Raw {
+            root: subroot,
+            _marker: PhantomData,
+        })
+    }
+
     /// Get value from the tree via generalized merkle index.
     pub fn get(&self, db: &DB, index: Index) -> Result<Option<ValueOf<DB>>, Error<DB::Error>> {
         match index.route() {

@@ -18,6 +18,12 @@ pub struct Vector<R: RootStatus, DB: Backend> {
     len: usize,
 }
 
+impl<R: RootStatus, DB: Backend> From<Vector<R, DB>> for Raw<R, DB> {
+    fn from(tuple: Vector<R, DB>) -> Self {
+        tuple.raw
+    }
+}
+
 impl<R: RootStatus, DB: Backend> Vector<R, DB> {
     fn raw_index(&self, i: usize) -> Index {
         Index::from_one(self.max_len() + i).expect("max_len returns value equal to or greater than 1; value always >= 1; qed")
@@ -146,6 +152,11 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
     pub fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         self.raw.drop(db)?;
         Ok(())
+    }
+
+    /// Create a tuple from raw merkle tree.
+    pub fn from_raw(raw: Raw<R, DB>, len: usize) -> Self {
+        Self { raw, len }
     }
 }
 
