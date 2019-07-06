@@ -7,7 +7,7 @@ edition = "2018"
 license = "Apache-2.0"
 
 [dependencies]
-bm = { version = "0.4", path = ".." }
+bm = { version = "0.5", path = ".." }
 typenum = "1.10"
 generic-array = "0.12"
 primitive-types = "0.4"
