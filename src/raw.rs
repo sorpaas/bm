@@ -212,7 +212,7 @@ mod tests {
     use crate::traits::Owned;
     use sha2::Sha256;
 
-    type InMemory = crate::traits::InMemoryBackend<Sha256, Vec<u8>>;
+    type InMemory = crate::memory::InMemoryBackend<Sha256, Vec<u8>>;
 
     #[test]
     fn test_merkle_selections() {

@@ -41,9 +41,9 @@ impl<R: RootStatus, DB: Backend> List<R, DB> where
     }
 
     /// Reconstruct the vector from a single hash value.
-    pub fn reconstruct(root: ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    pub fn reconstruct(root: ValueOf<DB>, db: &DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::reconstruct(root, db, |tuple_raw, _db, len| {
-            Ok(Vector::<Dangling, DB>::from_raw(tuple_raw, len))
+            Ok(Vector::<Dangling, DB>::from_raw(tuple_raw, len, max_len))
         })?))
     }
 }
@@ -93,8 +93,8 @@ impl<DB: Backend> List<Owned, DB> where
     EndOf<DB>: From<usize> + Into<usize>
 {
     /// Create a new vector.
-    pub fn create(db: &mut DB) -> Result<Self, Error<DB::Error>> {
-        Ok(Self(LengthMixed::create(db, |db| Vector::<Owned, _>::create(db, 0))?))
+    pub fn create(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+        Ok(Self(LengthMixed::create(db, |db| Vector::<Owned, _>::create(db, 0, max_len))?))
     }
 }
 
@@ -103,7 +103,7 @@ mod tests {
     use super::*;
     use sha2::Sha256;
 
-    type InMemory = crate::traits::InMemoryBackend<Sha256, ListValue>;
+    type InMemory = crate::memory::InMemoryBackend<Sha256, ListValue>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
     struct ListValue(Vec<u8>);
@@ -129,7 +129,7 @@ mod tests {
     }
 
     fn assert_push_pop_with_db(mut db: InMemory) {
-        let mut vec = List::create(&mut db).unwrap();
+        let mut vec = List::create(&mut db, None).unwrap();
         let mut roots = Vec::new();
 
         for i in 0..100 {
@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn test_set() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut vec = List::create(&mut db).unwrap();
+        let mut vec = OwnedList::create(&mut db, None).unwrap();
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn test_deconstruct_reconstruct() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut vec = OwnedList::create(&mut db).unwrap();
+        let mut vec = OwnedList::create(&mut db, None).unwrap();
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
@@ -186,7 +186,7 @@ mod tests {
         }
         let vec_hash = vec.deconstruct(&mut db).unwrap();
 
-        let vec = OwnedList::reconstruct(vec_hash, &mut db).unwrap();
+        let vec = OwnedList::reconstruct(vec_hash, &mut db, None).unwrap();
         assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
             assert_eq!(vec.get(&db, i).unwrap(), i.into());

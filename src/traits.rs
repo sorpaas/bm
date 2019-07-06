@@ -89,6 +89,10 @@ pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
 pub enum Error<DBError> {
     /// The database is corrupted.
     CorruptedDatabase,
+    /// Value trying to access overflowed the list or vector.
+    AccessOverflowed,
+    /// Parameters are invalid.
+    InvalidParameter,
     /// Backend database error.
     Backend(DBError),
 }

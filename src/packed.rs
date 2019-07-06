@@ -51,6 +51,7 @@ pub type DanglingPackedVector<DB, T, H, V> = PackedVector<Dangling, DB, T, H, V>
 pub struct PackedVector<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {
     tuple: Vector<R, DB>,
     len: usize,
+    max_len: Option<usize>,
     _marker: PhantomData<(T, H, V)>,
 }
 
@@ -134,11 +135,13 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
     }
 
     /// Create a packed tuple from raw merkle tree.
-    pub fn from_raw(raw: Raw<R, DB>, len: usize) -> Self {
+    pub fn from_raw(raw: Raw<R, DB>, len: usize, max_len: Option<usize>) -> Self {
+        let host_max_len = max_len.map(|l| host_len::<H, V>(l));
         let host_len = host_len::<H, V>(len);
         Self {
-            tuple: Vector::from_raw(raw, host_len),
+            tuple: Vector::from_raw(raw, host_len, host_max_len),
             len,
+            max_len,
             _marker: PhantomData,
         }
     }
@@ -177,18 +180,20 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak
     EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
-    type Metadata = (ValueOf<DB>, usize);
+    type Metadata = (ValueOf<DB>, usize, Option<usize>);
 
     fn metadata(&self) -> Self::Metadata {
         let value_len = self.len();
-        let (tuple_root, _host_len) = self.tuple.metadata();
-        (tuple_root, value_len)
+        let value_max_len = self.max_len;
+        let (tuple_root, _host_len, _host_max_len) = self.tuple.metadata();
+        (tuple_root, value_len, value_max_len)
     }
 
-    fn from_leaked((raw_root, value_len): Self::Metadata) -> Self {
+    fn from_leaked((raw_root, value_len, value_max_len): Self::Metadata) -> Self {
         Self {
-            tuple: Vector::from_leaked((raw_root, host_len::<H, V>(value_len))),
+            tuple: Vector::from_leaked((raw_root, host_len::<H, V>(value_len), value_max_len.map(|l| host_len::<H, V>(l)))),
             len: value_len,
+            max_len: value_max_len,
             _marker: PhantomData,
         }
     }
@@ -199,18 +204,15 @@ impl<DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<Owned,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Create a new tuple.
-    pub fn create(db: &mut DB, value_len: usize) -> Result<Self, Error<DB::Error>> {
-        let host_len = if value_len == 0 {
-            0
-        } else {
-            let (covering_base, covering_ranges) = coverings::<H, V>(value_len - 1);
-            covering_base + covering_ranges.len()
-        };
+    pub fn create(db: &mut DB, value_len: usize, value_max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+        let host_max_len = value_max_len.map(|l| host_len::<H, V>(l));
+        let host_len = host_len::<H, V>(value_len);
 
-        let tuple = Vector::create(db, host_len)?;
+        let tuple = Vector::create(db, host_len, host_max_len)?;
         Ok(Self {
             tuple,
             len: value_len,
+            max_len: value_max_len,
             _marker: PhantomData,
         })
     }
@@ -303,8 +305,8 @@ impl<DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<Owned, D
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Create a new vector.
-    pub fn create(db: &mut DB) -> Result<Self, Error<DB::Error>> {
-        Ok(Self(LengthMixed::create(db, |db| PackedVector::<Owned, _, T, H, V>::create(db, 0))?))
+    pub fn create(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+        Ok(Self(LengthMixed::create(db, |db| PackedVector::<Owned, _, T, H, V>::create(db, 0, max_len))?))
     }
 }
 
@@ -315,7 +317,7 @@ mod tests {
     use crate::traits::Owned;
     use typenum::{U8, U32};
 
-    type InMemory = crate::traits::InMemoryBackend<Sha256, ListValue>;
+    type InMemory = crate::memory::InMemoryBackend<Sha256, ListValue>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
     struct ListValue([u8; 8]);
@@ -366,7 +368,7 @@ mod tests {
     #[test]
     fn test_tuple() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut tuple = PackedVector::<Owned, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, 0).unwrap();
+        let mut tuple = PackedVector::<Owned, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, 0, None).unwrap();
 
         for i in 0..100 {
             let mut value = GenericArray::<u8, U32>::default();
@@ -394,7 +396,7 @@ mod tests {
     #[test]
     fn test_vec() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut vec = PackedList::<Owned, _, GenericArray<u8, U32>, U8, U32>::create(&mut db).unwrap();
+        let mut vec = PackedList::<Owned, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, None).unwrap();
 
         for i in 0..100 {
             let mut value = GenericArray::<u8, U32>::default();
