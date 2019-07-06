@@ -1,0 +1,12 @@
+[package]
+name = "bm-ssz"
+version = "0.1.0"
+description = "Ssz compatibility layer for binary merkle trie"
+authors = ["Wei Tang <hi@that.world>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+bm = { version = "0.4", path = ".." }
+typenum = "1.10"
+generic-array = "0.12"
