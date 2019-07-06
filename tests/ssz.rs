@@ -1,4 +1,4 @@
-use bm::{List, Vector, PackedList, Owned, Tree};
+use bm::{List, Vector, PackedList, Owned, Tree, Value};
 use sha2::Sha256;
 use digest::Digest;
 
@@ -89,9 +89,9 @@ fn ssz_composite_fixed() {
     let mut db = InMemory::new_with_inherited_empty();
     let mut tuple = Vector::<Owned, InMemory>::create(&mut db, 3, None).unwrap();
 
-    tuple.set(&mut db, 0, ssz_value.0.hash::<Sha256Hasher>().into()).unwrap();
-    tuple.set(&mut db, 1, ssz_value.1.hash::<Sha256Hasher>().into()).unwrap();
-    tuple.set(&mut db, 2, ssz_value.2.hash::<Sha256Hasher>().into()).unwrap();
+    tuple.set(&mut db, 0, Value::End(ssz_value.0.hash::<Sha256Hasher>().into())).unwrap();
+    tuple.set(&mut db, 1, Value::End(ssz_value.1.hash::<Sha256Hasher>().into())).unwrap();
+    tuple.set(&mut db, 2, Value::End(ssz_value.2.hash::<Sha256Hasher>().into())).unwrap();
 
     assert_eq!(&ssz_hash[..], tuple.root().intermediate().unwrap().as_slice());
 }
@@ -105,7 +105,7 @@ fn ssz_composite_variable() {
     let mut vec = List::<Owned, InMemory>::create(&mut db, None).unwrap();
 
     for v in ssz_value {
-        vec.push(&mut db, v.hash::<Sha256Hasher>().into()).unwrap();
+        vec.push(&mut db, Value::End(v.hash::<Sha256Hasher>().into())).unwrap();
     }
 
     assert_eq!(&ssz_hash[..], vec.root().intermediate().unwrap().as_slice());

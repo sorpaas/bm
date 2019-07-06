@@ -1,4 +1,4 @@
-use crate::traits::{Backend, EndOf, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree, Sequence};
+use crate::traits::{Backend, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree, Sequence};
 use crate::raw::Raw;
 use crate::index::Index;
 
@@ -71,29 +71,28 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
     }
 
     /// Get value at index.
-    pub fn get(&self, db: &DB, index: usize) -> Result<EndOf<DB>, Error<DB::Error>> {
+    pub fn get(&self, db: &DB, index: usize) -> Result<ValueOf<DB>, Error<DB::Error>> {
         if index >= self.len() {
             return Err(Error::AccessOverflowed)
         }
 
         let raw_index = self.raw_index(index)?;
-        self.raw.get(db, raw_index)?.ok_or(Error::CorruptedDatabase)?
-            .end().ok_or(Error::CorruptedDatabase)
+        self.raw.get(db, raw_index)?.ok_or(Error::CorruptedDatabase)
     }
 
     /// Set value at index.
-    pub fn set(&mut self, db: &mut DB, index: usize, value: EndOf<DB>) -> Result<(), Error<DB::Error>> {
+    pub fn set(&mut self, db: &mut DB, index: usize, value: ValueOf<DB>) -> Result<(), Error<DB::Error>> {
         if index >= self.len() {
             return Err(Error::AccessOverflowed)
         }
 
         let raw_index = self.raw_index(index)?;
-        self.raw.set(db, raw_index, Value::End(value))?;
+        self.raw.set(db, raw_index, value)?;
         Ok(())
     }
 
     /// Push a new value to the vector.
-    pub fn push(&mut self, db: &mut DB, value: EndOf<DB>) -> Result<(), Error<DB::Error>> {
+    pub fn push(&mut self, db: &mut DB, value: ValueOf<DB>) -> Result<(), Error<DB::Error>> {
         let old_len = self.len();
         if old_len == self.current_max_len() {
             if self.max_len.is_some() {
@@ -107,12 +106,12 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
         self.len = len;
 
         let raw_index = self.raw_index(index)?;
-        self.raw.set(db, raw_index, Value::End(value))?;
+        self.raw.set(db, raw_index, value)?;
         Ok(())
     }
 
     /// Pop a value from the vector.
-    pub fn pop(&mut self, db: &mut DB) -> Result<Option<EndOf<DB>>, Error<DB::Error>> {
+    pub fn pop(&mut self, db: &mut DB) -> Result<Option<ValueOf<DB>>, Error<DB::Error>> {
         let old_len = self.len();
         if old_len == 0 {
             return Ok(None)
@@ -121,10 +120,7 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
         let len = old_len - 1;
         let index = old_len - 1;
         let raw_index = self.raw_index(index)?;
-        let value = match self.raw.get(db, raw_index)? {
-            Some(value) => value.end().ok_or(Error::CorruptedDatabase)?,
-            None => return Err(Error::CorruptedDatabase),
-        };
+        let value = self.raw.get(db, raw_index)?.ok_or(Error::CorruptedDatabase)?;
 
         let mut empty_depth_to_bottom = 0;
         let mut replace_index = raw_index;

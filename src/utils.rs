@@ -14,8 +14,8 @@ pub fn required_depth(len: usize) -> usize {
 }
 
 /// Serialize a vector at given depth.
-pub fn vector_tree<DB: Backend>(values: &[ValueOf<DB>], db: &mut DB, at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
-    let total_depth = at_depth.unwrap_or(required_depth(values.len()));
+pub fn vector_tree<DB: Backend>(values: &[ValueOf<DB>], db: &mut DB, max_len: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
+    let total_depth = required_depth(max_len.unwrap_or(values.len()));
 
     let mut current = values.iter().cloned().collect::<Vec<_>>();
     let mut next = Vec::new();

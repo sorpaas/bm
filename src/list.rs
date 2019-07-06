@@ -16,22 +16,22 @@ impl<R: RootStatus, DB: Backend> List<R, DB> where
     EndOf<DB>: From<usize> + Into<usize>,
 {
     /// Get value at index.
-    pub fn get(&self, db: &DB, index: usize) -> Result<EndOf<DB>, Error<DB::Error>> {
+    pub fn get(&self, db: &DB, index: usize) -> Result<ValueOf<DB>, Error<DB::Error>> {
         self.0.with(db, |tuple, db| tuple.get(db, index))
     }
 
     /// Set value at index.
-    pub fn set(&mut self, db: &mut DB, index: usize, value: EndOf<DB>) -> Result<(), Error<DB::Error>> {
+    pub fn set(&mut self, db: &mut DB, index: usize, value: ValueOf<DB>) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.set(db, index, value))
     }
 
     /// Push a new value to the vector.
-    pub fn push(&mut self, db: &mut DB, value: EndOf<DB>) -> Result<(), Error<DB::Error>> {
+    pub fn push(&mut self, db: &mut DB, value: ValueOf<DB>) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.push(db, value))
     }
 
     /// Pop a value from the vector.
-    pub fn pop(&mut self, db: &mut DB) -> Result<Option<EndOf<DB>>, Error<DB::Error>> {
+    pub fn pop(&mut self, db: &mut DB) -> Result<Option<ValueOf<DB>>, Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.pop(db))
     }
 
@@ -101,6 +101,7 @@ impl<DB: Backend> List<Owned, DB> where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Value;
     use sha2::Sha256;
 
     type InMemory = crate::memory::InMemoryBackend<Sha256, ListValue>;
@@ -134,14 +135,14 @@ mod tests {
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
-            vec.push(&mut db, i.into()).unwrap();
+            vec.push(&mut db, Value::End(i.into())).unwrap();
             roots.push(vec.root());
         }
         assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
             assert_eq!(vec.root(), roots.pop().unwrap());
             let value = vec.pop(&mut db).unwrap();
-            assert_eq!(value, Some(i.into()));
+            assert_eq!(value, Some(Value::End(i.into())));
             assert_eq!(vec.len(), i);
         }
         assert_eq!(vec.len(), 0);
@@ -164,14 +165,14 @@ mod tests {
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
-            vec.push(&mut db, Default::default()).unwrap();
+            vec.push(&mut db, Value::End(Default::default())).unwrap();
         }
 
         for i in 0..100 {
-            vec.set(&mut db, i, i.into()).unwrap();
+            vec.set(&mut db, i, Value::End(i.into())).unwrap();
         }
         for i in 0..100 {
-            assert_eq!(vec.get(&db, i).unwrap(), i.into());
+            assert_eq!(vec.get(&db, i).unwrap(), Value::End(i.into()));
         }
     }
 
@@ -182,14 +183,14 @@ mod tests {
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
-            vec.push(&mut db, i.into()).unwrap();
+            vec.push(&mut db, Value::End(i.into())).unwrap();
         }
         let vec_hash = vec.deconstruct(&mut db).unwrap();
 
         let vec = OwnedList::reconstruct(vec_hash, &mut db, None).unwrap();
         assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
-            assert_eq!(vec.get(&db, i).unwrap(), i.into());
+            assert_eq!(vec.get(&db, i).unwrap(), Value::End(i.into()));
         }
     }
 }

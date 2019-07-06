@@ -1,7 +1,7 @@
-use bm::{Value, Backend, ValueOf, Error};
+use bm::{Value, Backend, ValueOf, Error, Index, DanglingRaw, Leak};
 use primitive_types::U256;
 
-use crate::{IntoTree, End, Intermediate};
+use crate::{IntoTree, FromTree, End, Intermediate};
 
 impl<DB> IntoTree<DB> for bool where
     DB: Backend<Intermediate=Intermediate, End=End>,
@@ -11,6 +11,14 @@ impl<DB> IntoTree<DB> for bool where
             true => 1u8.into_tree(db),
             false => 0u8.into_tree(db),
         }
+    }
+}
+
+impl<DB> FromTree<DB> for bool where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+{
+    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+        Ok(u8::from_tree(root, db)? != 0)
     }
 }
 
@@ -27,12 +35,31 @@ macro_rules! impl_builtin_uint {
                 Ok(Value::End(End(ret)))
             }
         }
+
+        impl<DB> FromTree<DB> for $t where
+            DB: Backend<Intermediate=Intermediate, End=End>,
+        {
+            fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+                let raw = DanglingRaw::from_leaked(root.clone());
+
+                match raw.get(db, Index::root())?.ok_or(Error::CorruptedDatabase)? {
+                    Value::Intermediate(_) => Err(Error::CorruptedDatabase),
+                    Value::End(value) => {
+                        let mut bytes = Self::default().to_le_bytes();
+                        let bytes_len = bytes.len();
+                        bytes.copy_from_slice(&value.0[..bytes_len]);
+
+                        Ok(Self::from_le_bytes(bytes))
+                    },
+                }
+            }
+        }
     )* }
 }
 
 impl_builtin_uint!(u8, u16, u32, u64, u128);
 
-impl<'a, DB> IntoTree<DB> for U256 where
+impl<DB> IntoTree<DB> for U256 where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
     fn into_tree(&self, _db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
@@ -40,5 +67,20 @@ impl<'a, DB> IntoTree<DB> for U256 where
         self.to_little_endian(&mut ret);
 
         Ok(Value::End(End(ret)))
+    }
+}
+
+impl<DB> FromTree<DB> for U256 where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+{
+    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+        let raw = DanglingRaw::from_leaked(root.clone());
+
+        match raw.get(db, Index::root())?.ok_or(Error::CorruptedDatabase)? {
+            Value::Intermediate(_) => Err(Error::CorruptedDatabase),
+            Value::End(value) => {
+                Ok(U256::from_little_endian(&value.0))
+            },
+        }
     }
 }

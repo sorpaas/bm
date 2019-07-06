@@ -6,7 +6,7 @@ use core::marker::PhantomData;
 use crate::length::LengthMixed;
 use crate::vector::Vector;
 use crate::raw::Raw;
-use crate::traits::{EndOf, Backend, ValueOf, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
+use crate::traits::{Value, EndOf, Backend, ValueOf, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
 
 fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
     let host_len = Host::to_usize();
@@ -66,7 +66,8 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
 
         let mut value_offset = 0;
         for (i, range) in covering_ranges.into_iter().enumerate() {
-            let host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i)?.into();
+            let host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i)?
+                .end().ok_or(Error::CorruptedDatabase)?.into();
             (&mut ret[value_offset..(value_offset + range.end - range.start)]).copy_from_slice(&host_value[range.clone()]);
             value_offset += range.end - range.start;
         }
@@ -81,9 +82,10 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
 
         let mut value_offset = 0;
         for (i, range) in covering_ranges.into_iter().enumerate() {
-            let mut host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i)?.into();
+            let mut host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i)?
+                .end().ok_or(Error::CorruptedDatabase)?.into();
             (&mut host_value[range.clone()]).copy_from_slice(&value[value_offset..(value_offset + range.end - range.start)]);
-            self.tuple.set(db, covering_base + i, host_value.into())?;
+            self.tuple.set(db, covering_base + i, Value::End(host_value.into()))?;
             value_offset += range.end - range.start;
         }
 
@@ -96,7 +98,7 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
         while self.tuple.len() < covering_base + covering_ranges.len() {
-            self.tuple.push(db, Default::default())?;
+            self.tuple.push(db, Value::End(Default::default()))?;
         }
         self.set(db, index, value)?;
         self.len += 1;
@@ -126,7 +128,7 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
 
             let last_value = self.get(db, last_index)?;
             self.tuple.pop(db)?;
-            self.tuple.push(db, Default::default())?;
+            self.tuple.push(db, Value::End(Default::default()))?;
             self.set(db, last_index, last_value)?;
         }
 

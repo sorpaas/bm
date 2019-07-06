@@ -1,4 +1,4 @@
-use bm::{OwnedList, ProvingBackend, Sequence};
+use bm::{OwnedList, ProvingBackend, Sequence, Value};
 use sha2::Sha256;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -45,7 +45,7 @@ fn basic_proving_vec() {
 
     for i in 0..100 {
         assert_eq!(vec.len(), i);
-        vec.push(&mut proving, i.into()).unwrap();
+        vec.push(&mut proving, Value::End(i.into())).unwrap();
     }
     proving.reset();
 
@@ -57,6 +57,6 @@ fn basic_proving_vec() {
     let mut proved = InMemory::new_with_inherited_empty();
     proved.populate(proofs);
     let proved_vec = OwnedList::reconstruct(vec_hash, &mut proved, None).unwrap();
-    assert_eq!(proved_vec.get(&proved, 5usize.into()).unwrap(), 5usize.into());
-    assert_eq!(proved_vec.get(&proved, 7usize.into()).unwrap(), 7usize.into());
+    assert_eq!(proved_vec.get(&proved, 5usize.into()).unwrap(), Value::End(5usize.into()));
+    assert_eq!(proved_vec.get(&proved, 7usize.into()).unwrap(), Value::End(7usize.into()));
 }

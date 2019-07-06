@@ -1,8 +1,9 @@
 use sha2::{Digest, Sha256};
 use primitive_types::H256;
+use std::fmt::Debug;
 
-use bm::NoopBackend;
-use bm_ssz::{End, IntoTree, FixedVec, VariableVec, tree_root};
+use bm::InMemoryBackend;
+use bm_ssz::{End, IntoTree, FromTree, FromVectorTree, FromListTree, FixedVec, VariableVec};
 
 fn chunk(data: &[u8]) -> H256 {
     let mut ret = [0; 32];
@@ -18,41 +19,68 @@ fn h(a: &[u8], b: &[u8]) -> H256 {
     H256::from_slice(hash.result().as_slice())
 }
 
-fn s<T>(value: &T) -> H256 where
-    T: IntoTree<NoopBackend<Sha256, End>>,
+fn t<T>(value: T, expected: H256) where
+    T: IntoTree<InMemoryBackend<Sha256, End>> + FromTree<InMemoryBackend<Sha256, End>>,
+    T: Debug + PartialEq,
 {
-    tree_root::<Sha256, T>(value)
+    let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
+    let actual = value.into_tree(&mut db).unwrap();
+    assert_eq!(H256::from_slice(actual.as_ref()), expected);
+    let decoded = T::from_tree(&actual, &db).unwrap();
+    assert_eq!(value, decoded);
+}
+
+fn t_fixed<T>(value: FixedVec<T>, expected: H256) where
+    FixedVec<T>: IntoTree<InMemoryBackend<Sha256, End>> + FromVectorTree<InMemoryBackend<Sha256, End>>,
+    T: Debug + PartialEq,
+{
+    let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
+    let actual = value.into_tree(&mut db).unwrap();
+    assert_eq!(H256::from_slice(actual.as_ref()), expected);
+    let decoded = FixedVec::<T>::from_vector_tree(&actual, &db, value.0.len(), None).unwrap();
+    assert_eq!(value, decoded);
+}
+
+fn t_variable<T>(value: VariableVec<T>, expected: H256) where
+    VariableVec<T>: IntoTree<InMemoryBackend<Sha256, End>> + FromListTree<InMemoryBackend<Sha256, End>>,
+    T: Debug + PartialEq,
+{
+    let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
+    let actual = value.into_tree(&mut db).unwrap();
+    assert_eq!(H256::from_slice(actual.as_ref()), expected);
+    let decoded = VariableVec::<T>::from_list_tree(&actual, &db, value.1).unwrap();
+    assert_eq!(value, decoded);
 }
 
 #[test]
 fn spec() {
-    assert_eq!(s(&false), chunk(&[0x00])); // boolean F
-    assert_eq!(s(&true), chunk(&[0x01])); // boolean T
-    assert_eq!(s(&0u8), chunk(&[0x00])); // uint8 00
-    assert_eq!(s(&1u8), chunk(&[0x01])); // uint8 01
-    assert_eq!(s(&0xabu8), chunk(&[0xab])); // uint8 ab
-    assert_eq!(s(&0x0000u16), chunk(&[0x00, 0x00])); // uint16 0000
-    assert_eq!(s(&0xabcdu16), chunk(&[0xcd, 0xab])); // uint16 abcd
-    assert_eq!(s(&0x00000000u32), chunk(&[0x00, 0x00, 0x00, 0x00])); // uint32 00000000
-    assert_eq!(s(&0x01234567u32), chunk(&[0x67, 0x45, 0x23, 0x01])); // uint32 01234567
+    t(false, chunk(&[0x00])); // boolean F
+    t(true, chunk(&[0x01])); // boolean T
+    t(0u8, chunk(&[0x00])); // uint8 00
+    t(1u8, chunk(&[0x01])); // uint8 01
+    t(0xabu8, chunk(&[0xab])); // uint8 ab
+    t(0x0000u16, chunk(&[0x00, 0x00])); // uint16 0000
+    t(0xabcdu16, chunk(&[0xcd, 0xab])); // uint16 abcd
+    t(0x00000000u32, chunk(&[0x00, 0x00, 0x00, 0x00])); // uint32 00000000
+    t(0x01234567u32, chunk(&[0x67, 0x45, 0x23, 0x01])); // uint32 01234567
 
     // uint64 0000000000000000
-    assert_eq!(s(&0x0000000000000000u64), chunk(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+    t(0x0000000000000000u64, chunk(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
     // uint64 0123456789abcdef
-    assert_eq!(s(&0x0123456789abcdefu64), chunk(&[0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01]));
+    t(0x0123456789abcdefu64, chunk(&[0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01]));
 
     // bitvector TTFTFTFF
-    assert_eq!(s(&FixedVec(vec![true, true, false, true, false, true, false, false])), chunk(&[0x2b]));
+    t_fixed(FixedVec(vec![true, true, false, true, false, true, false, false]), chunk(&[0x2b]));
     // bitvector FTFT
-    assert_eq!(s(&FixedVec(vec![false, true, false, true])), chunk(&[0x0a]));
+    t_fixed(FixedVec(vec![false, true, false, true]), chunk(&[0x0a]));
     // bitvector FTF
-    assert_eq!(s(&FixedVec(vec![false, true, false])), chunk(&[0x02]));
+    t_fixed(FixedVec(vec![false, true, false]), chunk(&[0x02]));
     // bitvector TFTFFFTTFT
-    assert_eq!(s(&FixedVec(vec![true, false, true, false, false, false, true, true, false, true])),
+    t_fixed(FixedVec(vec![true, false, true, false, false, false, true, true, false, true]),
                chunk(&[0xc5, 0x02]));
     // bitvector TFTFFFTTFTFFFFTT
-    assert_eq!(s(&FixedVec(vec![true, false, true, false, false, false, true, true, false, true,
-                                false, false, false, false, true, true])),
+    t_fixed(FixedVec(vec![true, false, true, false, false, false, true, true, false, true,
+                                false, false, false, false, true, true]),
                chunk(&[0xc5, 0xc2]));
     // long bitvector
     {
@@ -60,32 +88,31 @@ fn spec() {
         for _ in 0..512 {
             v.push(true);
         }
-        let root = s(&FixedVec(v));
-        assert_eq!(root, h(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
-                           &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]));
+        t_fixed(FixedVec(v), h(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+                               &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]));
     }
 
     // bitlist TTFTFTFF
-    assert_eq!(s(&VariableVec(vec![true, true, false, true, false, true, false, false], 8)),
+    t_variable(VariableVec(vec![true, true, false, true, false, true, false, false], 8),
                h(&chunk(&[0x2b])[..], &chunk(&[0x08])[..]));
     // bitlist FTFT
-    assert_eq!(s(&VariableVec(vec![false, true, false, true], 4)),
+    t_variable(VariableVec(vec![false, true, false, true], 4),
                h(&chunk(&[0x0a])[..], &chunk(&[0x04])[..]));
     // bitlist FTF
-    assert_eq!(s(&VariableVec(vec![false, true, false], 3)),
+    t_variable(VariableVec(vec![false, true, false], 3),
                h(&chunk(&[0x02])[..], &chunk(&[0x03])[..]));
     // bitlist TFTFFFTTFT
-    assert_eq!(s(&VariableVec(vec![true, false, true, false, false, false, true, true, false, true], 16)),
+    t_variable(VariableVec(vec![true, false, true, false, false, false, true, true, false, true], 16),
                h(&chunk(&[0xc5, 0x02])[..], &chunk(&[0x0a])[..]));
     // bitlist TFTFFFTTFTFFFFTT
-    assert_eq!(s(&VariableVec(vec![true, false, true, false, false, false, true, true, false, true,
-                                   false, false, false, false, true, true], 16)),
+    t_variable(VariableVec(vec![true, false, true, false, false, false, true, true, false, true,
+                                false, false, false, false, true, true], 16),
                h(&chunk(&[0xc5, 0xc2])[..], &chunk(&[0x10])[..]));
 }
 
