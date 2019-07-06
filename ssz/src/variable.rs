@@ -1,5 +1,5 @@
 use bm::{Error, ValueOf, Value, Backend};
-use bm::serialize;
+use bm::utils::required_depth;
 use primitive_types::U256;
 
 use crate::{FixedVecRef, End, Intermediate, IntoVectorTree, IntoTree};
@@ -12,7 +12,7 @@ impl<'a, DB, T> IntoTree<DB> for VariableVecRef<'a, T> where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
     fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        let target_depth = serialize::required_depth(self.1);
+        let target_depth = required_depth(self.1);
         let len = self.0.len();
 
         let left = FixedVecRef(&self.0).into_vector_tree(db, Some(target_depth))?;

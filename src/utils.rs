@@ -1,4 +1,4 @@
-//! Merkle direct serialization.
+//! Utilities
 
 use crate::{Backend, ValueOf, Error, Value};
 
@@ -14,7 +14,7 @@ pub fn required_depth(len: usize) -> usize {
 }
 
 /// Serialize a vector at given depth.
-pub fn serialize_vector<DB: Backend>(values: &[ValueOf<DB>], db: &mut DB, at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
+pub fn vector_tree<DB: Backend>(values: &[ValueOf<DB>], db: &mut DB, at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
     let total_depth = at_depth.unwrap_or(required_depth(values.len()));
 
     let mut current = values.iter().cloned().collect::<Vec<_>>();

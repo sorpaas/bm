@@ -1,5 +1,5 @@
 use bm::{ValueOf, Backend, Error, Value};
-use bm::serialize;
+use bm::utils::vector_tree;
 use primitive_types::{U256, H256};
 
 use crate::{IntoTree, Intermediate, End, Composite};
@@ -42,7 +42,7 @@ macro_rules! impl_builtin_fixed_uint_vector {
                     }
                 }
 
-                serialize::serialize_vector(&chunks.into_iter().map(|c| {
+                vector_tree(&chunks.into_iter().map(|c| {
                     let mut ret = End::default();
                     ret.0.copy_from_slice(&c);
                     Value::End(ret)
@@ -62,7 +62,7 @@ impl<'a, DB> IntoVectorTree<DB> for FixedVecRef<'a, U256> where
         db: &mut DB,
         at_depth: Option<usize>
     ) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        serialize::serialize_vector(&self.0.iter().map(|uint| {
+        vector_tree(&self.0.iter().map(|uint| {
             let mut ret = End::default();
             uint.to_little_endian(&mut ret.0);
             Value::End(ret)
@@ -98,7 +98,7 @@ impl<'a, DB, T: Composite> IntoVectorTree<DB> for FixedVecRef<'a, T> where
         db: &mut DB,
         at_depth: Option<usize>
     ) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        serialize::serialize_vector(&self.0.iter().map(|value| {
+        vector_tree(&self.0.iter().map(|value| {
             value.into_tree(db)
         }).collect::<Result<Vec<_>, _>>()?, db, at_depth)
     }

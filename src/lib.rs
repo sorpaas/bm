@@ -12,7 +12,7 @@ mod packed;
 mod proving;
 mod length;
 
-pub mod serialize;
+pub mod utils;
 
 pub use crate::traits::{Backend, Value, ValueOf, IntermediateOf, EndOf, Dangling, Owned, RootStatus, Error, Sequence, Tree, Leak};
 pub use crate::memory::{InMemoryBackend, InMemoryBackendError, NoopBackend, NoopBackendError};
