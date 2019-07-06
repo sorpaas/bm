@@ -6,9 +6,10 @@ use bm::{Backend, NoopBackend, Error};
 use bm::serialize::Serialize;
 
 mod basic;
+mod fixed;
 
 #[derive(Clone)]
-pub struct End([u8; 32]);
+pub struct End(pub [u8; 32]);
 
 impl Default for End {
     fn default() -> Self {
@@ -23,6 +24,8 @@ impl AsRef<[u8]> for End {
 }
 
 pub type Intermediate = GenericArray<u8, U32>;
+
+pub trait Composite { }
 
 pub struct Serial<'a, T>(pub &'a T);
 
