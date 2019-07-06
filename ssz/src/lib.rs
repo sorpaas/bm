@@ -11,7 +11,7 @@ mod variable;
 pub use fixed::{FixedVec, FixedVecRef, IntoVectorTree};
 pub use variable::{VariableVec, VariableVecRef};
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct End(pub [u8; 32]);
 
 impl Default for End {
@@ -35,6 +35,13 @@ pub trait IntoTree<DB: Backend<Intermediate=Intermediate, End=End>> {
 }
 
 pub trait Composite { }
+
+impl<'a, T> Composite for FixedVecRef<'a, T> { }
+impl<T> Composite for FixedVec<T> { }
+impl<'a, T> Composite for VariableVecRef<'a, T> { }
+impl<T> Composite for VariableVec<T> { }
+impl Composite for H256 { }
+
 
 pub fn into_tree<T, DB>(value: &T, db: &mut DB) -> Result<H256, Error<DB::Error>> where
     T: IntoTree<DB>,

@@ -2,7 +2,7 @@ use sha2::{Digest, Sha256};
 use primitive_types::H256;
 
 use bm::NoopBackend;
-use bm_ssz::{End, IntoTree, IntoVectorTree, tree_root};
+use bm_ssz::{End, IntoTree, FixedVec, VariableVec, tree_root};
 
 fn chunk(data: &[u8]) -> H256 {
     let mut ret = [0; 32];
@@ -41,25 +41,55 @@ fn spec() {
     // uint64 0123456789abcdef
     assert_eq!(s(&0x0123456789abcdefu64), chunk(&[0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01]));
 
-    // // bitvector TTFTFTFF
-    // assert_eq!(H256::from_slice(Serial(&FixedVec(vec![true, true, false, true, false, true, false, false])).serialize_vector(&mut NoopBackend::<Sha256, End>::new_with_inherited_empty(), None).unwrap().as_ref()), chunk(&[0x2b]));
+    // bitvector TTFTFTFF
+    assert_eq!(s(&FixedVec(vec![true, true, false, true, false, true, false, false])), chunk(&[0x2b]));
+    // bitvector FTFT
+    assert_eq!(s(&FixedVec(vec![false, true, false, true])), chunk(&[0x0a]));
+    // bitvector FTF
+    assert_eq!(s(&FixedVec(vec![false, true, false])), chunk(&[0x02]));
+    // bitvector TFTFFFTTFT
+    assert_eq!(s(&FixedVec(vec![true, false, true, false, false, false, true, true, false, true])),
+               chunk(&[0xc5, 0x02]));
+    // bitvector TFTFFFTTFTFFFFTT
+    assert_eq!(s(&FixedVec(vec![true, false, true, false, false, false, true, true, false, true,
+                                false, false, false, false, true, true])),
+               chunk(&[0xc5, 0xc2]));
+    // long bitvector
+    {
+        let mut v = Vec::new();
+        for _ in 0..512 {
+            v.push(true);
+        }
+        let root = s(&FixedVec(v));
+        assert_eq!(root, h(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff],
+                           &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]));
+    }
+
+    // bitlist TTFTFTFF
+    assert_eq!(s(&VariableVec(vec![true, true, false, true, false, true, false, false], 8)),
+               h(&chunk(&[0x2b])[..], &chunk(&[0x08])[..]));
+    // bitlist FTFT
+    assert_eq!(s(&VariableVec(vec![false, true, false, true], 4)),
+               h(&chunk(&[0x0a])[..], &chunk(&[0x04])[..]));
+    // bitlist FTF
+    assert_eq!(s(&VariableVec(vec![false, true, false], 3)),
+               h(&chunk(&[0x02])[..], &chunk(&[0x03])[..]));
+    // bitlist TFTFFFTTFT
+    assert_eq!(s(&VariableVec(vec![true, false, true, false, false, false, true, true, false, true], 16)),
+               h(&chunk(&[0xc5, 0x02])[..], &chunk(&[0x0a])[..]));
+    // bitlist TFTFFFTTFTFFFFTT
+    assert_eq!(s(&VariableVec(vec![true, false, true, false, false, false, true, true, false, true,
+                                   false, false, false, false, true, true], 16)),
+               h(&chunk(&[0xc5, 0xc2])[..], &chunk(&[0x10])[..]));
 }
 
 // test_data = [
-//     ("bitvector TTFTFTFF", Bitvector[8](1, 1, 0, 1, 0, 1, 0, 0), "2b", chunk("2b")),
-//     ("bitlist TTFTFTFF", Bitlist[8](1, 1, 0, 1, 0, 1, 0, 0), "2b01", h(chunk("2b"), chunk("08"))),
-//     ("bitvector FTFT", Bitvector[4](0, 1, 0, 1), "0a", chunk("0a")),
-//     ("bitlist FTFT", Bitlist[4](0, 1, 0, 1), "1a", h(chunk("0a"), chunk("04"))),
-//     ("bitvector FTF", Bitvector[3](0, 1, 0), "02", chunk("02")),
-//     ("bitlist FTF", Bitlist[3](0, 1, 0), "0a", h(chunk("02"), chunk("03"))),
-//     ("bitvector TFTFFFTTFT", Bitvector[10](1, 0, 1, 0, 0, 0, 1, 1, 0, 1), "c502", chunk("c502")),
-//     ("bitlist TFTFFFTTFT", Bitlist[16](1, 0, 1, 0, 0, 0, 1, 1, 0, 1), "c506", h(chunk("c502"), chunk("0A"))),
-//     ("bitvector TFTFFFTTFTFFFFTT", Bitvector[16](1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1),
-//      "c5c2", chunk("c5c2")),
-//     ("bitlist TFTFFFTTFTFFFFTT", Bitlist[16](1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1),
-//      "c5c201", h(chunk("c5c2"), chunk("10"))),
-//     ("long bitvector", Bitvector[512](1 for i in range(512)),
-//      "ff" * 64, h("ff" * 32, "ff" * 32)),
 //     ("long bitlist", Bitlist[512](1),
 //      "03", h(h(chunk("01"), chunk("")), chunk("01"))),
 //     ("long bitlist", Bitlist[512](1 for i in range(512)),

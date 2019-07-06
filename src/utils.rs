@@ -33,9 +33,5 @@ pub fn vector_tree<DB: Backend>(values: &[ValueOf<DB>], db: &mut DB, at_depth: O
         next = Vec::new();
     }
 
-    Ok(if total_depth == 0 {
-        current[0].clone()
-    } else {
-        next[0].clone()
-    })
+    Ok(current[0].clone())
 }
