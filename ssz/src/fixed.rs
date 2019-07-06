@@ -52,6 +52,21 @@ impl<'a, 'b, DB> SerializeVector<DB> for Serial<'a, FixedVecRef<'b, U256>> where
     }
 }
 
+impl<'a, 'b, DB> SerializeVector<DB> for Serial<'a, FixedVecRef<'b, bool>> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+{
+    fn serialize_vector(&self, db: &mut DB, _at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        let mut bytes = Vec::new();
+        bytes.resize(((self.0).0.len() + 7) / 8, 0u8);
+
+        for i in 0..(self.0).0.len() {
+            bytes[i / 8] |= ((self.0).0[i] as u8) << (i % 8);
+        }
+
+        Serial(&FixedVec(bytes)).serialize(db)
+    }
+}
+
 impl<'a, 'b, T: Composite, DB> SerializeVector<DB> for Serial<'a, FixedVecRef<'b, T>> where
     for<'c> Serial<'c, T>: Serialize<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>
