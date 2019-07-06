@@ -1,5 +1,11 @@
 use typenum::U32;
 use generic_array::GenericArray;
+use primitive_types::H256;
+use digest::Digest;
+use bm::{Backend, NoopBackend, Error};
+use bm::serialize::Serialize;
+
+mod basic;
 
 #[derive(Clone)]
 pub struct End([u8; 32]);
@@ -17,3 +23,20 @@ impl AsRef<[u8]> for End {
 }
 
 pub type Intermediate = GenericArray<u8, U32>;
+
+pub struct Serial<'a, T>(pub &'a T);
+
+pub fn serialize_root<'a, T, DB>(value: &'a T, db: &mut DB) -> Result<H256, Error<DB::Error>> where
+    Serial<'a, T>: Serialize<DB>,
+    DB: Backend<Intermediate=Intermediate, End=End>,
+{
+    bm::serialize::serialize_root(&Serial(value), db).map(|ret| H256::from_slice(ret.as_ref()))
+}
+
+pub fn serialize_root_noop<'a, D, T>(value: &'a T) -> H256 where
+    D: Digest<OutputSize=U32>,
+    Serial<'a, T>: Serialize<NoopBackend<D, End>>,
+{
+    serialize_root(value, &mut NoopBackend::new_with_inherited_empty())
+        .expect("Noop backend never fails in set; qed")
+}
