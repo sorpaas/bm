@@ -3,7 +3,7 @@ use primitive_types::H256;
 
 use bm::NoopBackend;
 use bm::serialize::Serialize;
-use bm_ssz::{Serial, End, serialize_root_noop};
+use bm_ssz::{Serial, End, serialize_noop};
 
 fn chunk(data: &[u8]) -> H256 {
     let mut ret = [0; 32];
@@ -22,7 +22,7 @@ fn h(a: &[u8], b: &[u8]) -> H256 {
 fn s<'a, T>(value: &'a T) -> H256 where
     Serial<'a, T>: Serialize<NoopBackend<Sha256, End>>,
 {
-    serialize_root_noop::<Sha256, _>(value)
+    serialize_noop::<Sha256, _>(value)
 }
 
 #[test]
