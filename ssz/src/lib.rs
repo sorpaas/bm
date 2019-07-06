@@ -7,6 +7,10 @@ use bm::serialize::Serialize;
 
 mod basic;
 mod fixed;
+mod variable;
+
+pub use fixed::{FixedVec, FixedVecRef, SerializeVector};
+pub use variable::{VariableVec, VariableVecRef};
 
 #[derive(Clone)]
 pub struct End(pub [u8; 32]);
