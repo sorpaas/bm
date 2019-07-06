@@ -1,3 +1,8 @@
+#![warn(missing_docs)]
+
+//! SimpleSerialize (ssz) compliant binary merkle tree supporting both
+//! merkleization and de-merkleization.
+
 use typenum::U32;
 use generic_array::GenericArray;
 use primitive_types::H256;
@@ -11,6 +16,7 @@ mod variable;
 pub use fixed::{FixedVec, FixedVecRef, IntoVectorTree, FromVectorTree};
 pub use variable::{VariableVec, VariableVecRef, FromListTree};
 
+/// End value for 256-bit ssz binary merkle tree.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct End(pub [u8; 32]);
 
@@ -40,18 +46,24 @@ impl Into<GenericArray<u8, typenum::U32>> for End {
     }
 }
 
+/// Intermediate type for 256-bit ssz binary merkle tree.
 pub type Intermediate = GenericArray<u8, U32>;
 
-/// Serializable type of merkle.
+/// Traits for type converting into a tree structure.
 pub trait IntoTree<DB: Backend<Intermediate=Intermediate, End=End>> {
-    /// Serialize this value into a list of merkle value.
+    /// Convert this type into merkle tree, writing nodes into the
+    /// given database.
     fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>>;
 }
 
+/// Traits for type converting from a tree structure.
 pub trait FromTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
+    /// Convert this type from merkle tree, reading nodes from the
+    /// given database.
     fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>>;
 }
 
+/// A composite value, in contrary to ssz's definition of basic value.
 pub trait Composite { }
 
 impl<'a, T> Composite for FixedVecRef<'a, T> { }
@@ -60,6 +72,7 @@ impl<'a, T> Composite for VariableVecRef<'a, T> { }
 impl<T> Composite for VariableVec<T> { }
 impl Composite for H256 { }
 
+/// Calculate a ssz merkle tree root, dismissing the tree.
 pub fn tree_root<D, T>(value: &T) -> H256 where
     T: IntoTree<NoopBackend<D, End>>,
     D: Digest<OutputSize=U32>,

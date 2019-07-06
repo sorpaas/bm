@@ -3,7 +3,10 @@ use primitive_types::U256;
 
 use crate::{Composite, FixedVec, FromVectorTree, FixedVecRef, End, Intermediate, IntoVectorTree, IntoTree};
 
+/// Traits for list converting from a tree structure.
 pub trait FromListTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
+    /// Convert this type from merkle tree, reading nodes from the
+    /// given database, with given maximum length.
     fn from_list_tree(
         root: &ValueOf<DB>,
         db: &DB,
@@ -12,8 +15,10 @@ pub trait FromListTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// Variable `Vec` reference. In `ssz`'s definition, this is a "list".
 pub struct VariableVecRef<'a, T>(pub &'a [T], pub usize);
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// Variable `Vec` value. In `ssz`'s definition, this is a "list".
 pub struct VariableVec<T>(pub Vec<T>, pub usize);
 
 macro_rules! impl_packed {

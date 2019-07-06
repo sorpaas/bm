@@ -5,7 +5,10 @@ use generic_array::GenericArray;
 
 use crate::{IntoTree, FromTree, Intermediate, End, Composite};
 
+/// Traits for vector converting into a tree structure.
 pub trait IntoVectorTree<DB: Backend<Intermediate=Intermediate, End=End>> {
+    /// Convert this vector into merkle tree, writing nodes into the
+    /// given database, and using the maximum length specified.
     fn into_vector_tree(
         &self,
         db: &mut DB,
@@ -13,7 +16,10 @@ pub trait IntoVectorTree<DB: Backend<Intermediate=Intermediate, End=End>> {
     ) -> Result<ValueOf<DB>, Error<DB::Error>>;
 }
 
+/// Traits for vector converting from a tree structure.
 pub trait FromVectorTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
+    /// Convert this type from merkle tree, reading nodes from the
+    /// given database, with given length and maximum length.
     fn from_vector_tree(
         root: &ValueOf<DB>,
         db: &DB,
@@ -23,8 +29,10 @@ pub trait FromVectorTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// Fixed `Vec` reference. In ssz's definition, this is a "vector".
 pub struct FixedVecRef<'a, T>(pub &'a [T]);
 #[derive(Debug, Clone, Eq, PartialEq)]
+/// Fixed `Vec` value. In ssz's definition, this is a "vector".
 pub struct FixedVec<T>(pub Vec<T>);
 
 macro_rules! impl_builtin_fixed_uint_vector {
