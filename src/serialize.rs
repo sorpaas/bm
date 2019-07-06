@@ -2,12 +2,6 @@
 
 use crate::{Backend, ValueOf, Error, Value};
 
-/// Serializable type of merkle.
-pub trait Serialize<DB: Backend> {
-    /// Serialize this value into a list of merkle value.
-    fn serialize(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>>;
-}
-
 /// Required depth of given length.
 pub fn required_depth(len: usize) -> usize {
     let mut max_len = 1;

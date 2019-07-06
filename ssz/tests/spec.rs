@@ -2,8 +2,7 @@ use sha2::{Digest, Sha256};
 use primitive_types::H256;
 
 use bm::NoopBackend;
-use bm::serialize::Serialize;
-use bm_ssz::{Serial, End, serialize_noop};
+use bm_ssz::{End, IntoTree, IntoVectorTree, tree_root};
 
 fn chunk(data: &[u8]) -> H256 {
     let mut ret = [0; 32];
@@ -19,10 +18,10 @@ fn h(a: &[u8], b: &[u8]) -> H256 {
     H256::from_slice(hash.result().as_slice())
 }
 
-fn s<'a, T>(value: &'a T) -> H256 where
-    Serial<'a, T>: Serialize<NoopBackend<Sha256, End>>,
+fn s<T>(value: &T) -> H256 where
+    T: IntoTree<NoopBackend<Sha256, End>>,
 {
-    serialize_noop::<Sha256, _>(value)
+    tree_root::<Sha256, T>(value)
 }
 
 #[test]
@@ -41,6 +40,9 @@ fn spec() {
     assert_eq!(s(&0x0000000000000000u64), chunk(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
     // uint64 0123456789abcdef
     assert_eq!(s(&0x0123456789abcdefu64), chunk(&[0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01]));
+
+    // // bitvector TTFTFTFF
+    // assert_eq!(H256::from_slice(Serial(&FixedVec(vec![true, true, false, true, false, true, false, false])).serialize_vector(&mut NoopBackend::<Sha256, End>::new_with_inherited_empty(), None).unwrap().as_ref()), chunk(&[0x2b]));
 }
 
 // test_data = [

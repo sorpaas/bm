@@ -1,31 +1,45 @@
 use bm::{ValueOf, Backend, Error, Value};
-use bm::serialize::{self, Serialize};
+use bm::serialize;
 use primitive_types::{U256, H256};
 
-use crate::{Serial, Intermediate, End, Composite};
+use crate::{IntoTree, Intermediate, End, Composite};
 
-pub trait SerializeVector<DB: Backend> {
-    fn serialize_vector(&self, db: &mut DB, at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>>;
+pub trait IntoVectorTree<DB: Backend<Intermediate=Intermediate, End=End>> {
+    fn into_vector_tree(
+        &self,
+        db: &mut DB,
+        at_depth: Option<usize>
+    ) -> Result<ValueOf<DB>, Error<DB::Error>>;
 }
 
-pub struct FixedVecRef<'a, T>(pub &'a Vec<T>);
+pub struct FixedVecRef<'a, T>(pub &'a [T]);
 pub struct FixedVec<T>(pub Vec<T>);
 
 macro_rules! impl_builtin_fixed_uint_vector {
     ( $( $t:ty ),* ) => { $(
-        impl<'a, 'b, DB> SerializeVector<DB> for Serial<'a, FixedVecRef<'b, $t>> where
+        impl<'a, DB> IntoVectorTree<DB> for FixedVecRef<'a, $t> where
             DB: Backend<Intermediate=Intermediate, End=End>
         {
-            fn serialize_vector(&self, db: &mut DB, at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
+            fn into_vector_tree(
+                &self,
+                db: &mut DB,
+                at_depth: Option<usize>
+            ) -> Result<ValueOf<DB>, Error<DB::Error>> {
                 let mut chunks: Vec<Vec<u8>> = Vec::new();
 
-                for value in (self.0).0 {
+                for value in self.0 {
                     if chunks.last().map(|v| v.len() == 32).unwrap_or(true) {
                         chunks.push(Vec::new());
                     }
 
                     let current = chunks.last_mut().expect("chunks must have at least one item; qed");
                     current.append(&mut value.to_le_bytes().into_iter().cloned().collect::<Vec<u8>>());
+                }
+
+                if let Some(last) = chunks.last_mut() {
+                    while last.len() < 32 {
+                        last.push(0u8);
+                    }
                 }
 
                 serialize::serialize_vector(&chunks.into_iter().map(|c| {
@@ -40,11 +54,15 @@ macro_rules! impl_builtin_fixed_uint_vector {
 
 impl_builtin_fixed_uint_vector!(u8, u16, u32, u64, u128);
 
-impl<'a, 'b, DB> SerializeVector<DB> for Serial<'a, FixedVecRef<'b, U256>> where
+impl<'a, DB> IntoVectorTree<DB> for FixedVecRef<'a, U256> where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn serialize_vector(&self, db: &mut DB, at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        serialize::serialize_vector(&(self.0).0.iter().map(|uint| {
+    fn into_vector_tree(
+        &self,
+        db: &mut DB,
+        at_depth: Option<usize>
+    ) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        serialize::serialize_vector(&self.0.iter().map(|uint| {
             let mut ret = End::default();
             uint.to_little_endian(&mut ret.0);
             Value::End(ret)
@@ -52,54 +70,75 @@ impl<'a, 'b, DB> SerializeVector<DB> for Serial<'a, FixedVecRef<'b, U256>> where
     }
 }
 
-impl<'a, 'b, DB> SerializeVector<DB> for Serial<'a, FixedVecRef<'b, bool>> where
+impl<'a, DB> IntoVectorTree<DB> for FixedVecRef<'a, bool> where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn serialize_vector(&self, db: &mut DB, _at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
+    fn into_vector_tree(
+        &self,
+        db: &mut DB,
+        at_depth: Option<usize>
+    ) -> Result<ValueOf<DB>, Error<DB::Error>> {
         let mut bytes = Vec::new();
-        bytes.resize(((self.0).0.len() + 7) / 8, 0u8);
+        bytes.resize((self.0.len() + 7) / 8, 0u8);
 
-        for i in 0..(self.0).0.len() {
-            bytes[i / 8] |= ((self.0).0[i] as u8) << (i % 8);
+        for i in 0..self.0.len() {
+            bytes[i / 8] |= (self.0[i] as u8) << (i % 8);
         }
 
-        Serial(&FixedVec(bytes)).serialize(db)
+        FixedVecRef(&bytes).into_vector_tree(db, at_depth)
     }
 }
 
-impl<'a, 'b, T: Composite, DB> SerializeVector<DB> for Serial<'a, FixedVecRef<'b, T>> where
-    for<'c> Serial<'c, T>: Serialize<DB>,
-    DB: Backend<Intermediate=Intermediate, End=End>
+impl<'a, DB, T: Composite> IntoVectorTree<DB> for FixedVecRef<'a, T> where
+    T: IntoTree<DB>,
+    DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn serialize_vector(&self, db: &mut DB, at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        serialize::serialize_vector(&(self.0).0.iter().map(|value| {
-            Serial(value).serialize(db)
+    fn into_vector_tree(
+        &self,
+        db: &mut DB,
+        at_depth: Option<usize>
+    ) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        serialize::serialize_vector(&self.0.iter().map(|value| {
+            value.into_tree(db)
         }).collect::<Result<Vec<_>, _>>()?, db, at_depth)
     }
 }
 
-impl<'a, DB> SerializeVector<DB> for Serial<'a, H256> where
+impl<'a, DB, T> IntoTree<DB> for FixedVecRef<'a, T> where
+    Self: IntoVectorTree<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn serialize_vector(&self, db: &mut DB, at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        Serial(&FixedVecRef(&self.0.as_ref().iter().cloned().collect())).serialize_vector(db, at_depth)
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        self.into_vector_tree(db, None)
     }
 }
 
-impl<'a, DB, T> SerializeVector<DB> for Serial<'a, FixedVec<T>> where
-    for<'b, 'c> Serial<'b, FixedVecRef<'c, T>>: SerializeVector<DB>,
+impl<DB, T> IntoVectorTree<DB> for FixedVec<T> where
+    for<'a> FixedVecRef<'a, T>: IntoVectorTree<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn serialize_vector(&self, db: &mut DB, at_depth: Option<usize>) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        Serial(&FixedVecRef(&(self.0).0)).serialize_vector(db, at_depth)
+    fn into_vector_tree(
+        &self,
+        db: &mut DB,
+        at_depth: Option<usize>
+    ) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        FixedVecRef(&self.0).into_vector_tree(db, at_depth)
     }
 }
 
-impl<'a, DB, T> Serialize<DB> for Serial<'a, FixedVec<T>> where
-    Self: SerializeVector<DB>,
-    DB: Backend<Intermediate=Intermediate, End=End>,
+impl<DB, T> IntoTree<DB> for FixedVec<T> where
+    Self: IntoVectorTree<DB>,
+    DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn serialize(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        self.serialize_vector(db, None)
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        self.into_vector_tree(db, None)
+    }
+}
+
+impl<DB> IntoTree<DB> for H256 where
+    DB: Backend<Intermediate=Intermediate, End=End>
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        FixedVecRef(&self.0.as_ref()).into_tree(db)
     }
 }
