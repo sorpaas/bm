@@ -102,9 +102,9 @@ impl<DBError> From<DBError> for Error<DBError> {
 /// Traits for a merkle database.
 pub trait Backend {
     /// Intermediate value stored in this merkle database.
-    type Intermediate: AsRef<[u8]> + Clone;
+    type Intermediate: Clone;
     /// End value stored in this merkle database.
-    type End: AsRef<[u8]> + Clone + Default;
+    type End: Clone + Default;
     /// Error type for DB access.
     type Error;
 
