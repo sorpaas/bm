@@ -3,10 +3,9 @@
 extern crate proc_macro;
 
 use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, DeriveInput, Field, Data, Fields};
+use syn::{parse_macro_input, DeriveInput, Expr};
 use syn::spanned::Spanned;
-use syn::punctuated::Punctuated;
-use syn::token::Comma;
+use deriving::{struct_fields, has_attribute, attribute_value};
 
 use proc_macro::TokenStream;
 
@@ -20,6 +19,7 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
         .iter()
         .map(|f| {
             let name = &f.ident;
+
             quote_spanned! { f.span() => {
                 vector.push(bm_le::IntoTree::into_tree(&self.#name, db)?);
             } }
@@ -44,18 +44,141 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(FromTree, attributes(bm))]
 pub fn from_tree_derive(input: TokenStream) -> TokenStream {
-    unimplemented!()
-}
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
 
-fn struct_fields(data: &Data) -> Option<&Punctuated<Field, Comma>> {
-    match data {
-        Data::Struct(ref data) => {
-            match data.fields {
-                Fields::Named(ref fields) => Some(&fields.named),
-                Fields::Unnamed(ref fields) => Some(&fields.unnamed),
-                Fields::Unit => None,
+    let config_trait = attribute_value("bm", &input.attrs, "config_trait");
+
+    let fields = struct_fields(&input.data)
+        .expect("Not supported derive type")
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let name = &f.ident;
+
+            if has_attribute("bm", &f.attrs, "vector") {
+                let config = attribute_value("bm", &f.attrs, "len")
+                    .expect("Must specify the length")
+                    .parse::<Expr>().expect("Invalid syntax");
+
+                if config_trait.is_some() {
+                    quote_spanned! {
+                        f.span() =>
+                            #name: bm_le::FromVectorTreeWithConfig::from_vector_tree_with_config(
+                                &vector.get(db, #i)?,
+                                db,
+                                #config,
+                                None,
+                                config,
+                            )?,
+                    }
+                } else {
+                    quote_spanned! {
+                        f.span() =>
+                            #name: bm_le::FromVectorTree::from_vector_tree(
+                                &vector.get(db, #i)?,
+                                db,
+                                #config,
+                                None,
+                            )?,
+                    }
+                }
+            } else if has_attribute("bm", &f.attrs, "list") {
+                let config = attribute_value("bm", &f.attrs, "max_len")
+                    .expect("Must specify the maximum length")
+                    .parse::<Expr>().expect("Invalid syntax");
+
+                if config_trait.is_some() {
+                    quote_spanned! {
+                        f.span() =>
+                            #name: bm_le::FromListTreeWithConfig::from_list_tree_with_config(
+                                &vector.get(db, #i)?,
+                                db,
+                                Some(#config),
+                                config,
+                            )?,
+                    }
+                } else {
+                    quote_spanned! {
+                        f.span() =>
+                            #name: bm_le::FromListTree::from_list_tree(
+                                &vector.get(db, #i)?,
+                                db,
+                                Some(#config)
+                            )?,
+                    }
+                }
+            } else {
+                if config_trait.is_some() {
+                    quote_spanned! {
+                        f.span() =>
+                            #name: bm_le::FromTreeWithConfig::from_tree_with_config(
+                                &vector.get(db, #i)?,
+                                db,
+                                config,
+                            )?,
+                    }
+                } else {
+                    quote_spanned! {
+                        f.span() =>
+                            #name: bm_le::FromTree::from_tree(
+                                &vector.get(db, #i)?,
+                                db,
+                            )?,
+                    }
+                }
             }
-        },
-        Data::Enum(_) | Data::Union(_) => None,
-    }
+        });
+
+    let fields_count = struct_fields(&input.data)
+        .expect("Not supported derive type")
+        .iter()
+        .count();
+
+    let expanded = if let Some(config_trait) = config_trait.clone() {
+        quote! {
+            impl<C: #config_trait, DB> bm_le::FromTreeWithConfig<C, DB> for #name where
+                DB: bm_le::Backend<Intermediate=bm_le::Intermediate, End=bm_le::End>
+            {
+                fn from_tree_with_config(
+                    root: &bm_le::ValueOf<DB>,
+                    db: &DB,
+                    config: &C
+                ) -> Result<Self, bm_le::Error<DB::Error>> {
+                    use bm_le::Leak;
+
+                    let vector = bm_le::DanglingVector::<DB>::from_leaked(
+                        (root.clone(), #fields_count, None)
+                    );
+
+                    Ok(Self {
+                        #(#fields)*
+                    })
+                }
+            }
+        }
+    } else {
+        quote! {
+            impl<DB> bm_le::FromTree<DB> for #name where
+                DB: bm_le::Backend<Intermediate=bm_le::Intermediate, End=bm_le::End>
+            {
+                fn from_tree(
+                    root: &bm_le::ValueOf<DB>,
+                    db: &DB,
+                ) -> Result<Self, bm_le::Error<DB::Error>> {
+                    use bm_le::Leak;
+
+                    let vector = bm_le::DanglingVector::<DB>::from_leaked(
+                        (root.clone(), #fields_count, None)
+                    );
+
+                    Ok(Self {
+                        #(#fields)*
+                    })
+                }
+            }
+        }
+    };
+
+    proc_macro::TokenStream::from(expanded)
 }

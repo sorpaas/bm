@@ -10,8 +10,9 @@ license = "Apache-2.0"
 proc-macro = true
 
 [dependencies]
-syn = "0.15"
+syn = { version = "0.15", features = ["extra-traits"] }
 quote = "0.6"
+deriving = "0.1"
 
 [dev-dependencies]
 bm-le = { version = "0.2", path = ".." }

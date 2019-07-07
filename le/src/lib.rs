@@ -9,7 +9,7 @@ use primitive_types::H256;
 use digest::Digest;
 use bm::NoopBackend;
 
-pub use bm::{Backend, Error, ValueOf, Value, Vector, List, utils};
+pub use bm::{Backend, Error, ValueOf, Value, Vector, DanglingVector, List, Leak, utils};
 
 mod basic;
 mod fixed;
