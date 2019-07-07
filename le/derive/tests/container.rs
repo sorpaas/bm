@@ -1,7 +1,13 @@
 use bm_le::{FixedVec, VariableVec};
 use bm_le_derive::{FromTree, IntoTree};
 
+trait Config {
+    fn d_len(&self) -> u64 { 4 }
+    fn e_max_len(&self) -> u64 { 5 }
+}
+
 #[derive(IntoTree, FromTree)]
+#[bm(config_trait = "Config")]
 pub struct Container {
     a: u32,
     b: u64,

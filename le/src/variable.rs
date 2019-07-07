@@ -3,6 +3,26 @@ use primitive_types::U256;
 
 use crate::{Composite, FixedVec, FromVectorTree, FromVectorTreeWithConfig, FixedVecRef, FromTree, End, Intermediate, IntoVectorTree, IntoTree};
 
+/// Implement FromListTreeWithConfig for traits that has already
+/// implemented FromListTree and does not need extra configs.
+#[macro_export]
+macro_rules! impl_from_list_tree_with_empty_config {
+    ( $t:ty ) => {
+        impl<C, DB> $crate::FromListTreeWithConfig<C, DB> for $t where
+            DB: $crate::Backend<Intermediate=Intermediate, End=End>
+        {
+            fn from_list_tree_with_config(
+                root: &$crate::ValueOf<DB>,
+                db: &DB,
+                max_len: Option<usize>,
+                _config: &C,
+            ) -> Result<Self, $crate::Error<DB::Error>> {
+                <$t>::from_list_tree(root, db, max_len)
+            }
+        }
+    }
+}
+
 /// Traits for list converting from a tree structure.
 pub trait FromListTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
     /// Convert this type from merkle tree, reading nodes from the

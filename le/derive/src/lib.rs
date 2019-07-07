@@ -136,6 +136,7 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
         .count();
 
     let expanded = if let Some(config_trait) = config_trait.clone() {
+        let config_trait = config_trait.parse::<syn::TraitBound>().expect("Invalid syntax");
         quote! {
             impl<C: #config_trait, DB> bm_le::FromTreeWithConfig<C, DB> for #name where
                 DB: bm_le::Backend<Intermediate=bm_le::Intermediate, End=bm_le::End>
@@ -159,6 +160,7 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
+            bm_le::impl_from_trait_with_empty_config!(#name);
             impl<DB> bm_le::FromTree<DB> for #name where
                 DB: bm_le::Backend<Intermediate=bm_le::Intermediate, End=bm_le::End>
             {

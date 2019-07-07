@@ -3,7 +3,28 @@ use bm::utils::vector_tree;
 use primitive_types::{U256, H256};
 use generic_array::GenericArray;
 
-use crate::{IntoTree, FromTree, FromTreeWithConfig, Intermediate, End, Composite};
+use crate::{IntoTree, FromTree, FromTreeWithConfig, Intermediate, End, Composite, impl_from_tree_with_empty_config};
+
+/// Implement FromVectorTreeWithConfig for traits that has already
+/// implemented FromVectorTree and does not need extra configs.
+#[macro_export]
+macro_rules! impl_from_vector_tree_with_empty_config {
+    ( $t:ty ) => {
+        impl<C, DB> $crate::FromVectorTreeWithConfig<C, DB> for $t where
+            DB: $crate::Backend<Intermediate=Intermediate, End=End>
+        {
+            fn from_vector_tree_with_config(
+                root: &$crate::ValueOf<DB>,
+                db: &DB,
+                len: usize,
+                max_len: Option<usize>,
+                _config: &C,
+            ) -> Result<Self, $crate::Error<DB::Error>> {
+                <$t>::from_vector_tree(root, db, len, max_len)
+            }
+        }
+    }
+}
 
 /// Traits for vector converting into a tree structure.
 pub trait IntoVectorTree<DB: Backend<Intermediate=Intermediate, End=End>> {
@@ -83,6 +104,7 @@ macro_rules! impl_builtin_fixed_uint_vector {
             }
         }
 
+        impl_from_vector_tree_with_empty_config!(FixedVec<$t>);
         impl<DB> FromVectorTree<DB> for FixedVec<$t> where
             DB: Backend<Intermediate=Intermediate, End=End>
         {
@@ -132,6 +154,7 @@ impl<'a, DB> IntoVectorTree<DB> for FixedVecRef<'a, U256> where
     }
 }
 
+impl_from_vector_tree_with_empty_config!(FixedVec<U256>);
 impl<DB> FromVectorTree<DB> for FixedVec<U256> where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
@@ -174,6 +197,7 @@ impl<'a, DB> IntoVectorTree<DB> for FixedVecRef<'a, bool> where
     }
 }
 
+impl_from_vector_tree_with_empty_config!(FixedVec<bool>);
 impl<DB> FromVectorTree<DB> for FixedVec<bool> where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
@@ -303,5 +327,15 @@ impl<DB> IntoTree<DB> for H256 where
 {
     fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
         FixedVecRef(&self.0.as_ref()).into_tree(db)
+    }
+}
+
+impl_from_tree_with_empty_config!(H256);
+impl<DB> FromTree<DB> for H256 where
+    DB: Backend<Intermediate=Intermediate, End=End>
+{
+    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+        let value = FixedVec::<u8>::from_vector_tree(root, db, 32, None)?;
+        Ok(Self::from_slice(value.0.as_ref()))
     }
 }

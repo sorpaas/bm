@@ -72,14 +72,6 @@ pub trait FromTreeWithConfig<C, DB: Backend<Intermediate=Intermediate, End=End>>
     fn from_tree_with_config(root: &ValueOf<DB>, db: &DB, config: &C) -> Result<Self, Error<DB::Error>>;
 }
 
-impl<DB, C, T: FromTree<DB>> FromTreeWithConfig<C, DB> for T where
-    DB: Backend<Intermediate=Intermediate, End=End>,
-{
-    fn from_tree_with_config(root: &ValueOf<DB>, db: &DB, _config: &C) -> Result<Self, Error<DB::Error>> {
-        T::from_tree(root, db)
-    }
-}
-
 /// A composite value, in contrary to ssz's definition of basic value.
 pub trait Composite { }
 
@@ -88,6 +80,25 @@ impl<T> Composite for FixedVec<T> { }
 impl<'a, T> Composite for VariableVecRef<'a, T> { }
 impl<T> Composite for VariableVec<T> { }
 impl Composite for H256 { }
+
+/// Implement FromTreeWithConfig for traits that has already
+/// implemented FromTree and does not need extra configs.
+#[macro_export]
+macro_rules! impl_from_tree_with_empty_config {
+    ( $t:ty ) => {
+        impl<DB, C> $crate::FromTreeWithConfig<C, DB> for $t where
+            DB: $crate::Backend<Intermediate=Intermediate, End=End>,
+        {
+            fn from_tree_with_config(
+                root: &$crate::ValueOf<DB>,
+                db: &DB,
+                _config: &C
+            ) -> Result<Self, $crate::Error<DB::Error>> {
+                $crate::FromTree::from_tree(root, db)
+            }
+        }
+    }
+}
 
 /// Calculate a ssz merkle tree root, dismissing the tree.
 pub fn tree_root<D, T>(value: &T) -> H256 where

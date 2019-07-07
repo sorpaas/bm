@@ -1,7 +1,7 @@
 use bm::{Value, Backend, ValueOf, Error, Index, DanglingRaw, Leak};
 use primitive_types::U256;
 
-use crate::{IntoTree, FromTree, End, Intermediate};
+use crate::{IntoTree, FromTree, End, Intermediate, impl_from_tree_with_empty_config};
 
 impl<DB> IntoTree<DB> for bool where
     DB: Backend<Intermediate=Intermediate, End=End>,
@@ -14,6 +14,7 @@ impl<DB> IntoTree<DB> for bool where
     }
 }
 
+impl_from_tree_with_empty_config!(bool);
 impl<DB> FromTree<DB> for bool where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
@@ -36,6 +37,7 @@ macro_rules! impl_builtin_uint {
             }
         }
 
+        impl_from_tree_with_empty_config!($t);
         impl<DB> FromTree<DB> for $t where
             DB: Backend<Intermediate=Intermediate, End=End>,
         {
@@ -70,6 +72,7 @@ impl<DB> IntoTree<DB> for U256 where
     }
 }
 
+impl_from_tree_with_empty_config!(U256);
 impl<DB> FromTree<DB> for U256 where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
