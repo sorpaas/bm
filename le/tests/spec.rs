@@ -99,20 +99,20 @@ fn spec() {
     }
 
     // bitlist TTFTFTFF
-    t_variable(VariableVec(vec![true, true, false, true, false, true, false, false], 8),
+    t_variable(VariableVec(vec![true, true, false, true, false, true, false, false], Some(8)),
                h(&chunk(&[0x2b])[..], &chunk(&[0x08])[..]));
     // bitlist FTFT
-    t_variable(VariableVec(vec![false, true, false, true], 4),
+    t_variable(VariableVec(vec![false, true, false, true], Some(4)),
                h(&chunk(&[0x0a])[..], &chunk(&[0x04])[..]));
     // bitlist FTF
-    t_variable(VariableVec(vec![false, true, false], 3),
+    t_variable(VariableVec(vec![false, true, false], Some(3)),
                h(&chunk(&[0x02])[..], &chunk(&[0x03])[..]));
     // bitlist TFTFFFTTFT
-    t_variable(VariableVec(vec![true, false, true, false, false, false, true, true, false, true], 16),
+    t_variable(VariableVec(vec![true, false, true, false, false, false, true, true, false, true], Some(16)),
                h(&chunk(&[0xc5, 0x02])[..], &chunk(&[0x0a])[..]));
     // bitlist TFTFFFTTFTFFFFTT
     t_variable(VariableVec(vec![true, false, true, false, false, false, true, true, false, true,
-                                false, false, false, false, true, true], 16),
+                                false, false, false, false, true, true], Some(16)),
                h(&chunk(&[0xc5, 0xc2])[..], &chunk(&[0x10])[..]));
 }
 

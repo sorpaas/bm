@@ -10,16 +10,16 @@ pub trait FromListTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
     fn from_list_tree(
         root: &ValueOf<DB>,
         db: &DB,
-        max_len: usize,
+        max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>>;
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// Variable `Vec` reference. In `ssz`'s definition, this is a "list".
-pub struct VariableVecRef<'a, T>(pub &'a [T], pub usize);
+pub struct VariableVecRef<'a, T>(pub &'a [T], pub Option<usize>);
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// Variable `Vec` value. In `ssz`'s definition, this is a "list".
-pub struct VariableVec<T>(pub Vec<T>, pub usize);
+pub struct VariableVec<T>(pub Vec<T>, pub Option<usize>);
 
 macro_rules! impl_packed {
     ( $t:ty, $len:expr ) => {
@@ -27,10 +27,10 @@ macro_rules! impl_packed {
             DB: Backend<Intermediate=Intermediate, End=End>,
         {
             fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
-                let max_len = self.1 * $len / 256;
+                let max_len = self.1.map(|max| max * $len / 256);
                 let len = self.0.len();
 
-                let left = FixedVecRef(&self.0).into_vector_tree(db, Some(max_len))?;
+                let left = FixedVecRef(&self.0).into_vector_tree(db, max_len)?;
                 let right = U256::from(len).into_tree(db)?;
                 let key = db.intermediate_of(&left, &right);
 
@@ -57,7 +57,7 @@ impl<'a, DB, T: Composite> IntoTree<DB> for VariableVecRef<'a, T> where
         let max_len = self.1;
         let len = self.0.len();
 
-        let left = FixedVecRef(&self.0).into_vector_tree(db, Some(max_len))?;
+        let left = FixedVecRef(&self.0).into_vector_tree(db, max_len)?;
         let right = U256::from(len).into_tree(db)?;
         let key = db.intermediate_of(&left, &right);
 
@@ -73,7 +73,7 @@ impl<DB, T> FromListTree<DB> for VariableVec<T> where
     fn from_list_tree(
         root: &ValueOf<DB>,
         db: &DB,
-        max_len: usize,
+        max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>> {
         let raw = DanglingRaw::<DB>::from_leaked(root.clone());
 
@@ -89,7 +89,7 @@ impl<DB, T> FromListTree<DB> for VariableVec<T> where
         };
 
         let vector = FixedVec::<T>::from_vector_tree(
-            &vector_root, db, len, Some(max_len)
+            &vector_root, db, len, max_len
         )?;
 
         Ok(Self(vector.0, max_len))
