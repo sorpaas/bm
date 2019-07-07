@@ -3,7 +3,7 @@ use bm::utils::vector_tree;
 use primitive_types::{U256, H256};
 use generic_array::GenericArray;
 
-use crate::{IntoTree, FromTree, Intermediate, End, Composite};
+use crate::{IntoTree, FromTree, FromTreeWithConfig, Intermediate, End, Composite};
 
 /// Traits for vector converting into a tree structure.
 pub trait IntoVectorTree<DB: Backend<Intermediate=Intermediate, End=End>> {
@@ -25,6 +25,19 @@ pub trait FromVectorTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized
         db: &DB,
         len: usize,
         max_len: Option<usize>,
+    ) -> Result<Self, Error<DB::Error>>;
+}
+
+/// Traits for vector converting from a tree structure with config.
+pub trait FromVectorTreeWithConfig<C, DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
+    /// Convert this type from merkle tree, reading nodes from the
+    /// given database, with given length and maximum length.
+    fn from_vector_tree_with_config(
+        root: &ValueOf<DB>,
+        db: &DB,
+        len: usize,
+        max_len: Option<usize>,
+        config: &C,
     ) -> Result<Self, Error<DB::Error>>;
 }
 
@@ -202,8 +215,30 @@ impl<'a, DB, T: Composite> IntoVectorTree<DB> for FixedVecRef<'a, T> where
     }
 }
 
-impl<DB, T: Composite> FromVectorTree<DB> for FixedVec<T> where
-    T: FromTree<DB>,
+fn from_vector_tree<T, F, DB>(
+    root: &ValueOf<DB>,
+    db: &DB,
+    len: usize,
+    max_len: Option<usize>,
+    f: F
+) -> Result<FixedVec<T>, Error<DB::Error>> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    F: Fn(&ValueOf<DB>, &DB) -> Result<T, Error<DB::Error>>
+{
+    let vector = DanglingVector::<DB>::from_leaked(
+        (root.clone(), len, max_len)
+    );
+    let mut ret = Vec::new();
+
+    for i in 0..len {
+        let value = vector.get(db, i)?;
+        ret.push(f(&value, db)?);
+    }
+
+    Ok(FixedVec(ret))
+}
+
+impl<DB, T: Composite + FromTree<DB>> FromVectorTree<DB> for FixedVec<T> where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
     fn from_vector_tree(
@@ -212,17 +247,23 @@ impl<DB, T: Composite> FromVectorTree<DB> for FixedVec<T> where
         len: usize,
         max_len: Option<usize>
     ) -> Result<Self, Error<DB::Error>> {
-        let vector = DanglingVector::<DB>::from_leaked(
-            (root.clone(), len, max_len)
-        );
-        let mut ret = Vec::new();
+        from_vector_tree(root, db, len, max_len, |value, db| T::from_tree(value, db))
+    }
+}
 
-        for i in 0..len {
-            let value = vector.get(db, i)?;
-            ret.push(T::from_tree(&value, db)?);
-        }
-
-        Ok(Self(ret))
+impl<DB, C, T: Composite + FromTreeWithConfig<C, DB>> FromVectorTreeWithConfig<C, DB> for FixedVec<T> where
+    DB: Backend<Intermediate=Intermediate, End=End>
+{
+    fn from_vector_tree_with_config(
+        root: &ValueOf<DB>,
+        db: &DB,
+        len: usize,
+        max_len: Option<usize>,
+        config: &C,
+    ) -> Result<Self, Error<DB::Error>> {
+        from_vector_tree(root, db, len, max_len, |value, db| {
+            T::from_tree_with_config(value, db, config)
+        })
     }
 }
 
