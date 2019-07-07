@@ -22,8 +22,23 @@ pub fn vector_tree<DB: Backend>(values: &[ValueOf<DB>], db: &mut DB, max_len: Op
     for depth in (1..(total_depth + 1)).rev() {
         let depth_to_bottom = total_depth - depth;
         while !current.is_empty() {
-            let left = current.pop().unwrap_or(db.empty_at(depth_to_bottom)?);
-            let right = current.pop().unwrap_or(db.empty_at(depth_to_bottom)?);
+            let (left, right) = match current.len() {
+                0 => (db.empty_at(depth_to_bottom)?, db.empty_at(depth_to_bottom)?),
+                1 => {
+                    let left = current.pop().expect("Length is checked to be one;
+                                                     one value left; qed");
+                    let right = db.empty_at(depth_to_bottom)?;
+                    (left, right)
+                },
+                _ => {
+                    let right = current.pop().expect("Length is checked to be greater than one;
+                                                      At least two values left; qed");
+                    let left = current.pop().expect("Length is checked to be greater than one;
+                                                      At least two values left; qed");
+                    (left, right)
+                },
+            };
+
             let key = db.intermediate_of(&left, &right);
 
             db.insert(key.clone(), (left, right))?;

@@ -131,3 +131,27 @@ impl<DB, T> FromTree<DB> for Vec<T> where
         VariableVec::from_list_tree(root, db, None).map(|ret| ret.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use bm::InMemoryBackend;
+    use sha2::Sha256;
+
+    #[test]
+    fn test_plain() {
+        let data = {
+            let mut ret = Vec::new();
+            for i in 0..17u16 {
+                ret.push(i);
+            }
+            ret
+        };
+
+        let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
+        let encoded = data.into_tree(&mut db).unwrap();
+        let decoded = Vec::<u16>::from_tree(&encoded, &db).unwrap();
+        assert_eq!(data, decoded);
+    }
+}
