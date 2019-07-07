@@ -44,9 +44,10 @@ approriate value.
 
 ## Merkleization
 
-You can use `bm-ssz` library for ssz merkleization. If you're only
-interested in the merkle root, use `tree_root` function. Otherwise,
-use `IntoTree` trait.
+You can use `bm-le` library for merkleization. It is ssz compatibile
+and with some extensions to make it work better in certain
+environments. If you're only interested in the merkle root, use
+`tree_root` function. Otherwise, use `IntoTree` trait.
 
 In order to merkleize vectors and lists, use `FixedVec` and
 `VariableVec` wrapper type. To merkleize bitvectors and bitlists, use

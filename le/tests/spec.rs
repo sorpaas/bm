@@ -3,7 +3,7 @@ use primitive_types::H256;
 use std::fmt::Debug;
 
 use bm::InMemoryBackend;
-use bm_ssz::{End, IntoTree, FromTree, FromVectorTree, FromListTree, FixedVec, VariableVec};
+use bm_le::{End, IntoTree, FromTree, FromVectorTree, FromListTree, FixedVec, VariableVec};
 
 fn chunk(data: &[u8]) -> H256 {
     let mut ret = [0; 32];

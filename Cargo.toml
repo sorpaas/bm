@@ -20,5 +20,5 @@ primitive-types = "0.2"
 
 [workspace]
 members = [
-  "ssz"
+  "le"
 ]
