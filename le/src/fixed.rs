@@ -1,5 +1,5 @@
 use bm::{ValueOf, Backend, Error, Value, DanglingPackedVector, DanglingVector, Leak, Sequence};
-use bm::utils::vector_tree;
+use bm::utils::{vector_tree, host_len};
 use primitive_types::{U256, H256};
 use generic_array::GenericArray;
 
@@ -100,7 +100,7 @@ macro_rules! impl_builtin_fixed_uint_vector {
                     let mut ret = End::default();
                     ret.0.copy_from_slice(&c);
                     Value::End(ret)
-                }).collect::<Vec<_>>(), db, max_len)
+                }).collect::<Vec<_>>(), db, max_len.map(|max| host_len::<typenum::U32, $lt>(max)))
             }
         }
 

@@ -59,7 +59,7 @@ macro_rules! impl_packed {
             DB: Backend<Intermediate=Intermediate, End=End>,
         {
             fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
-                let max_len = self.1.map(|max| max * $len / 256);
+                let max_len = self.1;
                 let len = self.0.len();
 
                 let left = FixedVecRef(&self.0).into_vector_tree(db, max_len)?;

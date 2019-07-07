@@ -2,6 +2,7 @@
 
 use crate::{Backend, ValueOf, Error, Value};
 use std::collections::VecDeque;
+use generic_array::ArrayLength;
 
 /// Required depth of given length.
 pub fn required_depth(len: usize) -> usize {
@@ -36,4 +37,17 @@ pub fn vector_tree<DB: Backend>(values: &[ValueOf<DB>], db: &mut DB, max_len: Op
     }
 
     Ok(current[0].clone())
+}
+
+/// Get the host len of a packed vector.
+pub fn host_len<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_len: usize) -> usize {
+    let host_array_len = Host::to_usize();
+    let value_array_len = Value::to_usize();
+
+    let bytes = value_array_len * value_len;
+    if bytes % host_array_len == 0 {
+        bytes / host_array_len
+    } else {
+        bytes / host_array_len + 1
+    }
 }

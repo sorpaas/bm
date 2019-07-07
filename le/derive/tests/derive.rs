@@ -30,16 +30,17 @@ struct BasicContainer {
     c: u128,
 }
 
-#[derive(IntoTree, FromTree)]
+#[derive(IntoTree, FromTree, PartialEq, Eq, Debug)]
 #[bm(config_trait = "Config")]
 struct ConfigContainer {
-    a: u32,
+    a: u64,
     b: u64,
-    c: u128,
+    c: u64,
     #[bm(vector, len = "config.d_len() as usize")]
     d: FixedVec<u64>,
+    e: u64,
     #[bm(list, max_len = "config.e_max_len() as usize")]
-    e: VariableVec<u64>,
+    f: VariableVec<u64>,
 }
 
 #[test]
@@ -61,8 +62,10 @@ fn test_config() {
         b: 2,
         c: 3,
         d: FixedVec(vec![4, 5, 6, 7]),
-        e: VariableVec(vec![8, 9], Some(5)),
+        e: 8,
+        f: VariableVec(vec![9, 10], Some(5)),
     };
     let actual = container.into_tree(&mut db).unwrap();
     let decoded = ConfigContainer::from_tree_with_config(&actual, &db, &TestConfig).unwrap();
+    assert_eq!(container, decoded);
 }

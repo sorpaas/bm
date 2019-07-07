@@ -7,6 +7,7 @@ use crate::length::LengthMixed;
 use crate::vector::Vector;
 use crate::raw::Raw;
 use crate::traits::{Value, EndOf, Backend, ValueOf, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
+use crate::utils::host_len;
 
 fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
     let host_len = Host::to_usize();
@@ -27,18 +28,6 @@ fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) 
     }
 
     (host_index, ranges)
-}
-
-fn host_len<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_len: usize) -> usize {
-    let host_array_len = Host::to_usize();
-    let value_array_len = Value::to_usize();
-
-    let bytes = value_array_len * value_len;
-    if bytes % host_array_len == 0 {
-        bytes / host_array_len
-    } else {
-        bytes / host_array_len + 1
-    }
 }
 
 /// `PackedVector` with owned root.
