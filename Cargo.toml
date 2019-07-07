@@ -20,5 +20,6 @@ primitive-types = "0.2"
 
 [workspace]
 members = [
-  "le"
+  "le",
+  "le/derive",
 ]

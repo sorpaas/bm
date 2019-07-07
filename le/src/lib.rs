@@ -7,7 +7,9 @@ use typenum::U32;
 use generic_array::GenericArray;
 use primitive_types::H256;
 use digest::Digest;
-use bm::{Backend, NoopBackend, Error, ValueOf};
+use bm::NoopBackend;
+
+pub use bm::{Backend, Error, ValueOf, Value, utils};
 
 mod basic;
 mod fixed;
