@@ -17,6 +17,8 @@ mod variable;
 
 pub use fixed::{FixedVec, FixedVecRef, IntoVectorTree, FromVectorTree, FromVectorTreeWithConfig};
 pub use variable::{VariableVec, VariableVecRef, FromListTree, FromListTreeWithConfig};
+#[cfg(feature = "derive")]
+pub use bm_le_derive::{FromTree, IntoTree};
 
 /// End value for 256-bit ssz binary merkle tree.
 #[derive(Debug, Clone, Eq, PartialEq)]

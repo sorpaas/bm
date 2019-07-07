@@ -1,8 +1,7 @@
 use sha2::{Digest, Sha256};
 use primitive_types::H256;
 use bm::InMemoryBackend;
-use bm_le::{FixedVec, VariableVec, IntoTree, FromTreeWithConfig, End, tree_root};
-use bm_le_derive::{IntoTree, FromTree};
+use bm_le::{FixedVec, VariableVec, IntoTree, FromTree, FromTreeWithConfig, End, tree_root};
 
 fn chunk(data: &[u8]) -> H256 {
     let mut ret = [0; 32];
