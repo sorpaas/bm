@@ -1,7 +1,7 @@
 use bm::{Error, ValueOf, Value, Backend, Index, DanglingRaw, Leak};
 use primitive_types::U256;
 
-use crate::{Composite, FixedVec, FromVectorTree, FixedVecRef, End, Intermediate, IntoVectorTree, IntoTree};
+use crate::{Composite, FixedVec, FromVectorTree, FixedVecRef, FromTree, End, Intermediate, IntoVectorTree, IntoTree};
 
 /// Traits for list converting from a tree structure.
 pub trait FromListTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
@@ -102,5 +102,32 @@ impl<DB, T> IntoTree<DB> for VariableVec<T> where
 {
     fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
         VariableVecRef(&self.0, self.1).into_tree(db)
+    }
+}
+
+impl<DB, T> IntoTree<DB> for [T] where
+    for<'a> VariableVecRef<'a, T>: IntoTree<DB>,
+    DB: Backend<Intermediate=Intermediate, End=End>,
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        VariableVecRef(&self, None).into_tree(db)
+    }
+}
+
+impl<DB, T> IntoTree<DB> for Vec<T> where
+    for<'a> VariableVecRef<'a, T>: IntoTree<DB>,
+    DB: Backend<Intermediate=Intermediate, End=End>,
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        VariableVecRef(&self, None).into_tree(db)
+    }
+}
+
+impl<DB, T> FromTree<DB> for Vec<T> where
+    VariableVec<T>: FromListTree<DB>,
+    DB: Backend<Intermediate=Intermediate, End=End>,
+{
+    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+        VariableVec::from_list_tree(root, db, None).map(|ret| ret.0)
     }
 }
