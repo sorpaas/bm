@@ -1,7 +1,7 @@
 use bm::{ValueOf, Backend, Error, Value, DanglingPackedVector, DanglingVector, Leak, Sequence};
 use bm::utils::{vector_tree, host_len};
 use primitive_types::{U256, H256};
-use generic_array::GenericArray;
+use generic_array::{GenericArray, ArrayLength};
 
 use crate::{IntoTree, FromTree, FromTreeWithConfig, Intermediate, End, Composite, impl_from_tree_with_empty_config};
 
@@ -337,5 +337,89 @@ impl<DB> FromTree<DB> for H256 where
     fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
         let value = FixedVec::<u8>::from_vector_tree(root, db, 32, None)?;
         Ok(Self::from_slice(value.0.as_ref()))
+    }
+}
+
+macro_rules! impl_fixed_array {
+    ( $( $n:expr ),* ) => { $(
+        impl<DB, T> IntoTree<DB> for [T; $n] where
+            DB: Backend<Intermediate=Intermediate, End=End>,
+            for<'a> FixedVecRef<'a, T>: IntoTree<DB>,
+        {
+            fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+                FixedVecRef(&self[..]).into_tree(db)
+            }
+        }
+
+        // This is similar to `impl_from_tree_with_empty_config!([T; $n])`
+        // but we cannot use it directly.
+        impl<DB, T, C> FromTreeWithConfig<C, DB> for [T; $n] where
+            DB: Backend<Intermediate=Intermediate, End=End>,
+            T: Default + Copy,
+            for<'a> FixedVec<T>: FromVectorTree<DB>,
+        {
+            fn from_tree_with_config(
+                root: &ValueOf<DB>,
+                db: &DB,
+                _config: &C
+            ) -> Result<Self, Error<DB::Error>> {
+                FromTree::from_tree(root, db)
+            }
+        }
+
+        impl<DB, T> FromTree<DB> for [T; $n] where
+            DB: Backend<Intermediate=Intermediate, End=End>,
+            T: Default + Copy,
+            for<'a> FixedVec<T>: FromVectorTree<DB>,
+        {
+            fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+                let value = FixedVec::<T>::from_vector_tree(root, db, $n, None)?;
+                let mut ret = [T::default(); $n];
+                for (i, v) in value.0.into_iter().enumerate() {
+                    ret[i] = v;
+                }
+                Ok(ret)
+            }
+        }
+    )* }
+}
+
+impl_fixed_array!(1, 2, 3, 4, 5, 6, 7, 8,
+                  9, 10, 11, 12, 13, 14, 15, 16,
+                  17, 18, 19, 20, 21, 22, 23, 24,
+                  25, 26, 27, 28, 29, 30, 31, 32);
+
+impl<DB, T, L: ArrayLength<T>> IntoTree<DB> for GenericArray<T, L> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    for<'a> FixedVecRef<'a, T>: IntoTree<DB>,
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        FixedVecRef(&self[..]).into_tree(db)
+    }
+}
+
+// This is similar to `impl_from_tree_with_empty_config!(GenericArray<T, L>)`
+// but we cannot use it directly.
+impl<DB, T, L: ArrayLength<T>, C> FromTreeWithConfig<C, DB> for GenericArray<T, L> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    for<'a> FixedVec<T>: FromVectorTree<DB>,
+{
+    fn from_tree_with_config(
+        root: &ValueOf<DB>,
+        db: &DB,
+        _config: &C
+    ) -> Result<Self, Error<DB::Error>> {
+        FromTree::from_tree(root, db)
+    }
+}
+
+impl<DB, T, L: ArrayLength<T>> FromTree<DB> for GenericArray<T, L> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    for<'a> FixedVec<T>: FromVectorTree<DB>,
+{
+    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+        let value = FixedVec::<T>::from_vector_tree(root, db, L::to_usize(), None)?;
+        Ok(GenericArray::from_exact_iter(value.0)
+           .expect("Fixed vec must build vector with L::as_usize; qed"))
     }
 }
