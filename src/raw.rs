@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use alloc::vec::Vec;
 
 use crate::index::{Index, IndexSelection, IndexRoute};
 use crate::traits::{Backend, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree};

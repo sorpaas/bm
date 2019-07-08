@@ -1,6 +1,9 @@
 #![warn(missing_docs)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 //! Binary merkle tree implementation.
+
+extern crate alloc;
 
 mod traits;
 mod memory;
@@ -9,8 +12,9 @@ mod index;
 mod vector;
 mod list;
 mod packed;
-mod proving;
 mod length;
+#[cfg(feature = "std")]
+mod proving;
 
 pub mod utils;
 
@@ -22,5 +26,6 @@ pub use crate::vector::{Vector, OwnedVector, DanglingVector};
 pub use crate::list::{List, OwnedList, DanglingList};
 pub use crate::packed::{PackedVector, OwnedPackedVector, DanglingPackedVector,
                         PackedList, OwnedPackedList, DanglingPackedList};
-pub use crate::proving::ProvingBackend;
 pub use crate::length::LengthMixed;
+#[cfg(feature = "std")]
+pub use crate::proving::ProvingBackend;

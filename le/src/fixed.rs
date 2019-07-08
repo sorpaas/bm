@@ -2,6 +2,7 @@ use bm::{ValueOf, Backend, Error, Value, DanglingPackedVector, DanglingVector, L
 use bm::utils::{vector_tree, host_len};
 use primitive_types::{U256, H256};
 use generic_array::{GenericArray, ArrayLength};
+use alloc::vec::Vec;
 
 use crate::{IntoTree, FromTree, FromTreeWithConfig, Intermediate, End, Composite, impl_from_tree_with_empty_config};
 

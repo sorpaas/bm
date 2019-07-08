@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+#[cfg(feature = "std")]
+use std::collections::HashMap as Map;
+#[cfg(not(feature = "std"))]
+use alloc::collections::BTreeMap as Map;
 use generic_array::GenericArray;
 use digest::Digest;
 
@@ -14,7 +17,7 @@ pub enum NoopBackendError {
 #[derive(Clone)]
 /// Noop merkle database.
 pub struct NoopBackend<D: Digest, T: AsRef<[u8]> + Clone + Default>(
-    HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>,
+    Map<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>,
     Option<EndOf<Self>>,
 );
 
@@ -89,7 +92,7 @@ pub enum InMemoryBackendError {
 #[derive(Clone)]
 /// In-memory merkle database.
 pub struct InMemoryBackend<D: Digest, T: AsRef<[u8]> + Clone + Default>(
-    HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>,
+    Map<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>,
     Option<EndOf<Self>>,
 );
 
@@ -129,15 +132,15 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryBackend<D, T> {
     }
 
     /// Populate the database with proofs.
-    pub fn populate(&mut self, proofs: HashMap<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)>) {
+    pub fn populate(&mut self, proofs: Map<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)>) {
         for (key, value) in proofs {
             self.0.insert(key, (value, None));
         }
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>> for InMemoryBackend<D, T> {
-    fn as_ref(&self) -> &HashMap<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)> {
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<Map<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>> for InMemoryBackend<D, T> {
+    fn as_ref(&self) -> &Map<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)> {
         &self.0
     }
 }

@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 /// Merkle selection.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum IndexSelection {

@@ -1,7 +1,7 @@
 //! Utilities
 
 use crate::{Backend, ValueOf, Error, Value};
-use std::collections::VecDeque;
+use alloc::collections::VecDeque;
 use generic_array::ArrayLength;
 
 /// Required depth of given length.

@@ -1,5 +1,6 @@
 use bm::{Error, ValueOf, Value, Backend, Index, DanglingRaw, Leak};
 use primitive_types::U256;
+use alloc::vec::Vec;
 
 use crate::{Composite, FixedVec, FromVectorTree, FromVectorTreeWithConfig, FixedVecRef, FromTree, End, Intermediate, IntoVectorTree, IntoTree};
 

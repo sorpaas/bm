@@ -7,12 +7,12 @@ edition = "2018"
 license = "Apache-2.0"
 
 [dependencies]
-bm = { version = "0.5", path = ".." }
+bm = { version = "0.5", path = "..", default-features = false }
+primitive-types = { version = "0.4", default-features = false }
 bm-le-derive = { version = "0.1", path = "derive", optional = true }
+digest = "0.8"
 typenum = "1.10"
 generic-array = "0.12"
-primitive-types = "0.4"
-digest = "0.8"
 
 [features]
 default = ["derive"]

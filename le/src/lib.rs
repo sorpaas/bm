@@ -1,7 +1,10 @@
 #![warn(missing_docs)]
+#![no_std]
 
 //! SimpleSerialize (ssz) compliant binary merkle tree supporting both
 //! merkleization and de-merkleization.
+
+extern crate alloc;
 
 use typenum::U32;
 use generic_array::GenericArray;

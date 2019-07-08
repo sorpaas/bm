@@ -2,6 +2,7 @@ use generic_array::{GenericArray, ArrayLength};
 use core::ops::Range;
 use core::cmp;
 use core::marker::PhantomData;
+use alloc::vec::Vec;
 
 use crate::length::LengthMixed;
 use crate::vector::Vector;
