@@ -3,9 +3,9 @@
 extern crate proc_macro;
 
 use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, DeriveInput, Expr};
+use syn::{parse_macro_input, DeriveInput};
 use syn::spanned::Spanned;
-use deriving::{struct_fields, has_attribute, attribute_value};
+use deriving::{struct_fields, attribute_value};
 
 use proc_macro::TokenStream;
 
@@ -56,76 +56,22 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
         .map(|(i, f)| {
             let name = &f.ident;
 
-            if has_attribute("bm", &f.attrs, "vector") {
-                let config = attribute_value("bm", &f.attrs, "len")
-                    .expect("Must specify the length")
-                    .parse::<Expr>().expect("Invalid syntax");
-
-                if config_trait.is_some() {
-                    quote_spanned! {
-                        f.span() =>
-                            #name: bm_le::FromVectorTreeWithConfig::from_vector_tree_with_config(
-                                &vector.get(db, #i)?,
-                                db,
-                                #config,
-                                None,
-                                config,
-                            )?,
-                    }
-                } else {
-                    quote_spanned! {
-                        f.span() =>
-                            #name: bm_le::FromVectorTree::from_vector_tree(
-                                &vector.get(db, #i)?,
-                                db,
-                                #config,
-                                None,
-                            )?,
-                    }
-                }
-            } else if has_attribute("bm", &f.attrs, "list") {
-                let config = attribute_value("bm", &f.attrs, "max_len")
-                    .expect("Must specify the maximum length")
-                    .parse::<Expr>().expect("Invalid syntax");
-
-                if config_trait.is_some() {
-                    quote_spanned! {
-                        f.span() =>
-                            #name: bm_le::FromListTreeWithConfig::from_list_tree_with_config(
-                                &vector.get(db, #i)?,
-                                db,
-                                Some(#config),
-                                config,
-                            )?,
-                    }
-                } else {
-                    quote_spanned! {
-                        f.span() =>
-                            #name: bm_le::FromListTree::from_list_tree(
-                                &vector.get(db, #i)?,
-                                db,
-                                Some(#config)
-                            )?,
-                    }
+            if config_trait.is_some() {
+                quote_spanned! {
+                    f.span() =>
+                        #name: bm_le::FromTreeWithConfig::from_tree_with_config(
+                            &vector.get(db, #i)?,
+                            db,
+                            config,
+                        )?,
                 }
             } else {
-                if config_trait.is_some() {
-                    quote_spanned! {
-                        f.span() =>
-                            #name: bm_le::FromTreeWithConfig::from_tree_with_config(
-                                &vector.get(db, #i)?,
-                                db,
-                                config,
-                            )?,
-                    }
-                } else {
-                    quote_spanned! {
-                        f.span() =>
-                            #name: bm_le::FromTree::from_tree(
-                                &vector.get(db, #i)?,
-                                db,
-                            )?,
-                    }
+                quote_spanned! {
+                    f.span() =>
+                        #name: bm_le::FromTree::from_tree(
+                            &vector.get(db, #i)?,
+                            db,
+                        )?,
                 }
             }
         });

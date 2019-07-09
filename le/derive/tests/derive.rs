@@ -1,7 +1,8 @@
 use sha2::{Digest, Sha256};
 use primitive_types::H256;
 use bm::InMemoryBackend;
-use bm_le::{FixedVec, VariableVec, IntoTree, FromTree, FromTreeWithConfig, End, tree_root};
+use bm_le::{FixedVec, VariableVec, LenFromConfig, MaxLenFromConfig, IntoTree, FromTree, FromTreeWithConfig, End, tree_root};
+use core::marker::PhantomData;
 
 fn chunk(data: &[u8]) -> H256 {
     let mut ret = [0; 32];
@@ -22,6 +23,23 @@ trait Config {
     fn e_max_len(&self) -> u64 { 5 }
 }
 
+#[derive(Eq, PartialEq, Clone, Debug)]
+struct DLenFromConfig;
+#[derive(Eq, PartialEq, Clone, Debug)]
+struct EMaxLenFromConfig;
+
+impl<C: Config> LenFromConfig<C> for DLenFromConfig {
+    fn len_from_config(config: &C) -> usize {
+        config.d_len() as usize
+    }
+}
+
+impl<C: Config> MaxLenFromConfig<C> for EMaxLenFromConfig {
+    fn max_len_from_config(config: &C) -> Option<usize> {
+        Some(config.e_max_len() as usize)
+    }
+}
+
 #[derive(IntoTree)]
 struct BasicContainer {
     a: u32,
@@ -35,11 +53,9 @@ struct ConfigContainer {
     a: u64,
     b: u64,
     c: u64,
-    #[bm(vector, len = "config.d_len() as usize")]
-    d: FixedVec<u64>,
+    d: FixedVec<u64, DLenFromConfig>,
     e: u64,
-    #[bm(list, max_len = "config.e_max_len() as usize")]
-    f: VariableVec<u64>,
+    f: VariableVec<u64, EMaxLenFromConfig>,
 }
 
 #[test]
@@ -60,9 +76,9 @@ fn test_config() {
         a: 1,
         b: 2,
         c: 3,
-        d: FixedVec(vec![4, 5, 6, 7]),
+        d: FixedVec(vec![4, 5, 6, 7], PhantomData),
         e: 8,
-        f: VariableVec(vec![9, 10], Some(5)),
+        f: VariableVec(vec![9, 10], Some(5), PhantomData),
     };
     let actual = container.into_tree(&mut db).unwrap();
     let decoded = ConfigContainer::from_tree_with_config(&actual, &db, &TestConfig).unwrap();
