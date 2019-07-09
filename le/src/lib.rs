@@ -15,11 +15,17 @@ use bm::NoopBackend;
 pub use bm::{Backend, Error, ValueOf, Value, Vector, DanglingVector, List, Leak, utils};
 
 mod basic;
+mod elemental_fixed;
+mod elemental_variable;
 mod fixed;
 mod variable;
 
-pub use fixed::{FixedVec, FixedVecRef, IntoVectorTree, FromVectorTree, FromVectorTreeWithConfig};
-pub use variable::{VariableVec, VariableVecRef, FromListTree, FromListTreeWithConfig};
+pub use elemental_fixed::{ElementalFixedVec, ElementalFixedVecRef,
+                          IntoVectorTree, FromVectorTree, FromVectorTreeWithConfig};
+pub use elemental_variable::{ElementalVariableVec, ElementalVariableVecRef,
+                             IntoListTree, FromListTree, FromListTreeWithConfig};
+pub use fixed::{FixedVecRef, FixedVec, LenFromConfig};
+pub use variable::{VariableVec, VariableVecRef, MaxLenFromConfig, NoMaxLen, KnownMaxLen};
 #[cfg(feature = "derive")]
 pub use bm_le_derive::{FromTree, IntoTree};
 
@@ -80,10 +86,12 @@ pub trait FromTreeWithConfig<C, DB: Backend<Intermediate=Intermediate, End=End>>
 /// A composite value, in contrary to ssz's definition of basic value.
 pub trait Composite { }
 
-impl<'a, T> Composite for FixedVecRef<'a, T> { }
-impl<T> Composite for FixedVec<T> { }
-impl<'a, T> Composite for VariableVecRef<'a, T> { }
-impl<T> Composite for VariableVec<T> { }
+impl<'a, T> Composite for ElementalFixedVecRef<'a, T> { }
+impl<T> Composite for ElementalFixedVec<T> { }
+impl<'a, T, L> Composite for FixedVecRef<'a, T, L> { }
+impl<T, L> Composite for FixedVec<T, L> { }
+// impl<'a, T> Composite for VariableVecRef<'a, T> { }
+// impl<T> Composite for VariableVec<T> { }
 impl Composite for H256 { }
 
 /// Implement FromTreeWithConfig for traits that has already
