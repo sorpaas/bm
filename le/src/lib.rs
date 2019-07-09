@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 //! SimpleSerialize (ssz) compliant binary merkle tree supporting both
 //! merkleization and de-merkleization.

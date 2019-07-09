@@ -1,6 +1,6 @@
 [package]
 name = "bm-le"
-version = "0.2.4"
+version = "0.2.5"
 description = "Little endian 256-bit layer for binary merkle trie with ssz compatibility and extensions"
 authors = ["Wei Tang <hi@that.world>"]
 edition = "2018"
@@ -15,8 +15,9 @@ typenum = "1.10"
 generic-array = "0.12"
 
 [features]
-default = ["derive"]
+default = ["derive", "std"]
 derive = ["bm-le-derive"]
+std = ["bm/std"]
 
 [dev-dependencies]
 sha2 = "0.8"
