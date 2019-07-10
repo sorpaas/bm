@@ -106,7 +106,7 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            bm_le::impl_from_trait_with_empty_config!(#name);
+            bm_le::impl_from_tree_with_empty_config!(#name);
             impl<DB> bm_le::FromTree<DB> for #name where
                 DB: bm_le::Backend<Intermediate=bm_le::Intermediate, End=bm_le::End>
             {
