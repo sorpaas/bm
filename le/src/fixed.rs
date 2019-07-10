@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use core::ops::{Deref, DerefMut};
 use bm::{Backend, ValueOf, Error};
 use primitive_types::H256;
 use generic_array::{GenericArray, ArrayLength};
@@ -23,6 +24,28 @@ pub struct FixedVecRef<'a, T, L>(pub &'a [T], pub PhantomData<L>);
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// Fixed `Vec` value. In ssz's definition, this is a "vector".
 pub struct FixedVec<T, L>(pub Vec<T>, pub PhantomData<L>);
+
+impl<'a, T, L> Deref for FixedVecRef<'a, T, L> {
+    type Target = [T];
+
+    fn deref(&self) -> &[T] {
+        self.0
+    }
+}
+
+impl<T, L> Deref for FixedVec<T, L> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Vec<T> {
+        &self.0
+    }
+}
+
+impl<T, L> DerefMut for FixedVec<T, L> {
+    fn deref_mut(&mut self) -> &mut Vec<T> {
+        &mut self.0
+    }
+}
 
 impl<'a, T, L> Composite for FixedVecRef<'a, T, L> { }
 impl<T, L> Composite for FixedVec<T, L> { }

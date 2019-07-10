@@ -1,6 +1,7 @@
 use typenum::Unsigned;
 use bm::{Error, ValueOf, Backend};
 use core::marker::PhantomData;
+use core::ops::{Deref, DerefMut};
 use crate::{ElementalVariableVecRef, ElementalVariableVec, Intermediate, End, IntoTree, IntoListTree, FromTree, FromListTree, FromTreeWithConfig, Composite};
 
 /// Traits for getting the maximum length from config.
@@ -42,6 +43,28 @@ pub struct VariableVecRef<'a, T, ML>(pub &'a [T], pub Option<usize>, pub Phantom
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// Variable `Vec` value.
 pub struct VariableVec<T, ML>(pub Vec<T>, pub Option<usize>, pub PhantomData<ML>);
+
+impl<'a, T, L> Deref for VariableVecRef<'a, T, L> {
+    type Target = [T];
+
+    fn deref(&self) -> &[T] {
+        self.0
+    }
+}
+
+impl<T, L> Deref for VariableVec<T, L> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Vec<T> {
+        &self.0
+    }
+}
+
+impl<T, L> DerefMut for VariableVec<T, L> {
+    fn deref_mut(&mut self) -> &mut Vec<T> {
+        &mut self.0
+    }
+}
 
 impl<'a, T, ML> Composite for VariableVecRef<'a, T, ML> { }
 impl<T, ML> Composite for VariableVec<T, ML> { }
