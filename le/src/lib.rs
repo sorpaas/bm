@@ -92,7 +92,7 @@ pub trait Composite { }
 macro_rules! impl_from_tree_with_empty_config {
     ( $t:ty ) => {
         impl<DB, C> $crate::FromTreeWithConfig<C, DB> for $t where
-            DB: $crate::Backend<Intermediate=Intermediate, End=End>,
+            DB: $crate::Backend<Intermediate=$crate::Intermediate, End=$crate::End>,
         {
             fn from_tree_with_config(
                 root: &$crate::ValueOf<DB>,
