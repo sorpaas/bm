@@ -10,9 +10,8 @@ use typenum::U32;
 use generic_array::GenericArray;
 use primitive_types::H256;
 use digest::Digest;
-use bm::NoopBackend;
 
-pub use bm::{Backend, Error, ValueOf, Value, Vector, DanglingVector, List, Leak, utils};
+pub use bm::{Backend, Error, ValueOf, Value, Vector, DanglingVector, List, Leak, NoopBackend, InMemoryBackend, utils};
 
 mod basic;
 mod elemental_fixed;
