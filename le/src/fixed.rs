@@ -3,7 +3,7 @@ use bm::{Backend, ValueOf, Error};
 use primitive_types::H256;
 use generic_array::{GenericArray, ArrayLength};
 use typenum::Unsigned;
-use crate::{impl_from_tree_with_empty_config, ElementalFixedVecRef, ElementalFixedVec, IntoVectorTree, IntoTree, FromTree, FromTreeWithConfig, FromVectorTree, Intermediate, End};
+use crate::{impl_from_tree_with_empty_config, ElementalFixedVecRef, ElementalFixedVec, IntoVectorTree, IntoTree, FromTree, FromTreeWithConfig, FromVectorTree, Intermediate, End, Composite};
 
 /// Traits for getting the length from config.
 pub trait LenFromConfig<C> {
@@ -23,6 +23,9 @@ pub struct FixedVecRef<'a, T, L>(pub &'a [T], pub PhantomData<L>);
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// Fixed `Vec` value. In ssz's definition, this is a "vector".
 pub struct FixedVec<T, L>(pub Vec<T>, pub PhantomData<L>);
+
+impl<'a, T, L> Composite for FixedVecRef<'a, T, L> { }
+impl<T, L> Composite for FixedVec<T, L> { }
 
 impl<'a, DB, T, L> IntoTree<DB> for FixedVecRef<'a, T, L> where
     for<'b> ElementalFixedVecRef<'b, T>: IntoVectorTree<DB>,
@@ -71,6 +74,8 @@ impl<DB, C, T, L: LenFromConfig<C>> FromTreeWithConfig<C, DB> for FixedVec<T, L>
     }
 }
 
+impl Composite for H256 { }
+
 impl<DB> IntoTree<DB> for H256 where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
@@ -91,6 +96,8 @@ impl<DB> FromTree<DB> for H256 where
 
 macro_rules! impl_fixed_array {
     ( $( $n:expr ),* ) => { $(
+        impl<T> Composite for [T; $n] { }
+
         impl<DB, T> IntoTree<DB> for [T; $n] where
             DB: Backend<Intermediate=Intermediate, End=End>,
             for<'a> ElementalFixedVecRef<'a, T>: IntoTree<DB>,
@@ -137,6 +144,8 @@ impl_fixed_array!(1, 2, 3, 4, 5, 6, 7, 8,
                   9, 10, 11, 12, 13, 14, 15, 16,
                   17, 18, 19, 20, 21, 22, 23, 24,
                   25, 26, 27, 28, 29, 30, 31, 32);
+
+impl<T, L: ArrayLength<T>> Composite for GenericArray<T, L> { }
 
 impl<DB, T, L: ArrayLength<T>> IntoTree<DB> for GenericArray<T, L> where
     DB: Backend<Intermediate=Intermediate, End=End>,

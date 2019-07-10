@@ -1,7 +1,7 @@
 use typenum::Unsigned;
 use bm::{Error, ValueOf, Backend};
 use core::marker::PhantomData;
-use crate::{ElementalVariableVecRef, ElementalVariableVec, Intermediate, End, IntoTree, IntoListTree, FromTree, FromListTree, FromTreeWithConfig};
+use crate::{ElementalVariableVecRef, ElementalVariableVec, Intermediate, End, IntoTree, IntoListTree, FromTree, FromListTree, FromTreeWithConfig, Composite};
 
 /// Traits for getting the maximum length from config.
 pub trait MaxLenFromConfig<C> {
@@ -42,6 +42,9 @@ pub struct VariableVecRef<'a, T, ML>(pub &'a [T], pub Option<usize>, pub Phantom
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// Variable `Vec` value.
 pub struct VariableVec<T, ML>(pub Vec<T>, pub Option<usize>, pub PhantomData<ML>);
+
+impl<'a, T, ML> Composite for VariableVecRef<'a, T, ML> { }
+impl<T, ML> Composite for VariableVec<T, ML> { }
 
 impl<'a, DB, T, L> IntoTree<DB> for VariableVecRef<'a, T, L> where
     for<'b> ElementalVariableVecRef<'b, T>: IntoListTree<DB>,
@@ -90,6 +93,8 @@ impl<DB, C, T, ML: MaxLenFromConfig<C>> FromTreeWithConfig<C, DB> for VariableVe
     }
 }
 
+impl<T> Composite for [T] { }
+
 impl<DB, T> IntoTree<DB> for [T] where
     for<'a> ElementalVariableVecRef<'a, T>: IntoListTree<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>,
@@ -98,6 +103,8 @@ impl<DB, T> IntoTree<DB> for [T] where
         ElementalVariableVecRef(&self).into_list_tree(db, None)
     }
 }
+
+impl<T> Composite for Vec<T> { }
 
 impl<DB, T> IntoTree<DB> for Vec<T> where
     for<'a> ElementalVariableVecRef<'a, T>: IntoListTree<DB>,

@@ -86,14 +86,6 @@ pub trait FromTreeWithConfig<C, DB: Backend<Intermediate=Intermediate, End=End>>
 /// A composite value, in contrary to ssz's definition of basic value.
 pub trait Composite { }
 
-impl<'a, T> Composite for ElementalFixedVecRef<'a, T> { }
-impl<T> Composite for ElementalFixedVec<T> { }
-impl<'a, T, L> Composite for FixedVecRef<'a, T, L> { }
-impl<T, L> Composite for FixedVec<T, L> { }
-// impl<'a, T> Composite for VariableVecRef<'a, T> { }
-// impl<T> Composite for VariableVec<T> { }
-impl Composite for H256 { }
-
 /// Implement FromTreeWithConfig for traits that has already
 /// implemented FromTree and does not need extra configs.
 #[macro_export]
