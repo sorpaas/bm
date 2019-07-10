@@ -2,7 +2,7 @@ use typenum::Unsigned;
 use bm::{Error, ValueOf, Backend};
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
-use crate::{ElementalVariableVecRef, ElementalVariableVec, Intermediate, End, IntoTree, IntoListTree, FromTree, FromListTree, FromTreeWithConfig, Composite};
+use crate::{ElementalVariableVecRef, ElementalVariableVec, Intermediate, End, IntoTree, IntoListTree, FromTree, FromListTree, FromTreeWithConfig, Composite, DefaultWithConfig};
 
 /// Traits for getting the maximum length from config.
 pub trait MaxLenFromConfig<C> {
@@ -63,6 +63,18 @@ impl<T, L> Deref for VariableVec<T, L> {
 impl<T, L> DerefMut for VariableVec<T, L> {
     fn deref_mut(&mut self) -> &mut Vec<T> {
         &mut self.0
+    }
+}
+
+impl<T, ML: KnownMaxLen> Default for VariableVec<T, ML> {
+    fn default() -> Self {
+        Self(Vec::new(), ML::max_len(), PhantomData)
+    }
+}
+
+impl<C, T, ML: MaxLenFromConfig<C>> DefaultWithConfig<C> for VariableVec<T, ML> {
+    fn default_with_config(config: &C) -> Self {
+        Self(Vec::new(), ML::max_len_from_config(config), PhantomData)
     }
 }
 

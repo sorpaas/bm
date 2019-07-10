@@ -23,7 +23,7 @@ pub use elemental_fixed::{ElementalFixedVec, ElementalFixedVecRef,
                           IntoVectorTree, FromVectorTree, FromVectorTreeWithConfig};
 pub use elemental_variable::{ElementalVariableVec, ElementalVariableVecRef,
                              IntoListTree, FromListTree, FromListTreeWithConfig};
-pub use fixed::{FixedVecRef, FixedVec, LenFromConfig};
+pub use fixed::{FixedVecRef, FixedVec, LenFromConfig, KnownLen};
 pub use variable::{VariableVec, VariableVecRef, MaxLenFromConfig, NoMaxLen, KnownMaxLen};
 #[cfg(feature = "derive")]
 pub use bm_le_derive::{FromTree, IntoTree};
@@ -80,6 +80,12 @@ pub trait FromTreeWithConfig<C, DB: Backend<Intermediate=Intermediate, End=End>>
     /// Convert this type from merkle tree, reading nodes from the
     /// given database, with the given config.
     fn from_tree_with_config(root: &ValueOf<DB>, db: &DB, config: &C) -> Result<Self, Error<DB::Error>>;
+}
+
+/// Traits for getting default value from a config.
+pub trait DefaultWithConfig<C>: Sized {
+    /// Get the default value.
+    fn default_with_config(config: &C) -> Self;
 }
 
 /// A composite value, in contrary to ssz's definition of basic value.

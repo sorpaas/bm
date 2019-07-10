@@ -4,7 +4,7 @@ use bm::{Backend, ValueOf, Error};
 use primitive_types::H256;
 use generic_array::{GenericArray, ArrayLength};
 use typenum::Unsigned;
-use crate::{impl_from_tree_with_empty_config, ElementalFixedVecRef, ElementalFixedVec, IntoVectorTree, IntoTree, FromTree, FromTreeWithConfig, FromVectorTree, Intermediate, End, Composite};
+use crate::{impl_from_tree_with_empty_config, ElementalFixedVecRef, ElementalFixedVec, IntoVectorTree, IntoTree, FromTree, FromTreeWithConfig, FromVectorTree, Intermediate, End, Composite, DefaultWithConfig};
 
 /// Traits for getting the length from config.
 pub trait LenFromConfig<C> {
@@ -12,9 +12,21 @@ pub trait LenFromConfig<C> {
     fn len_from_config(config: &C) -> usize;
 }
 
-impl<C, U: Unsigned> LenFromConfig<C> for U {
-    fn len_from_config(_config: &C) -> usize {
+/// Trait indicate `LenFromConfig` has a known maximum length.
+pub trait KnownLen {
+    /// Get the static length.
+    fn len() -> usize;
+}
+
+impl<U: Unsigned> KnownLen for U {
+    fn len() -> usize {
         U::to_usize()
+    }
+}
+
+impl<C, U: KnownLen> LenFromConfig<C> for U {
+    fn len_from_config(_config: &C) -> usize {
+        U::len()
     }
 }
 
@@ -44,6 +56,28 @@ impl<T, L> Deref for FixedVec<T, L> {
 impl<T, L> DerefMut for FixedVec<T, L> {
     fn deref_mut(&mut self) -> &mut Vec<T> {
         &mut self.0
+    }
+}
+
+impl<T: Default, L: KnownLen> Default for FixedVec<T, L> {
+    fn default() -> Self {
+        let len = L::len();
+        let mut ret = Vec::new();
+        for _ in 0..len {
+            ret.push(T::default());
+        }
+        Self(ret, PhantomData)
+    }
+}
+
+impl<C, T: Default, L: LenFromConfig<C>> DefaultWithConfig<C> for FixedVec<T, L> {
+    fn default_with_config(config: &C) -> Self {
+        let len = L::len_from_config(config);
+        let mut ret = Vec::new();
+        for _ in 0..len {
+            ret.push(T::default());
+        }
+        Self(ret, PhantomData)
     }
 }
 
