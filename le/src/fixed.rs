@@ -1,36 +1,20 @@
-use core::ops::{Deref, DerefMut};
 use bm::{Backend, ValueOf, Error};
 use primitive_types::H256;
 use generic_array::{GenericArray, ArrayLength};
 use crate::{ElementalFixedVecRef, ElementalFixedVec, IntoCompositeVectorTree,
             IntoCompactVectorTree, IntoTree, FromTree, FromCompositeVectorTree,
-            FromCompactVectorTree, Intermediate, End};
+            FromCompactVectorTree, Intermediate, End, Compact, CompactRef};
 
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
-/// Compact array.
-pub struct CompactArray<T, L: ArrayLength<T>>(pub GenericArray<T, L>);
-
-impl<T, L: ArrayLength<T>> Deref for CompactArray<T, L> {
-    type Target = GenericArray<T, L>;
-
-    fn deref(&self) -> &GenericArray<T, L> {
-        &self.0
+impl<'a, T, L: ArrayLength<T>, DB> IntoTree<DB> for CompactRef<'a, GenericArray<T, L>> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    for<'b> ElementalFixedVecRef<'b, T>: IntoCompactVectorTree<DB>,
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, None)
     }
 }
 
-impl<T, L: ArrayLength<T>> DerefMut for CompactArray<T, L> {
-    fn deref_mut(&mut self) -> &mut GenericArray<T, L> {
-        &mut self.0
-    }
-}
-
-impl<T, L: ArrayLength<T>> From<GenericArray<T, L>> for CompactArray<T, L> {
-    fn from(array: GenericArray<T, L>) -> Self {
-        Self(array)
-    }
-}
-
-impl<T, L: ArrayLength<T>, DB> IntoTree<DB> for CompactArray<T, L> where
+impl<T, L: ArrayLength<T>, DB> IntoTree<DB> for Compact<GenericArray<T, L>> where
     DB: Backend<Intermediate=Intermediate, End=End>,
     for<'a> ElementalFixedVecRef<'a, T>: IntoCompactVectorTree<DB>,
 {
@@ -39,7 +23,7 @@ impl<T, L: ArrayLength<T>, DB> IntoTree<DB> for CompactArray<T, L> where
     }
 }
 
-impl<T, L: ArrayLength<T>, DB> FromTree<DB> for CompactArray<T, L> where
+impl<T, L: ArrayLength<T>, DB> FromTree<DB> for Compact<GenericArray<T, L>> where
     DB: Backend<Intermediate=Intermediate, End=End>,
     T: Default,
     ElementalFixedVec<T>: FromCompactVectorTree<DB>,

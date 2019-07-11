@@ -4,7 +4,8 @@ use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 use crate::{ElementalVariableVecRef, ElementalVariableVec, Intermediate, End,
             IntoTree, IntoCompactListTree, IntoCompositeListTree,
-            FromTree, FromCompactListTree, FromCompositeListTree};
+            FromTree, FromCompactListTree, FromCompositeListTree,
+            Compact, CompactRef};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// Vec value with maximum length.
@@ -57,37 +58,7 @@ impl<DB, T, ML: Unsigned> FromTree<DB> for MaxVec<T, ML> where
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-/// Vec value with maximum length.
-pub struct CompactVec<T, ML>(pub Vec<T>, PhantomData<ML>);
-
-impl<T, ML> Deref for CompactVec<T, ML> {
-    type Target = Vec<T>;
-
-    fn deref(&self) -> &Vec<T> {
-        &self.0
-    }
-}
-
-impl<T, ML> DerefMut for CompactVec<T, ML> {
-    fn deref_mut(&mut self) -> &mut Vec<T> {
-        &mut self.0
-    }
-}
-
-impl<T, ML> Default for CompactVec<T, ML> {
-    fn default() -> Self {
-        Self(Vec::new(), PhantomData)
-    }
-}
-
-impl<T, ML> From<Vec<T>> for CompactVec<T, ML> {
-    fn from(vec: Vec<T>) -> Self {
-        Self(vec, PhantomData)
-    }
-}
-
-impl<DB, T, ML: Unsigned> IntoTree<DB> for CompactVec<T, ML> where
+impl<'a, DB, T, ML: Unsigned> IntoTree<DB> for CompactRef<'a, MaxVec<T, ML>> where
     for<'b> ElementalVariableVecRef<'b, T>: IntoCompactListTree<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
@@ -96,7 +67,16 @@ impl<DB, T, ML: Unsigned> IntoTree<DB> for CompactVec<T, ML> where
     }
 }
 
-impl<DB, T, ML: Unsigned> FromTree<DB> for CompactVec<T, ML> where
+impl<DB, T, ML: Unsigned> IntoTree<DB> for Compact<MaxVec<T, ML>> where
+    for<'b> ElementalVariableVecRef<'b, T>: IntoCompactListTree<DB>,
+    DB: Backend<Intermediate=Intermediate, End=End>,
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        ElementalVariableVecRef(&self.0).into_compact_list_tree(db, Some(ML::to_usize()))
+    }
+}
+
+impl<DB, T, ML: Unsigned> FromTree<DB> for Compact<MaxVec<T, ML>> where
     for<'a> ElementalVariableVec<T>: FromCompactListTree<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
@@ -104,7 +84,7 @@ impl<DB, T, ML: Unsigned> FromTree<DB> for CompactVec<T, ML> where
         let value = ElementalVariableVec::<T>::from_compact_list_tree(
             root, db, Some(ML::to_usize())
         )?;
-        Ok(CompactVec(value.0, PhantomData))
+        Ok(Self(MaxVec(value.0, PhantomData)))
     }
 }
 

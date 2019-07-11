@@ -11,7 +11,8 @@ use generic_array::GenericArray;
 use primitive_types::H256;
 use digest::Digest;
 
-pub use bm::{Backend, Error, ValueOf, Value, Vector, DanglingVector, List, Leak, NoopBackend, InMemoryBackend, utils};
+pub use bm::{Backend, Error, ValueOf, Value, Vector, DanglingVector, List, Leak,
+             NoopBackend, InMemoryBackend, utils};
 
 mod basic;
 mod elemental_fixed;
@@ -25,8 +26,7 @@ pub use elemental_fixed::{ElementalFixedVec, ElementalFixedVecRef,
 pub use elemental_variable::{ElementalVariableVec, ElementalVariableVecRef,
                              IntoCompactListTree, FromCompactListTree,
                              IntoCompositeListTree, FromCompositeListTree};
-pub use fixed::CompactArray;
-pub use variable::{MaxVec, CompactVec};
+pub use variable::MaxVec;
 #[cfg(feature = "derive")]
 pub use bm_le_derive::{FromTree, IntoTree};
 
@@ -76,6 +76,14 @@ pub trait FromTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
     /// given database.
     fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>>;
 }
+
+/// Indicate that the current value should be serialized and
+/// deserialized in Compact format. Reference form.
+pub struct CompactRef<'a, T>(pub &'a T);
+
+/// Indicate that the current value should be serialized and
+/// deserialized in Compact format. Value form.
+pub struct Compact<T>(pub T);
 
 /// Calculate a ssz merkle tree root, dismissing the tree.
 pub fn tree_root<D, T>(value: &T) -> H256 where
