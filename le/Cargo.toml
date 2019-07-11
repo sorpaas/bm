@@ -1,6 +1,6 @@
 [package]
 name = "bm-le"
-version = "0.5.0"
+version = "0.6.0"
 description = "Little endian 256-bit layer for binary merkle trie with ssz compatibility and extensions"
 authors = ["Wei Tang <hi@that.world>"]
 edition = "2018"
@@ -9,7 +9,7 @@ license = "Apache-2.0"
 [dependencies]
 bm = { version = "0.5", path = "..", default-features = false }
 primitive-types = { version = "0.4", default-features = false }
-bm-le-derive = { version = "0.5", path = "derive", optional = true }
+bm-le-derive = { version = "0.6", path = "derive", optional = true }
 digest = "0.8"
 typenum = "1.10"
 generic-array = "0.12"

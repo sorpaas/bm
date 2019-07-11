@@ -1,6 +1,6 @@
 [package]
 name = "bm-le-derive"
-version = "0.5.0"
+version = "0.6.0"
 description = "Derive for bm-le."
 authors = ["Wei Tang <hi@that.world>"]
 edition = "2018"
@@ -15,7 +15,7 @@ quote = "0.6"
 deriving = "0.1"
 
 [dev-dependencies]
-bm-le = { version = "0.5", path = ".." }
+bm-le = { version = "0.6", path = ".." }
 bm = { version = "0.5", path = "../.." }
 primitive-types = "0.4"
 sha2 = "0.8"
