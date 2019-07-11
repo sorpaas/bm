@@ -26,5 +26,4 @@ std = []
 members = [
   "le",
   "le/derive",
-  "le/config",
 ]

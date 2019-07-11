@@ -1,7 +1,6 @@
 use bm::{Backend, ValueOf, Error};
 use primitive_types::H256;
 use generic_array::{GenericArray, ArrayLength};
-use typenum::Unsigned;
 use crate::{ElementalFixedVecRef, ElementalFixedVec, IntoVectorTree, IntoTree, FromTree, FromVectorTree, Intermediate, End, Composite};
 
 impl Composite for H256 { }
@@ -62,10 +61,10 @@ impl<T, L: ArrayLength<T>> Composite for GenericArray<T, L> { }
 
 impl<DB, T, L: ArrayLength<T>> IntoTree<DB> for GenericArray<T, L> where
     DB: Backend<Intermediate=Intermediate, End=End>,
-    for<'a> ElementalFixedVecRef<'a, T>: IntoTree<DB>,
+    for<'a> ElementalFixedVecRef<'a, T>: IntoVectorTree<DB>,
 {
     fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        ElementalFixedVecRef(&self[..]).into_tree(db)
+        ElementalFixedVecRef(&self[..]).into_vector_tree(db, None)
     }
 }
 

@@ -2,10 +2,10 @@ use sha2::{Digest, Sha256};
 use primitive_types::H256;
 use std::fmt::Debug;
 use typenum::*;
-use core::marker::PhantomData;
 
 use bm::InMemoryBackend;
-use bm_le::{End, IntoTree, FromTree, FixedVec, VariableVec};
+use generic_array::GenericArray;
+use bm_le::{End, IntoTree, FromTree, MaxVec};
 
 fn chunk(data: &[u8]) -> H256 {
     let mut ret = [0; 32];
@@ -32,29 +32,6 @@ fn t<T>(value: T, expected: H256) where
     assert_eq!(value, decoded);
 }
 
-fn t_fixed<T, L>(value: FixedVec<T, L>, expected: H256) where
-    FixedVec<T, L>: IntoTree<InMemoryBackend<Sha256, End>> + FromTree<InMemoryBackend<Sha256, End>>,
-    T: Debug + PartialEq,
-{
-    let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
-    let actual = value.into_tree(&mut db).unwrap();
-    assert_eq!(H256::from_slice(actual.as_ref()), expected);
-    let decoded = FixedVec::<T, L>::from_tree(&actual, &db).unwrap();
-    assert_eq!(value.0, decoded.0);
-}
-
-fn t_variable<T, ML>(value: VariableVec<T, ML>, expected: H256) where
-    VariableVec<T, ML>: IntoTree<InMemoryBackend<Sha256, End>> + FromTree<InMemoryBackend<Sha256, End>>,
-    T: Debug + PartialEq,
-{
-    let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
-    let actual = value.into_tree(&mut db).unwrap();
-    assert_eq!(H256::from_slice(actual.as_ref()), expected);
-    let decoded = VariableVec::<T, ML>::from_tree(&actual, &db).unwrap();
-    assert_eq!(value.0, decoded.0);
-    assert_eq!(value.1, decoded.1);
-}
-
 #[test]
 fn spec() {
     t(false, chunk(&[0x00])); // boolean F
@@ -73,17 +50,17 @@ fn spec() {
     t(0x0123456789abcdefu64, chunk(&[0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01]));
 
     // bitvector TTFTFTFF
-    t_fixed(FixedVec::<bool, U8>(vec![true, true, false, true, false, true, false, false], PhantomData), chunk(&[0x2b]));
+    t(GenericArray::<bool, U8>::from([true, true, false, true, false, true, false, false]), chunk(&[0x2b]));
     // bitvector FTFT
-    t_fixed(FixedVec::<bool, U4>(vec![false, true, false, true], PhantomData), chunk(&[0x0a]));
+    t(GenericArray::<bool, U4>::from([false, true, false, true]), chunk(&[0x0a]));
     // bitvector FTF
-    t_fixed(FixedVec::<bool, U3>(vec![false, true, false], PhantomData), chunk(&[0x02]));
+    t(GenericArray::<bool, U3>::from([false, true, false]), chunk(&[0x02]));
     // bitvector TFTFFFTTFT
-    t_fixed(FixedVec::<bool, U10>(vec![true, false, true, false, false, false, true, true, false, true], PhantomData),
+    t(GenericArray::<bool, U10>::from([true, false, true, false, false, false, true, true, false, true]),
             chunk(&[0xc5, 0x02]));
     // bitvector TFTFFFTTFTFFFFTT
-    t_fixed(FixedVec::<bool, U16>(vec![true, false, true, false, false, false, true, true, false, true,
-                                       false, false, false, false, true, true], PhantomData),
+    t(GenericArray::<bool, U16>::from([true, false, true, false, false, false, true, true, false, true,
+                                       false, false, false, false, true, true]),
             chunk(&[0xc5, 0xc2]));
     // long bitvector
     {
@@ -91,7 +68,7 @@ fn spec() {
         for _ in 0..512 {
             v.push(true);
         }
-        t_fixed(FixedVec::<bool, U512>(v, PhantomData),
+        t(GenericArray::<bool, U512>::from_exact_iter(v).unwrap(),
                 h(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -103,21 +80,21 @@ fn spec() {
     }
 
     // bitlist TTFTFTFF
-    t_variable(VariableVec::<bool, U8>(vec![true, true, false, true, false, true, false, false], Some(8), PhantomData),
+    t(MaxVec::<bool, U8>::from(vec![true, true, false, true, false, true, false, false]),
                h(&chunk(&[0x2b])[..], &chunk(&[0x08])[..]));
     // bitlist FTFT
-    t_variable(VariableVec::<bool, U4>(vec![false, true, false, true], Some(4), PhantomData),
+    t(MaxVec::<bool, U4>::from(vec![false, true, false, true]),
                h(&chunk(&[0x0a])[..], &chunk(&[0x04])[..]));
     // bitlist FTF
-    t_variable(VariableVec::<bool, U3>(vec![false, true, false], Some(3), PhantomData),
+    t(MaxVec::<bool, U3>::from(vec![false, true, false]),
                h(&chunk(&[0x02])[..], &chunk(&[0x03])[..]));
     // bitlist TFTFFFTTFT
-    t_variable(VariableVec::<bool, U16>(vec![true, false, true, false, false, false, true, true, false, true], Some(16), PhantomData),
+    t(MaxVec::<bool, U16>::from(vec![true, false, true, false, false, false, true, true, false, true]),
                h(&chunk(&[0xc5, 0x02])[..], &chunk(&[0x0a])[..]));
     // bitlist TFTFFFTTFTFFFFTT
-    t_variable(VariableVec::<bool, U16>(vec![
+    t(MaxVec::<bool, U16>::from(vec![
         true, false, true, false, false, false, true, true, false, true,
-        false, false, false, false, true, true], Some(16), PhantomData),
+        false, false, false, false, true, true]),
                h(&chunk(&[0xc5, 0xc2])[..], &chunk(&[0x10])[..]));
 }
 

@@ -1,8 +1,8 @@
 use sha2::{Digest, Sha256};
 use primitive_types::H256;
 use bm::InMemoryBackend;
-use bm_le::{FixedVec, VariableVec, LenFromConfig, MaxLenFromConfig, IntoTree, FromTree, FromTreeWithConfig, End, tree_root};
-use core::marker::PhantomData;
+use bm_le::{IntoTree, FromTree, End, MaxVec, tree_root};
+use generic_array::GenericArray;
 
 fn chunk(data: &[u8]) -> H256 {
     let mut ret = [0; 32];
@@ -18,28 +18,6 @@ fn h(a: &[u8], b: &[u8]) -> H256 {
     H256::from_slice(hash.result().as_slice())
 }
 
-trait Config {
-    fn d_len(&self) -> u64 { 4 }
-    fn e_max_len(&self) -> u64 { 5 }
-}
-
-#[derive(Eq, PartialEq, Clone, Debug)]
-struct DLenFromConfig;
-#[derive(Eq, PartialEq, Clone, Debug)]
-struct EMaxLenFromConfig;
-
-impl<C: Config> LenFromConfig<C> for DLenFromConfig {
-    fn len_from_config(config: &C) -> usize {
-        config.d_len() as usize
-    }
-}
-
-impl<C: Config> MaxLenFromConfig<C> for EMaxLenFromConfig {
-    fn max_len_from_config(config: &C) -> Option<usize> {
-        Some(config.e_max_len() as usize)
-    }
-}
-
 #[derive(IntoTree)]
 struct BasicContainer {
     a: u32,
@@ -48,14 +26,13 @@ struct BasicContainer {
 }
 
 #[derive(IntoTree, FromTree, PartialEq, Eq, Debug)]
-#[bm(config_trait = "Config")]
 struct ConfigContainer {
     a: u64,
     b: u64,
     c: u64,
-    d: FixedVec<u64, DLenFromConfig>,
+    d: GenericArray<u64, typenum::U4>,
     e: u64,
-    f: VariableVec<u64, EMaxLenFromConfig>,
+    f: MaxVec<u64, typenum::U5>,
 }
 
 #[test]
@@ -65,10 +42,6 @@ fn test_basic() {
                  &h(&chunk(&[0x03])[..], &chunk(&[])[..])[..]));
 }
 
-struct TestConfig;
-
-impl Config for TestConfig { }
-
 #[test]
 fn test_config() {
     let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
@@ -76,11 +49,11 @@ fn test_config() {
         a: 1,
         b: 2,
         c: 3,
-        d: FixedVec(vec![4, 5, 6, 7], PhantomData),
+        d: GenericArray::from([4, 5, 6, 7]),
         e: 8,
-        f: VariableVec(vec![9, 10], Some(5), PhantomData),
+        f: MaxVec::from(vec![9, 10]),
     };
     let actual = container.into_tree(&mut db).unwrap();
-    let decoded = ConfigContainer::from_tree_with_config(&actual, &db, &TestConfig).unwrap();
+    let decoded = ConfigContainer::from_tree(&actual, &db).unwrap();
     assert_eq!(container, decoded);
 }

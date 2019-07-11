@@ -39,6 +39,12 @@ impl<T, ML> Default for MaxVec<T, ML> {
     }
 }
 
+impl<T, ML> From<Vec<T>> for MaxVec<T, ML> {
+    fn from(vec: Vec<T>) -> Self {
+        Self(vec, PhantomData)
+    }
+}
+
 impl<'a, T, ML> Composite for MaxVecRef<'a, T, ML> { }
 impl<T, ML> Composite for MaxVec<T, ML> { }
 
