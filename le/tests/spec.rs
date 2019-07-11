@@ -5,7 +5,7 @@ use typenum::*;
 
 use bm::InMemoryBackend;
 use generic_array::GenericArray;
-use bm_le::{End, IntoTree, FromTree, CompactArray, CompactVec};
+use bm_le::{End, IntoTree, FromTree, Compact, MaxVec};
 
 fn chunk(data: &[u8]) -> H256 {
     let mut ret = [0; 32];
@@ -50,17 +50,17 @@ fn spec() {
     t(0x0123456789abcdefu64, chunk(&[0xef, 0xcd, 0xab, 0x89, 0x67, 0x45, 0x23, 0x01]));
 
     // bitvector TTFTFTFF
-    t(CompactArray::from(GenericArray::<bool, U8>::from([true, true, false, true, false, true, false, false])), chunk(&[0x2b]));
+    t(Compact(GenericArray::<bool, U8>::from([true, true, false, true, false, true, false, false])), chunk(&[0x2b]));
     // bitvector FTFT
-    t(CompactArray::from(GenericArray::<bool, U4>::from([false, true, false, true])), chunk(&[0x0a]));
+    t(Compact(GenericArray::<bool, U4>::from([false, true, false, true])), chunk(&[0x0a]));
     // bitvector FTF
-    t(CompactArray::from(GenericArray::<bool, U3>::from([false, true, false])), chunk(&[0x02]));
+    t(Compact(GenericArray::<bool, U3>::from([false, true, false])), chunk(&[0x02]));
     // bitvector TFTFFFTTFT
-    t(CompactArray::from(GenericArray::<bool, U10>::from([true, false, true, false, false, false, true, true, false, true])),
+    t(Compact(GenericArray::<bool, U10>::from([true, false, true, false, false, false, true, true, false, true])),
             chunk(&[0xc5, 0x02]));
     // bitvector TFTFFFTTFTFFFFTT
-    t(CompactArray::from(GenericArray::<bool, U16>::from([true, false, true, false, false, false, true, true, false, true,
-                                                          false, false, false, false, true, true])),
+    t(Compact(GenericArray::<bool, U16>::from([true, false, true, false, false, false, true, true, false, true,
+                                               false, false, false, false, true, true])),
             chunk(&[0xc5, 0xc2]));
     // long bitvector
     {
@@ -68,7 +68,7 @@ fn spec() {
         for _ in 0..512 {
             v.push(true);
         }
-        t(CompactArray::from(GenericArray::<bool, U512>::from_exact_iter(v).unwrap()),
+        t(Compact(GenericArray::<bool, U512>::from_exact_iter(v).unwrap()),
                 h(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -80,21 +80,21 @@ fn spec() {
     }
 
     // bitlist TTFTFTFF
-    t(CompactVec::<bool, U8>::from(vec![true, true, false, true, false, true, false, false]),
+    t(Compact(MaxVec::<bool, U8>::from(vec![true, true, false, true, false, true, false, false])),
                h(&chunk(&[0x2b])[..], &chunk(&[0x08])[..]));
     // bitlist FTFT
-    t(CompactVec::<bool, U4>::from(vec![false, true, false, true]),
+    t(Compact(MaxVec::<bool, U4>::from(vec![false, true, false, true])),
                h(&chunk(&[0x0a])[..], &chunk(&[0x04])[..]));
     // bitlist FTF
-    t(CompactVec::<bool, U3>::from(vec![false, true, false]),
+    t(Compact(MaxVec::<bool, U3>::from(vec![false, true, false])),
                h(&chunk(&[0x02])[..], &chunk(&[0x03])[..]));
     // bitlist TFTFFFTTFT
-    t(CompactVec::<bool, U16>::from(vec![true, false, true, false, false, false, true, true, false, true]),
+    t(Compact(MaxVec::<bool, U16>::from(vec![true, false, true, false, false, false, true, true, false, true])),
                h(&chunk(&[0xc5, 0x02])[..], &chunk(&[0x0a])[..]));
     // bitlist TFTFFFTTFTFFFFTT
-    t(CompactVec::<bool, U16>::from(vec![
+    t(Compact(MaxVec::<bool, U16>::from(vec![
         true, false, true, false, false, false, true, true, false, true,
-        false, false, false, false, true, true]),
+        false, false, false, false, true, true])),
                h(&chunk(&[0xc5, 0xc2])[..], &chunk(&[0x10])[..]));
 }
 

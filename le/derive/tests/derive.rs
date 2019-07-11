@@ -30,8 +30,10 @@ struct ConfigContainer {
     a: u64,
     b: u64,
     c: u64,
+    #[bm(compact)]
     d: GenericArray<u64, typenum::U4>,
     e: u64,
+    #[bm(compact)]
     f: MaxVec<u64, typenum::U5>,
 }
 

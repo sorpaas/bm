@@ -5,7 +5,7 @@ extern crate proc_macro;
 use quote::{quote, quote_spanned};
 use syn::{parse_macro_input, DeriveInput};
 use syn::spanned::Spanned;
-use deriving::struct_fields;
+use deriving::{struct_fields, has_attribute};
 
 use proc_macro::TokenStream;
 
@@ -20,9 +20,15 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
         .map(|f| {
             let name = &f.ident;
 
-            quote_spanned! { f.span() => {
-                vector.push(bm_le::IntoTree::into_tree(&self.#name, db)?);
-            } }
+            if has_attribute("bm", &f.attrs, "compact") {
+                quote_spanned! { f.span() => {
+                    vector.push(bm_le::IntoTree::into_tree(&bm_le::CompactRef(&self.#name), db)?);
+                } }
+            } else {
+                quote_spanned! { f.span() => {
+                    vector.push(bm_le::IntoTree::into_tree(&self.#name, db)?);
+                } }
+            }
         });
 
     let expanded = quote! {
@@ -51,13 +57,24 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
         .enumerate()
         .map(|(i, f)| {
             let name = &f.ident;
+            let ty = &f.ty;
 
-            quote_spanned! {
-                f.span() =>
-                    #name: bm_le::FromTree::from_tree(
-                        &vector.get(db, #i)?,
-                        db,
-                    )?,
+            if has_attribute("bm", &f.attrs, "compact") {
+                quote_spanned! {
+                    f.span() =>
+                        #name: <bm_le::Compact<#ty> as bm_le::FromTree<_>>::from_tree(
+                            &vector.get(db, #i)?,
+                            db,
+                        )?.0,
+                }
+            } else {
+                quote_spanned! {
+                    f.span() =>
+                        #name: bm_le::FromTree::from_tree(
+                            &vector.get(db, #i)?,
+                            db,
+                        )?,
+                }
             }
         });
 

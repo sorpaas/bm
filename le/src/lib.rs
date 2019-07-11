@@ -79,10 +79,12 @@ pub trait FromTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
 
 /// Indicate that the current value should be serialized and
 /// deserialized in Compact format. Reference form.
+#[derive(Debug, Eq, PartialEq)]
 pub struct CompactRef<'a, T>(pub &'a T);
 
 /// Indicate that the current value should be serialized and
 /// deserialized in Compact format. Value form.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Compact<T>(pub T);
 
 /// Calculate a ssz merkle tree root, dismissing the tree.
