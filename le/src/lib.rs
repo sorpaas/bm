@@ -20,11 +20,10 @@ mod fixed;
 mod variable;
 
 pub use elemental_fixed::{ElementalFixedVec, ElementalFixedVecRef,
-                          IntoVectorTree, FromVectorTree, FromVectorTreeWithConfig};
+                          IntoVectorTree, FromVectorTree};
 pub use elemental_variable::{ElementalVariableVec, ElementalVariableVecRef,
-                             IntoListTree, FromListTree, FromListTreeWithConfig};
-pub use fixed::{FixedVecRef, FixedVec, LenFromConfig, KnownLen};
-pub use variable::{VariableVec, VariableVecRef, MaxLenFromConfig, NoMaxLen, KnownMaxLen};
+                             IntoListTree, FromListTree};
+pub use variable::{MaxVec, MaxVecRef};
 #[cfg(feature = "derive")]
 pub use bm_le_derive::{FromTree, IntoTree};
 
@@ -75,40 +74,8 @@ pub trait FromTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
     fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>>;
 }
 
-/// Traits for type converting from a tree structure with a config.
-pub trait FromTreeWithConfig<C, DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
-    /// Convert this type from merkle tree, reading nodes from the
-    /// given database, with the given config.
-    fn from_tree_with_config(root: &ValueOf<DB>, db: &DB, config: &C) -> Result<Self, Error<DB::Error>>;
-}
-
-/// Traits for getting default value from a config.
-pub trait DefaultWithConfig<C>: Sized {
-    /// Get the default value.
-    fn default_with_config(config: &C) -> Self;
-}
-
 /// A composite value, in contrary to ssz's definition of basic value.
 pub trait Composite { }
-
-/// Implement FromTreeWithConfig for traits that has already
-/// implemented FromTree and does not need extra configs.
-#[macro_export]
-macro_rules! impl_from_tree_with_empty_config {
-    ( $t:ty ) => {
-        impl<DB, C> $crate::FromTreeWithConfig<C, DB> for $t where
-            DB: $crate::Backend<Intermediate=$crate::Intermediate, End=$crate::End>,
-        {
-            fn from_tree_with_config(
-                root: &$crate::ValueOf<DB>,
-                db: &DB,
-                _config: &C
-            ) -> Result<Self, $crate::Error<DB::Error>> {
-                $crate::FromTree::from_tree(root, db)
-            }
-        }
-    }
-}
 
 /// Calculate a ssz merkle tree root, dismissing the tree.
 pub fn tree_root<D, T>(value: &T) -> H256 where

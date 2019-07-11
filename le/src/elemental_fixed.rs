@@ -4,28 +4,7 @@ use primitive_types::U256;
 use generic_array::GenericArray;
 use alloc::vec::Vec;
 
-use crate::{IntoTree, FromTree, FromTreeWithConfig, Intermediate, End, Composite};
-
-/// Implement FromVectorTreeWithConfig for traits that has already
-/// implemented FromVectorTree and does not need extra configs.
-#[macro_export]
-macro_rules! impl_from_vector_tree_with_empty_config {
-    ( $t:ty ) => {
-        impl<C, DB> $crate::FromVectorTreeWithConfig<C, DB> for $t where
-            DB: $crate::Backend<Intermediate=Intermediate, End=End>
-        {
-            fn from_vector_tree_with_config(
-                root: &$crate::ValueOf<DB>,
-                db: &DB,
-                len: usize,
-                max_len: Option<usize>,
-                _config: &C,
-            ) -> Result<Self, $crate::Error<DB::Error>> {
-                <$t>::from_vector_tree(root, db, len, max_len)
-            }
-        }
-    }
-}
+use crate::{IntoTree, FromTree, Intermediate, End, Composite};
 
 /// Traits for vector converting into a tree structure.
 pub trait IntoVectorTree<DB: Backend<Intermediate=Intermediate, End=End>> {
@@ -47,19 +26,6 @@ pub trait FromVectorTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized
         db: &DB,
         len: usize,
         max_len: Option<usize>,
-    ) -> Result<Self, Error<DB::Error>>;
-}
-
-/// Traits for vector converting from a tree structure with config.
-pub trait FromVectorTreeWithConfig<C, DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
-    /// Convert this type from merkle tree, reading nodes from the
-    /// given database, with given length and maximum length.
-    fn from_vector_tree_with_config(
-        root: &ValueOf<DB>,
-        db: &DB,
-        len: usize,
-        max_len: Option<usize>,
-        config: &C,
     ) -> Result<Self, Error<DB::Error>>;
 }
 
@@ -105,7 +71,6 @@ macro_rules! impl_builtin_fixed_uint_vector {
             }
         }
 
-        impl_from_vector_tree_with_empty_config!(ElementalFixedVec<$t>);
         impl<DB> FromVectorTree<DB> for ElementalFixedVec<$t> where
             DB: Backend<Intermediate=Intermediate, End=End>
         {
@@ -155,7 +120,6 @@ impl<'a, DB> IntoVectorTree<DB> for ElementalFixedVecRef<'a, U256> where
     }
 }
 
-impl_from_vector_tree_with_empty_config!(ElementalFixedVec<U256>);
 impl<DB> FromVectorTree<DB> for ElementalFixedVec<U256> where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
@@ -198,7 +162,6 @@ impl<'a, DB> IntoVectorTree<DB> for ElementalFixedVecRef<'a, bool> where
     }
 }
 
-impl_from_vector_tree_with_empty_config!(ElementalFixedVec<bool>);
 impl<DB> FromVectorTree<DB> for ElementalFixedVec<bool> where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
@@ -274,22 +237,6 @@ impl<DB, T: Composite + FromTree<DB>> FromVectorTree<DB> for ElementalFixedVec<T
         max_len: Option<usize>
     ) -> Result<Self, Error<DB::Error>> {
         from_vector_tree(root, db, len, max_len, |value, db| T::from_tree(value, db))
-    }
-}
-
-impl<DB, C, T: Composite + FromTreeWithConfig<C, DB>> FromVectorTreeWithConfig<C, DB> for ElementalFixedVec<T> where
-    DB: Backend<Intermediate=Intermediate, End=End>
-{
-    fn from_vector_tree_with_config(
-        root: &ValueOf<DB>,
-        db: &DB,
-        len: usize,
-        max_len: Option<usize>,
-        config: &C,
-    ) -> Result<Self, Error<DB::Error>> {
-        from_vector_tree(root, db, len, max_len, |value, db| {
-            T::from_tree_with_config(value, db, config)
-        })
     }
 }
 

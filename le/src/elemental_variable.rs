@@ -2,27 +2,7 @@ use bm::{Error, ValueOf, Value, Backend, Index, DanglingRaw, Leak};
 use primitive_types::U256;
 use alloc::vec::Vec;
 
-use crate::{Composite, ElementalFixedVec, FromVectorTree, FromVectorTreeWithConfig, ElementalFixedVecRef, End, Intermediate, IntoVectorTree, IntoTree};
-
-/// Implement FromListTreeWithConfig for traits that has already
-/// implemented FromListTree and does not need extra configs.
-#[macro_export]
-macro_rules! impl_from_list_tree_with_empty_config {
-    ( $t:ty ) => {
-        impl<C, DB> $crate::FromListTreeWithConfig<C, DB> for $t where
-            DB: $crate::Backend<Intermediate=Intermediate, End=End>
-        {
-            fn from_list_tree_with_config(
-                root: &$crate::ValueOf<DB>,
-                db: &DB,
-                max_len: Option<usize>,
-                _config: &C,
-            ) -> Result<Self, $crate::Error<DB::Error>> {
-                <$t>::from_list_tree(root, db, max_len)
-            }
-        }
-    }
-}
+use crate::{Composite, ElementalFixedVec, FromVectorTree, ElementalFixedVecRef, End, Intermediate, IntoVectorTree, IntoTree};
 
 /// Traits for list converting into a tree structure.
 pub trait IntoListTree<DB: Backend<Intermediate=Intermediate, End=End>> {
@@ -43,18 +23,6 @@ pub trait FromListTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
         root: &ValueOf<DB>,
         db: &DB,
         max_len: Option<usize>,
-    ) -> Result<Self, Error<DB::Error>>;
-}
-
-/// Traits for list converting from a tree structure with config.
-pub trait FromListTreeWithConfig<C, DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
-    /// Convert this type from merkle tree, reading nodes from the
-    /// given database, with given maximum length.
-    fn from_list_tree_with_config(
-        root: &ValueOf<DB>,
-        db: &DB,
-        max_len: Option<usize>,
-        config: &C,
     ) -> Result<Self, Error<DB::Error>>;
 }
 
@@ -157,24 +125,6 @@ impl<DB, T> FromListTree<DB> for ElementalVariableVec<T> where
         from_list_tree(root, db, max_len, |vector_root, db, len, max_len| {
             ElementalFixedVec::<T>::from_vector_tree(
                 &vector_root, db, len, max_len
-            )
-        })
-    }
-}
-
-impl<C, DB, T> FromListTreeWithConfig<C, DB> for ElementalVariableVec<T> where
-    ElementalFixedVec<T>: FromVectorTreeWithConfig<C, DB>,
-    DB: Backend<Intermediate=Intermediate, End=End>,
-{
-    fn from_list_tree_with_config(
-        root: &ValueOf<DB>,
-        db: &DB,
-        max_len: Option<usize>,
-        config: &C,
-    ) -> Result<Self, Error<DB::Error>> {
-        from_list_tree(root, db, max_len, |vector_root, db, len, max_len| {
-            ElementalFixedVec::<T>::from_vector_tree_with_config(
-                &vector_root, db, len, max_len, config
             )
         })
     }
