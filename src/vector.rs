@@ -21,7 +21,7 @@ pub struct Vector<R: RootStatus, DB: Backend> {
 
 impl<R: RootStatus, DB: Backend> Vector<R, DB> {
     fn raw_index(&self, i: usize) -> Result<Index, Error<DB::Error>> {
-        Index::from_one(self.current_max_len() + i).ok_or(Error::InvalidParameter)
+        Index::from_one((1 << self.depth()) + i).ok_or(Error::InvalidParameter)
     }
 
     fn extend(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {

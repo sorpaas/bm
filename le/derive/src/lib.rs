@@ -35,8 +35,6 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
                 bm_le::utils::vector_tree(&vector, db, None)
             }
         }
-
-        impl bm_le::Composite for #name { }
     };
 
     proc_macro::TokenStream::from(expanded)
