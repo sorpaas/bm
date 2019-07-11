@@ -20,10 +20,13 @@ mod fixed;
 mod variable;
 
 pub use elemental_fixed::{ElementalFixedVec, ElementalFixedVecRef,
-                          IntoVectorTree, FromVectorTree};
+                          IntoCompactVectorTree, FromCompactVectorTree,
+                          IntoCompositeVectorTree, FromCompositeVectorTree};
 pub use elemental_variable::{ElementalVariableVec, ElementalVariableVecRef,
-                             IntoListTree, FromListTree};
-pub use variable::{MaxVec, MaxVecRef};
+                             IntoCompactListTree, FromCompactListTree,
+                             IntoCompositeListTree, FromCompositeListTree};
+pub use fixed::CompactArray;
+pub use variable::{MaxVec, CompactVec};
 #[cfg(feature = "derive")]
 pub use bm_le_derive::{FromTree, IntoTree};
 
@@ -73,9 +76,6 @@ pub trait FromTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
     /// given database.
     fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>>;
 }
-
-/// A composite value, in contrary to ssz's definition of basic value.
-pub trait Composite { }
 
 /// Calculate a ssz merkle tree root, dismissing the tree.
 pub fn tree_root<D, T>(value: &T) -> H256 where

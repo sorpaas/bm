@@ -4,24 +4,47 @@ use primitive_types::U256;
 use generic_array::GenericArray;
 use alloc::vec::Vec;
 
-use crate::{IntoTree, FromTree, Intermediate, End, Composite};
+use crate::{IntoTree, FromTree, Intermediate, End};
 
-/// Traits for vector converting into a tree structure.
-pub trait IntoVectorTree<DB: Backend<Intermediate=Intermediate, End=End>> {
+/// Traits for vector converting into a composite tree structure.
+pub trait IntoCompositeVectorTree<DB: Backend<Intermediate=Intermediate, End=End>> {
     /// Convert this vector into merkle tree, writing nodes into the
     /// given database, and using the maximum length specified.
-    fn into_vector_tree(
+    fn into_composite_vector_tree(
         &self,
         db: &mut DB,
         max_len: Option<usize>
     ) -> Result<ValueOf<DB>, Error<DB::Error>>;
 }
 
-/// Traits for vector converting from a tree structure.
-pub trait FromVectorTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
+/// Traits for vector converting into a compact tree structure.
+pub trait IntoCompactVectorTree<DB: Backend<Intermediate=Intermediate, End=End>> {
+    /// Convert this vector into merkle tree, writing nodes into the
+    /// given database, and using the maximum length specified.
+    fn into_compact_vector_tree(
+        &self,
+        db: &mut DB,
+        max_len: Option<usize>
+    ) -> Result<ValueOf<DB>, Error<DB::Error>>;
+}
+
+/// Traits for vector converting from a composite tree structure.
+pub trait FromCompositeVectorTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
     /// Convert this type from merkle tree, reading nodes from the
     /// given database, with given length and maximum length.
-    fn from_vector_tree(
+    fn from_composite_vector_tree(
+        root: &ValueOf<DB>,
+        db: &DB,
+        len: usize,
+        max_len: Option<usize>,
+    ) -> Result<Self, Error<DB::Error>>;
+}
+
+/// Traits for vector converting from a compact tree structure.
+pub trait FromCompactVectorTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
+    /// Convert this type from merkle tree, reading nodes from the
+    /// given database, with given length and maximum length.
+    fn from_compact_vector_tree(
         root: &ValueOf<DB>,
         db: &DB,
         len: usize,
@@ -38,10 +61,10 @@ pub struct ElementalFixedVec<T>(pub Vec<T>);
 
 macro_rules! impl_builtin_fixed_uint_vector {
     ( $t:ty, $lt:ty ) => {
-        impl<'a, DB> IntoVectorTree<DB> for ElementalFixedVecRef<'a, $t> where
+        impl<'a, DB> IntoCompactVectorTree<DB> for ElementalFixedVecRef<'a, $t> where
             DB: Backend<Intermediate=Intermediate, End=End>
         {
-            fn into_vector_tree(
+            fn into_compact_vector_tree(
                 &self,
                 db: &mut DB,
                 max_len: Option<usize>
@@ -71,10 +94,10 @@ macro_rules! impl_builtin_fixed_uint_vector {
             }
         }
 
-        impl<DB> FromVectorTree<DB> for ElementalFixedVec<$t> where
+        impl<DB> FromCompactVectorTree<DB> for ElementalFixedVec<$t> where
             DB: Backend<Intermediate=Intermediate, End=End>
         {
-            fn from_vector_tree(
+            fn from_compact_vector_tree(
                 root: &ValueOf<DB>,
                 db: &DB,
                 len: usize,
@@ -104,10 +127,10 @@ impl_builtin_fixed_uint_vector!(u32, typenum::U4);
 impl_builtin_fixed_uint_vector!(u64, typenum::U8);
 impl_builtin_fixed_uint_vector!(u128, typenum::U16);
 
-impl<'a, DB> IntoVectorTree<DB> for ElementalFixedVecRef<'a, U256> where
+impl<'a, DB> IntoCompactVectorTree<DB> for ElementalFixedVecRef<'a, U256> where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn into_vector_tree(
+    fn into_compact_vector_tree(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -120,10 +143,10 @@ impl<'a, DB> IntoVectorTree<DB> for ElementalFixedVecRef<'a, U256> where
     }
 }
 
-impl<DB> FromVectorTree<DB> for ElementalFixedVec<U256> where
+impl<DB> FromCompactVectorTree<DB> for ElementalFixedVec<U256> where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn from_vector_tree(
+    fn from_compact_vector_tree(
         root: &ValueOf<DB>,
         db: &DB,
         len: usize,
@@ -143,10 +166,10 @@ impl<DB> FromVectorTree<DB> for ElementalFixedVec<U256> where
     }
 }
 
-impl<'a, DB> IntoVectorTree<DB> for ElementalFixedVecRef<'a, bool> where
+impl<'a, DB> IntoCompactVectorTree<DB> for ElementalFixedVecRef<'a, bool> where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn into_vector_tree(
+    fn into_compact_vector_tree(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -158,14 +181,14 @@ impl<'a, DB> IntoVectorTree<DB> for ElementalFixedVecRef<'a, bool> where
             bytes[i / 8] |= (self.0[i] as u8) << (i % 8);
         }
 
-        ElementalFixedVecRef(&bytes).into_vector_tree(db, max_len)
+        ElementalFixedVecRef(&bytes).into_compact_vector_tree(db, max_len)
     }
 }
 
-impl<DB> FromVectorTree<DB> for ElementalFixedVec<bool> where
+impl<DB> FromCompactVectorTree<DB> for ElementalFixedVec<bool> where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn from_vector_tree(
+    fn from_compact_vector_tree(
         root: &ValueOf<DB>,
         db: &DB,
         len: usize,
@@ -189,11 +212,11 @@ impl<DB> FromVectorTree<DB> for ElementalFixedVec<bool> where
     }
 }
 
-impl<'a, DB, T: Composite> IntoVectorTree<DB> for ElementalFixedVecRef<'a, T> where
+impl<'a, DB, T> IntoCompositeVectorTree<DB> for ElementalFixedVecRef<'a, T> where
     T: IntoTree<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn into_vector_tree(
+    fn into_composite_vector_tree(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -204,7 +227,7 @@ impl<'a, DB, T: Composite> IntoVectorTree<DB> for ElementalFixedVecRef<'a, T> wh
     }
 }
 
-fn from_vector_tree<T, F, DB>(
+fn from_composite_vector_tree<T, F, DB>(
     root: &ValueOf<DB>,
     db: &DB,
     len: usize,
@@ -227,28 +250,41 @@ fn from_vector_tree<T, F, DB>(
     Ok(ElementalFixedVec(ret))
 }
 
-impl<DB, T: Composite + FromTree<DB>> FromVectorTree<DB> for ElementalFixedVec<T> where
+impl<DB, T: FromTree<DB>> FromCompositeVectorTree<DB> for ElementalFixedVec<T> where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn from_vector_tree(
+    fn from_composite_vector_tree(
         root: &ValueOf<DB>,
         db: &DB,
         len: usize,
         max_len: Option<usize>
     ) -> Result<Self, Error<DB::Error>> {
-        from_vector_tree(root, db, len, max_len, |value, db| T::from_tree(value, db))
+        from_composite_vector_tree(root, db, len, max_len, |value, db| T::from_tree(value, db))
     }
 }
 
-impl<DB, T> IntoVectorTree<DB> for ElementalFixedVec<T> where
-    for<'a> ElementalFixedVecRef<'a, T>: IntoVectorTree<DB>,
+impl<DB, T> IntoCompactVectorTree<DB> for ElementalFixedVec<T> where
+    for<'a> ElementalFixedVecRef<'a, T>: IntoCompactVectorTree<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn into_vector_tree(
+    fn into_compact_vector_tree(
         &self,
         db: &mut DB,
         max_len: Option<usize>
     ) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        ElementalFixedVecRef(&self.0).into_vector_tree(db, max_len)
+        ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, max_len)
+    }
+}
+
+impl<DB, T> IntoCompositeVectorTree<DB> for ElementalFixedVec<T> where
+    for<'a> ElementalFixedVecRef<'a, T>: IntoCompositeVectorTree<DB>,
+    DB: Backend<Intermediate=Intermediate, End=End>
+{
+    fn into_composite_vector_tree(
+        &self,
+        db: &mut DB,
+        max_len: Option<usize>
+    ) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        ElementalFixedVecRef(&self.0).into_composite_vector_tree(db, max_len)
     }
 }
