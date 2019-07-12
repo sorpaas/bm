@@ -1,6 +1,6 @@
 [package]
 name = "bm-le"
-version = "0.6.2"
+version = "0.6.3"
 description = "Little endian 256-bit layer for binary merkle trie with ssz compatibility and extensions"
 authors = ["Wei Tang <hi@that.world>"]
 edition = "2018"
