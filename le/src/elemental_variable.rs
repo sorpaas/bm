@@ -58,7 +58,7 @@ pub struct ElementalVariableVecRef<'a, T>(pub &'a [T]);
 pub struct ElementalVariableVec<T>(pub Vec<T>);
 
 macro_rules! impl_packed {
-    ( $t:ty, $len:expr ) => {
+    ( $t:ty ) => {
         impl<'a, DB> IntoCompactListTree<DB> for ElementalVariableVecRef<'a, $t> where
             DB: Backend<Intermediate=Intermediate, End=End>,
         {
@@ -80,13 +80,13 @@ macro_rules! impl_packed {
     }
 }
 
-impl_packed!(bool, 1);
-impl_packed!(u8, 8);
-impl_packed!(u16, 16);
-impl_packed!(u32, 32);
-impl_packed!(u64, 64);
-impl_packed!(u128, 128);
-impl_packed!(U256, 256);
+impl_packed!(bool);
+impl_packed!(u8);
+impl_packed!(u16);
+impl_packed!(u32);
+impl_packed!(u64);
+impl_packed!(u128);
+impl_packed!(U256);
 
 impl<'a, DB, T> IntoCompositeListTree<DB> for ElementalVariableVecRef<'a, T> where
     for<'b> ElementalFixedVecRef<'b, T>: IntoCompositeVectorTree<DB>,

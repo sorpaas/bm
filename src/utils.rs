@@ -36,7 +36,11 @@ pub fn vector_tree<DB: Backend>(values: &[ValueOf<DB>], db: &mut DB, max_len: Op
         next = VecDeque::new();
     }
 
-    Ok(current[0].clone())
+    if current.is_empty() {
+        Ok(db.empty_at(total_depth)?)
+    } else {
+        Ok(current[0].clone())
+    }
 }
 
 /// Get the host len of a packed vector.

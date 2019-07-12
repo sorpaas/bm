@@ -18,7 +18,7 @@ serde = { version = "1.0", optional = true, features = ["derive"] }
 [features]
 default = ["derive", "std", "serde"]
 derive = ["bm-le-derive"]
-std = ["bm/std"]
+std = ["bm/std", "primitive-types/std"]
 
 [dev-dependencies]
 sha2 = "0.8"

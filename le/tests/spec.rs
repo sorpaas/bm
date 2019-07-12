@@ -1,6 +1,7 @@
 use sha2::{Digest, Sha256};
 use primitive_types::H256;
 use std::fmt::Debug;
+use std::str::FromStr;
 use typenum::*;
 
 use bm::InMemoryBackend;
@@ -95,7 +96,10 @@ fn spec() {
     t(Compact(MaxVec::<bool, U16>::from(vec![
         true, false, true, false, false, false, true, true, false, true,
         false, false, false, false, true, true])),
-               h(&chunk(&[0xc5, 0xc2])[..], &chunk(&[0x10])[..]));
+      h(&chunk(&[0xc5, 0xc2])[..], &chunk(&[0x10])[..]));
+    t(Compact(MaxVec::<bool, U4096>::from(vec![
+        true, false, true, true, true, false, false, false
+    ])), H256::from_str("f4de82badf841b3e8064de143959343ec7d4405e72d95bfc741748bb15721ff4").unwrap());
 }
 
 // test_data = [
