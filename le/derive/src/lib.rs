@@ -3,7 +3,7 @@
 extern crate proc_macro;
 
 use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, parse2, Generics, DeriveInput};
 use syn::spanned::Spanned;
 use deriving::{struct_fields, has_attribute};
 
@@ -13,6 +13,27 @@ use proc_macro::TokenStream;
 pub fn into_tree_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
+
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let mut impl_generics = parse2::<Generics>(quote! { #impl_generics }).expect("Parse generic failed");
+    impl_generics.params.push(parse2(quote! { DB }).expect("Parse generic failed"));
+
+    let where_fields = struct_fields(&input.data)
+	.expect("Not supported derive type")
+        .iter()
+        .map(|f| {
+	    let ty = &f.ty;
+
+            if has_attribute("bm", &f.attrs, "compact") {
+                quote_spanned! {
+		    f.span() => for<'a> bm_le::CompactRef<'a, #ty>: bm_le::IntoTree<DB>
+	        }
+            } else {
+	        quote_spanned! {
+		    f.span() => #ty: bm_le::IntoTree<DB>
+	        }
+            }
+	});
 
     let fields = struct_fields(&input.data)
         .expect("Not supported derive type")
@@ -32,7 +53,9 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
         });
 
     let expanded = quote! {
-        impl<DB> bm_le::IntoTree<DB> for #name where
+        impl #impl_generics bm_le::IntoTree<DB> for #name #ty_generics where
+            #where_clause
+            #(#where_fields),*,
             DB: bm_le::Backend<Intermediate=bm_le::Intermediate, End=bm_le::End>
         {
             fn into_tree(&self, db: &mut DB) -> Result<bm_le::ValueOf<DB>, bm_le::Error<DB::Error>> {
@@ -50,6 +73,27 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
 pub fn from_tree_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
+
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let mut impl_generics = parse2::<Generics>(quote! { #impl_generics }).expect("Parse generic failed");
+    impl_generics.params.push(parse2(quote! { DB }).expect("Parse generic failed"));
+
+    let where_fields = struct_fields(&input.data)
+	.expect("Not supported derive type")
+        .iter()
+        .map(|f| {
+	    let ty = &f.ty;
+
+            if has_attribute("bm", &f.attrs, "compact") {
+                quote_spanned! {
+		    f.span() => bm_le::Compact<#ty>: bm_le::FromTree<DB>
+	        }
+            } else {
+	        quote_spanned! {
+		    f.span() => #ty: bm_le::FromTree<DB>
+	        }
+            }
+	});
 
     let fields = struct_fields(&input.data)
         .expect("Not supported derive type")
@@ -85,7 +129,9 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
 
     let expanded =
         quote! {
-            impl<DB> bm_le::FromTree<DB> for #name where
+            impl #impl_generics bm_le::FromTree<DB> for #name #ty_generics where
+                #where_clause
+                #(#where_fields),*,
                 DB: bm_le::Backend<Intermediate=bm_le::Intermediate, End=bm_le::End>
             {
                 fn from_tree(

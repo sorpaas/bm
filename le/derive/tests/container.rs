@@ -1,17 +1,17 @@
 use bm_le::MaxVec;
 use bm_le_derive::{FromTree, IntoTree};
-use generic_array::GenericArray;
+use generic_array::{GenericArray, ArrayLength};
 
 pub trait Config {
-    fn d_len(&self) -> u64 { 4 }
-    fn e_max_len(&self) -> u64 { 5 }
+    type D: ArrayLength<u64>;
+    type E: ArrayLength<u64>;
 }
 
 #[derive(IntoTree, FromTree)]
-pub struct Container {
+pub struct Container<C: Config> {
     a: u32,
     b: u64,
     c: u128,
-    d: GenericArray<u64, typenum::U4>,
-    e: MaxVec<u64, typenum::U5>,
+    d: GenericArray<u64, C::D>,
+    e: MaxVec<u64, C::E>,
 }
