@@ -1,6 +1,6 @@
 [package]
 name = "bm-le-derive"
-version = "0.6.0"
+version = "0.6.1"
 description = "Derive for bm-le."
 authors = ["Wei Tang <hi@that.world>"]
 edition = "2018"
