@@ -6,6 +6,8 @@
 
 extern crate alloc;
 
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use typenum::U32;
 use generic_array::GenericArray;
 use primitive_types::H256;
@@ -85,6 +87,7 @@ pub struct CompactRef<'a, T>(pub &'a T);
 /// Indicate that the current value should be serialized and
 /// deserialized in Compact format. Value form.
 #[derive(Debug, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Compact<T>(pub T);
 
 /// Calculate a ssz merkle tree root, dismissing the tree.

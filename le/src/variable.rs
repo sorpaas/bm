@@ -2,13 +2,16 @@ use typenum::Unsigned;
 use bm::{Error, ValueOf, Backend};
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use crate::{ElementalVariableVecRef, ElementalVariableVec, Intermediate, End,
             IntoTree, IntoCompactListTree, IntoCompositeListTree,
             FromTree, FromCompactListTree, FromCompositeListTree,
             Compact, CompactRef};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
 /// Vec value with maximum length.
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MaxVec<T, ML>(pub Vec<T>, PhantomData<ML>);
 
 impl<T, ML> Deref for MaxVec<T, ML> {
