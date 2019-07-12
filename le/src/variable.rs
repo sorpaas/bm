@@ -3,7 +3,7 @@ use bm::{Error, ValueOf, Backend};
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 #[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::{ElementalVariableVecRef, ElementalVariableVec, Intermediate, End,
             IntoTree, IntoCompactListTree, IntoCompositeListTree,
             FromTree, FromCompactListTree, FromCompositeListTree,
@@ -12,6 +12,8 @@ use crate::{ElementalVariableVecRef, ElementalVariableVec, Intermediate, End,
 /// Vec value with maximum length.
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(from = "Vec<T>", into = "Vec<T>"))]
+#[cfg_attr(feature = "serde", serde(bound = "T: Clone + Serialize + DeserializeOwned + 'static, ML: Clone"))]
 pub struct MaxVec<T, ML>(pub Vec<T>, PhantomData<ML>);
 
 impl<T, ML> Deref for MaxVec<T, ML> {
@@ -37,6 +39,12 @@ impl<T, ML> Default for MaxVec<T, ML> {
 impl<T, ML> From<Vec<T>> for MaxVec<T, ML> {
     fn from(vec: Vec<T>) -> Self {
         Self(vec, PhantomData)
+    }
+}
+
+impl<T, ML> Into<Vec<T>> for MaxVec<T, ML> {
+    fn into(self) -> Vec<T> {
+        self.0
     }
 }
 

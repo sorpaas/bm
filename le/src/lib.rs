@@ -88,7 +88,14 @@ pub struct CompactRef<'a, T>(pub &'a T);
 /// deserialized in Compact format. Value form.
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Compact<T>(pub T);
+
+impl<T> From<T> for Compact<T> {
+    fn from(t: T) -> Self {
+        Self(t)
+    }
+}
 
 /// Calculate a ssz merkle tree root, dismissing the tree.
 pub fn tree_root<D, T>(value: &T) -> H256 where
