@@ -181,7 +181,9 @@ impl<'a, DB> IntoCompactVectorTree<DB> for ElementalFixedVecRef<'a, bool> where
             bytes[i / 8] |= (self.0[i] as u8) << (i % 8);
         }
 
-        ElementalFixedVecRef(&bytes).into_compact_vector_tree(db, max_len)
+        ElementalFixedVecRef(&bytes).into_compact_vector_tree(db, max_len.map(|l| {
+            (l + 7) / 8
+        }))
     }
 }
 
