@@ -100,6 +100,8 @@ fn spec() {
     t(Compact(MaxVec::<bool, U4096>::from(vec![
         true, false, true, true, true, false, false, false
     ])), H256::from_str("f4de82badf841b3e8064de143959343ec7d4405e72d95bfc741748bb15721ff4").unwrap());
+
+    t(GenericArray::<H256, U0>::from_exact_iter(vec![]).unwrap(), H256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap());
 }
 
 // test_data = [
