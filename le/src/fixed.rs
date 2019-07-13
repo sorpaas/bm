@@ -1,5 +1,5 @@
 use bm::{Backend, ValueOf, Error};
-use primitive_types::H256;
+use primitive_types::{H256, H512};
 use generic_array::{GenericArray, ArrayLength};
 use crate::{ElementalFixedVecRef, ElementalFixedVec, IntoCompositeVectorTree,
             IntoCompactVectorTree, IntoTree, FromTree, FromCompositeVectorTree,
@@ -47,6 +47,23 @@ impl<DB> IntoTree<DB> for H256 where
 }
 
 impl<DB> FromTree<DB> for H256 where
+    DB: Backend<Intermediate=Intermediate, End=End>
+{
+    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+        let value = ElementalFixedVec::<u8>::from_compact_vector_tree(root, db, 32, None)?;
+        Ok(Self::from_slice(value.0.as_ref()))
+    }
+}
+
+impl<DB> IntoTree<DB> for H512 where
+    DB: Backend<Intermediate=Intermediate, End=End>
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        ElementalFixedVecRef(&self.0.as_ref()).into_compact_vector_tree(db, None)
+    }
+}
+
+impl<DB> FromTree<DB> for H512 where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
     fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
