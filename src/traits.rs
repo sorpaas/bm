@@ -114,7 +114,8 @@ pub trait Backend {
 
     /// Get the intermediate value of given left and right child.
     fn intermediate_of(&self, left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self>;
-    /// Get or create the empty value at given depth-to-bottom.
+    /// Get or create the empty value at given depth-to-bottom for
+    /// balanced list / vectors.
     fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self>, Self::Error>;
     /// Get an internal item by key.
     fn get(&self, key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error>;

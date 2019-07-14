@@ -1,4 +1,4 @@
-use bm::{Backend, ValueOf, Error};
+use bm::{Backend, ValueOf, Error, Value};
 use primitive_types::{H256, H512};
 use generic_array::{GenericArray, ArrayLength};
 use crate::{ElementalFixedVecRef, ElementalFixedVec, IntoCompositeVectorTree,
@@ -122,5 +122,25 @@ impl<DB, T, L: ArrayLength<T>> FromTree<DB> for GenericArray<T, L> where
         let value = ElementalFixedVec::<T>::from_composite_vector_tree(root, db, L::to_usize(), None)?;
         Ok(GenericArray::from_exact_iter(value.0)
            .expect("Fixed vec must build vector with L::as_usize; qed"))
+    }
+}
+
+impl<DB> FromTree<DB> for () where
+    DB: Backend<Intermediate=Intermediate, End=End>
+{
+    fn from_tree(root: &ValueOf<DB>, _db: &DB) -> Result<Self, Error<DB::Error>> {
+        if root == &Value::End(Default::default()) {
+            Ok(())
+        } else {
+            Err(Error::CorruptedDatabase)
+        }
+    }
+}
+
+impl<DB> IntoTree<DB> for () where
+    DB: Backend<Intermediate=Intermediate, End=End>
+{
+    fn into_tree(&self, _db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        Ok(Value::End(Default::default()))
     }
 }
