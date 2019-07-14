@@ -90,11 +90,6 @@ impl<DB> IntoTree<DB> for ValueOf<DB> where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
     fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
-        match self {
-            Value::End(_) => (),
-            Value::Intermediate(intermediate) => { db.get(intermediate)?; },
-        }
-
         Ok(self.clone())
     }
 }
@@ -103,11 +98,6 @@ impl<DB> FromTree<DB> for ValueOf<DB> where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
     fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
-        match root {
-            Value::End(_) => (),
-            Value::Intermediate(intermediate) => { db.get(intermediate)?; },
-        }
-
         Ok(root.clone())
     }
 }
