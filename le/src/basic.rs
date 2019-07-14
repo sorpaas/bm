@@ -2,6 +2,7 @@ use bm::{Value, Backend, ValueOf, Error, Index, DanglingRaw, Leak};
 use primitive_types::U256;
 
 use crate::{IntoTree, FromTree, End, Intermediate};
+use crate::utils::{mix_in_type, decode_with_type};
 
 impl<DB> IntoTree<DB> for bool where
     DB: Backend<Intermediate=Intermediate, End=End>,
@@ -95,5 +96,48 @@ impl<DB> IntoTree<DB> for ValueOf<DB> where
         }
 
         Ok(self.clone())
+    }
+}
+
+impl<DB> FromTree<DB> for ValueOf<DB> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+{
+    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+        match root {
+            Value::End(_) => (),
+            Value::Intermediate(intermediate) => { db.get(intermediate)?; },
+        }
+
+        Ok(root.clone())
+    }
+}
+
+impl<T, DB> FromTree<DB> for Option<T> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    T: FromTree<DB>,
+{
+    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+        decode_with_type(root, db, |inner, db, ty| {
+            match ty {
+                0 => {
+                    <()>::from_tree(inner, db)?;
+                    Ok(None)
+                },
+                1 => Ok(Some(T::from_tree(inner, db)?)),
+                _ => Err(Error::CorruptedDatabase),
+            }
+        })
+    }
+}
+
+impl<T, DB> IntoTree<DB> for Option<T> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    T: IntoTree<DB>,
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        match self {
+            None => mix_in_type(&(), db, 0),
+            Some(value) => mix_in_type(value, db, 1),
+        }
     }
 }

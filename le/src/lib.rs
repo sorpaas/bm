@@ -14,13 +14,14 @@ use primitive_types::H256;
 use digest::Digest;
 
 pub use bm::{Backend, Error, ValueOf, Value, Vector, DanglingVector, List, Leak,
-             NoopBackend, InMemoryBackend, utils};
+             NoopBackend, InMemoryBackend};
 
 mod basic;
 mod elemental_fixed;
 mod elemental_variable;
 mod fixed;
 mod variable;
+pub mod utils;
 
 pub use elemental_fixed::{ElementalFixedVec, ElementalFixedVecRef,
                           IntoCompactVectorTree, FromCompactVectorTree,

@@ -1,10 +1,11 @@
-use bm::{Error, ValueOf, Value, Backend, Index, DanglingRaw, Leak};
+use bm::{Error, ValueOf, Backend};
 use primitive_types::U256;
 use alloc::vec::Vec;
 
 use crate::{ElementalFixedVec, FromCompactVectorTree, FromCompositeVectorTree,
-            ElementalFixedVecRef, End, Intermediate, IntoTree, IntoCompactVectorTree,
+            ElementalFixedVecRef, End, Intermediate, IntoCompactVectorTree,
             IntoCompositeVectorTree};
+use crate::utils::{mix_in_length, decode_with_length};
 
 /// Traits for list converting into a tree structure.
 pub trait IntoCompositeListTree<DB: Backend<Intermediate=Intermediate, End=End>> {
@@ -69,12 +70,8 @@ macro_rules! impl_packed {
             ) -> Result<ValueOf<DB>, Error<DB::Error>> {
                 let len = self.0.len();
 
-                let left = ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, max_len)?;
-                let right = U256::from(len).into_tree(db)?;
-                let key = db.intermediate_of(&left, &right);
-
-                db.insert(key.clone(), (left, right))?;
-                Ok(Value::Intermediate(key))
+                mix_in_length(&ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, max_len)?,
+                              db, len)
             }
         }
     }
@@ -99,12 +96,8 @@ impl<'a, DB, T> IntoCompositeListTree<DB> for ElementalVariableVecRef<'a, T> whe
     ) -> Result<ValueOf<DB>, Error<DB::Error>> {
         let len = self.0.len();
 
-        let left = ElementalFixedVecRef(&self.0).into_composite_vector_tree(db, max_len)?;
-        let right = U256::from(len).into_tree(db)?;
-        let key = db.intermediate_of(&left, &right);
-
-        db.insert(key.clone(), (left, right))?;
-        Ok(Value::Intermediate(key))
+        mix_in_length(&ElementalFixedVecRef(&self.0).into_composite_vector_tree(db, max_len)?,
+                      db, len)
     }
 }
 
@@ -117,18 +110,7 @@ fn from_list_tree<T, F, DB>(
     DB: Backend<Intermediate=Intermediate, End=End>,
     F: FnOnce(&ValueOf<DB>, &DB, usize, Option<usize>) -> Result<ElementalFixedVec<T>, Error<DB::Error>>
 {
-    let raw = DanglingRaw::<DB>::from_leaked(root.clone());
-
-    let vector_root = raw.get(db, Index::root().left())?.ok_or(Error::CorruptedDatabase)?;
-    let len_raw = raw.get(db, Index::root().right())?.ok_or(Error::CorruptedDatabase)?
-        .end().ok_or(Error::CorruptedDatabase)?;
-
-    let len_big = U256::from_little_endian(&len_raw.0);
-    let len = if len_big > U256::from(usize::max_value()) {
-        return Err(Error::CorruptedDatabase)
-    } else {
-        len_big.as_usize()
-    };
+    let (vector_root, len) = decode_with_length::<ValueOf<DB>, _>(root, db)?;
 
     let vector = f(
         &vector_root, db, len, max_len
@@ -200,7 +182,7 @@ impl<DB, T> IntoCompositeListTree<DB> for ElementalVariableVec<T> where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::FromTree;
+    use crate::{IntoTree, FromTree};
 
     use bm::InMemoryBackend;
     use sha2::Sha256;
