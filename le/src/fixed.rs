@@ -1,4 +1,5 @@
-use bm::{Backend, ValueOf, Error, Value};
+use bm::{Backend, ValueOf, Error, Value, DanglingVector, Leak};
+use bm::utils::vector_tree;
 use primitive_types::{H256, H512};
 use generic_array::{GenericArray, ArrayLength};
 use crate::{ElementalFixedVecRef, ElementalFixedVec, IntoCompositeVectorTree,
@@ -144,3 +145,47 @@ impl<DB> IntoTree<DB> for () where
         Ok(Value::End(Default::default()))
     }
 }
+
+macro_rules! impl_tuple {
+    ($len:expr, $($i:ident => $t:ident),+) => {
+        impl<DB, $($t: FromTree<DB>),+> FromTree<DB> for ($($t),+) where
+            DB: Backend<Intermediate=Intermediate, End=End>
+        {
+            fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+                let vector = DanglingVector::<DB>::from_leaked(
+                    (root.clone(), $len, None)
+                );
+                let mut i = 0;
+                Ok(($({
+                    let value = <$t>::from_tree(&vector.get(db, i)?, db)?;
+                    #[allow(unused_assignments)] {
+                        i += 1;
+                    }
+                    value
+                }),+))
+            }
+        }
+
+        impl<DB, $($t: IntoTree<DB>),+> IntoTree<DB> for ($($t),+) where
+            DB: Backend<Intermediate=Intermediate, End=End>
+        {
+            fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+                let ($($i),+) = self;
+                let mut vector = Vec::new();
+                $({
+                    vector.push($i.into_tree(db)?);
+                })+
+                vector_tree(&vector, db, None)
+            }
+        }
+    }
+}
+
+impl_tuple!(2, a => A, b => B);
+impl_tuple!(3, a => A, b => B, c => C);
+impl_tuple!(4, a => A, b => B, c => C, d => D);
+impl_tuple!(5, a => A, b => B, c => C, d => D, e => E);
+impl_tuple!(6, a => A, b => B, c => C, d => D, e => E, f => F);
+impl_tuple!(7, a => A, b => B, c => C, d => D, e => E, f => F, g => G);
+impl_tuple!(8, a => A, b => B, c => C, d => D, e => E, f => F, g => G, h => H);
+impl_tuple!(9, a => A, b => B, c => C, d => D, e => E, f => F, g => G, h => H, i => I);
