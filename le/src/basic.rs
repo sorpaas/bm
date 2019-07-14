@@ -89,7 +89,7 @@ impl<DB> FromTree<DB> for U256 where
 impl<DB> IntoTree<DB> for ValueOf<DB> where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+    fn into_tree(&self, _db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
         Ok(self.clone())
     }
 }
@@ -97,7 +97,7 @@ impl<DB> IntoTree<DB> for ValueOf<DB> where
 impl<DB> FromTree<DB> for ValueOf<DB> where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, _db: &DB) -> Result<Self, Error<DB::Error>> {
         Ok(root.clone())
     }
 }
