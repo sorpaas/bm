@@ -84,3 +84,16 @@ impl<DB> FromTree<DB> for U256 where
         }
     }
 }
+
+impl<DB> IntoTree<DB> for ValueOf<DB> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        match self {
+            Value::End(_) => (),
+            Value::Intermediate(intermediate) => { db.get(intermediate)?; },
+        }
+
+        Ok(self.clone())
+    }
+}
