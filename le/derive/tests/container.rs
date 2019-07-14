@@ -15,3 +15,13 @@ pub struct Container<C: Config> {
     d: GenericArray<u64, C::D>,
     e: MaxVec<u64, C::E>,
 }
+
+#[derive(IntoTree, FromTree)]
+pub enum EnumTest {
+    A(u128),
+    B {
+        c: u64,
+        d: u32,
+    },
+    E,
+}

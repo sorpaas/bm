@@ -148,7 +148,7 @@ impl<DB> IntoTree<DB> for () where
 
 macro_rules! impl_tuple {
     ($len:expr, $($i:ident => $t:ident),+) => {
-        impl<DB, $($t: FromTree<DB>),+> FromTree<DB> for ($($t),+) where
+        impl<DB, $($t: FromTree<DB>),+> FromTree<DB> for ($($t,)+) where
             DB: Backend<Intermediate=Intermediate, End=End>
         {
             fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {

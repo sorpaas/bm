@@ -37,6 +37,16 @@ struct ConfigContainer {
     f: MaxVec<u64, typenum::U5>,
 }
 
+#[derive(IntoTree, FromTree, Debug, Eq, PartialEq)]
+pub enum EnumTest {
+    A(u128),
+    B {
+        c: u64,
+        d: u32,
+    },
+    E,
+}
+
 #[test]
 fn test_basic() {
     assert_eq!(tree_root::<Sha256, _>(&BasicContainer { a: 1, b: 2, c: 3 }),
@@ -58,4 +68,22 @@ fn test_config() {
     let actual = container.into_tree(&mut db).unwrap();
     let decoded = ConfigContainer::from_tree(&actual, &db).unwrap();
     assert_eq!(container, decoded);
+}
+
+#[test]
+fn test_enum() {
+    let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
+    let e1 = EnumTest::A(123);
+    let e2 = EnumTest::B { c: 1, d: 2 };
+    let e3 = EnumTest::E;
+
+    let a1 = e1.into_tree(&mut db).unwrap();
+    let d1 = EnumTest::from_tree(&a1, &db).unwrap();
+    let a2 = e2.into_tree(&mut db).unwrap();
+    let d2 = EnumTest::from_tree(&a2, &db).unwrap();
+    let a3 = e3.into_tree(&mut db).unwrap();
+    let d3 = EnumTest::from_tree(&a3, &db).unwrap();
+    assert_eq!(d1, e1);
+    assert_eq!(d2, e2);
+    assert_eq!(d3, e3);
 }
