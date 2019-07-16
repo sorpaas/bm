@@ -2,6 +2,9 @@ use bm::{Backend, ValueOf, Error, Value, DanglingVector, Leak};
 use bm::utils::vector_tree;
 use primitive_types::{H256, H512};
 use generic_array::{GenericArray, ArrayLength};
+use vecarray::VecArray;
+use typenum::Unsigned;
+use core::convert::TryFrom;
 use crate::{ElementalFixedVecRef, ElementalFixedVec, IntoCompositeVectorTree,
             IntoCompactVectorTree, IntoTree, FromTree, FromCompositeVectorTree,
             FromCompactVectorTree, Intermediate, End, Compact, CompactRef};
@@ -36,6 +39,35 @@ impl<T, L: ArrayLength<T>, DB> FromTree<DB> for Compact<GenericArray<T, L>> wher
             ret[i] = v;
         }
         Ok(Self(ret))
+    }
+}
+
+impl<'a, T, L: Unsigned, DB> IntoTree<DB> for CompactRef<'a, VecArray<T, L>> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    for<'b> ElementalFixedVecRef<'b, T>: IntoCompactVectorTree<DB>,
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, None)
+    }
+}
+
+impl<T, L: Unsigned, DB> IntoTree<DB> for Compact<VecArray<T, L>> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    for<'a> ElementalFixedVecRef<'a, T>: IntoCompactVectorTree<DB>,
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, None)
+    }
+}
+
+impl<T, L: Unsigned, DB> FromTree<DB> for Compact<VecArray<T, L>> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    T: Default,
+    ElementalFixedVec<T>: FromCompactVectorTree<DB>,
+{
+    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+        let value = ElementalFixedVec::<T>::from_compact_vector_tree(root, db, L::to_usize(), None)?;
+        Ok(Self(VecArray::try_from(value.0).map_err(|_| Error::CorruptedDatabase)?))
     }
 }
 
@@ -123,6 +155,25 @@ impl<DB, T, L: ArrayLength<T>> FromTree<DB> for GenericArray<T, L> where
         let value = ElementalFixedVec::<T>::from_composite_vector_tree(root, db, L::to_usize(), None)?;
         Ok(GenericArray::from_exact_iter(value.0)
            .expect("Fixed vec must build vector with L::as_usize; qed"))
+    }
+}
+
+impl<DB, T, L: Unsigned> IntoTree<DB> for VecArray<T, L> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    for<'a> ElementalFixedVecRef<'a, T>: IntoCompositeVectorTree<DB>,
+{
+    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+        ElementalFixedVecRef(&self[..]).into_composite_vector_tree(db, None)
+    }
+}
+
+impl<DB, T, L: Unsigned> FromTree<DB> for VecArray<T, L> where
+    DB: Backend<Intermediate=Intermediate, End=End>,
+    for<'a> ElementalFixedVec<T>: FromCompositeVectorTree<DB>,
+{
+    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+        let value = ElementalFixedVec::<T>::from_composite_vector_tree(root, db, L::to_usize(), None)?;
+        Ok(VecArray::try_from(value.0).map_err(|_| Error::CorruptedDatabase)?)
     }
 }
 
