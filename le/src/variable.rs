@@ -30,6 +30,12 @@ impl<T, ML> DerefMut for MaxVec<T, ML> {
     }
 }
 
+impl<T, ML> AsRef<[T]> for MaxVec<T, ML> {
+    fn as_ref(&self) -> &[T] {
+        &self.0
+    }
+}
+
 impl<T, ML> Default for MaxVec<T, ML> {
     fn default() -> Self {
         Self(Vec::new(), PhantomData)
