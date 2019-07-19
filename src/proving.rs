@@ -8,7 +8,7 @@ pub struct ProvingBackend<'a, DB: Backend> where
     IntermediateOf<DB>: Eq + Hash,
 {
     db: &'a mut DB,
-    proofs: Mutex<HashMap<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)>>,
+    proofs: HashMap<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)>,
     inserts: HashSet<IntermediateOf<Self>>,
 }
 
@@ -19,15 +19,15 @@ impl<'a, DB: Backend> ProvingBackend<'a, DB> where
     pub fn new(db: &'a mut DB) -> Self {
         Self {
             db,
-            proofs: Mutex::new(Default::default()),
+            proofs: Default::default(),
             inserts: Default::default(),
         }
     }
 
     /// Reset the proving database and get all the proofs.
     pub fn reset(&mut self) -> HashMap<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)> {
-        let proofs = self.proofs.lock().expect("Lock is poisoned").clone();
-        self.proofs = Mutex::new(Default::default());
+        let proofs = self.proofs.clone();
+        self.proofs = Default::default();
         self.inserts = Default::default();
         proofs
     }
@@ -40,8 +40,8 @@ impl<'a, DB: Backend> Backend for ProvingBackend<'a, DB> where
     type End = DB::End;
     type Error = DB::Error;
 
-    fn intermediate_of(&self, left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
-        self.db.intermediate_of(left, right)
+    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
+        DB::intermediate_of(left, right)
     }
 
     fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self>, Self::Error> {
@@ -49,12 +49,12 @@ impl<'a, DB: Backend> Backend for ProvingBackend<'a, DB> where
     }
 
     fn get(
-        &self,
+        &mut self,
         key: &IntermediateOf<Self>
     ) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error> {
         let value = self.db.get(key)?;
         if !self.inserts.contains(key) {
-            self.proofs.lock().expect("Lock is poisoned").insert(key.clone(), value.clone());
+            self.proofs.insert(key.clone(), value.clone());
         }
         Ok(value)
     }

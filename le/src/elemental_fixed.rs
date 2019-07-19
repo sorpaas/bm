@@ -34,7 +34,7 @@ pub trait FromCompositeVectorTree<DB: Backend<Intermediate=Intermediate, End=End
     /// given database, with given length and maximum length.
     fn from_composite_vector_tree(
         root: &ValueOf<DB>,
-        db: &DB,
+        db: &mut DB,
         len: usize,
         max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>>;
@@ -46,7 +46,7 @@ pub trait FromCompactVectorTree<DB: Backend<Intermediate=Intermediate, End=End>>
     /// given database, with given length and maximum length.
     fn from_compact_vector_tree(
         root: &ValueOf<DB>,
-        db: &DB,
+        db: &mut DB,
         len: usize,
         max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>>;
@@ -99,7 +99,7 @@ macro_rules! impl_builtin_fixed_uint_vector {
         {
             fn from_compact_vector_tree(
                 root: &ValueOf<DB>,
-                db: &DB,
+                db: &mut DB,
                 len: usize,
                 max_len: Option<usize>
             ) -> Result<Self, Error<DB::Error>> {
@@ -148,7 +148,7 @@ impl<DB> FromCompactVectorTree<DB> for ElementalFixedVec<U256> where
 {
     fn from_compact_vector_tree(
         root: &ValueOf<DB>,
-        db: &DB,
+        db: &mut DB,
         len: usize,
         max_len: Option<usize>
     ) -> Result<Self, Error<DB::Error>> {
@@ -192,7 +192,7 @@ impl<DB> FromCompactVectorTree<DB> for ElementalFixedVec<bool> where
 {
     fn from_compact_vector_tree(
         root: &ValueOf<DB>,
-        db: &DB,
+        db: &mut DB,
         len: usize,
         max_len: Option<usize>
     ) -> Result<Self, Error<DB::Error>> {
@@ -231,13 +231,13 @@ impl<'a, DB, T> IntoCompositeVectorTree<DB> for ElementalFixedVecRef<'a, T> wher
 
 fn from_composite_vector_tree<T, F, DB>(
     root: &ValueOf<DB>,
-    db: &DB,
+    db: &mut DB,
     len: usize,
     max_len: Option<usize>,
     f: F
 ) -> Result<ElementalFixedVec<T>, Error<DB::Error>> where
     DB: Backend<Intermediate=Intermediate, End=End>,
-    F: Fn(&ValueOf<DB>, &DB) -> Result<T, Error<DB::Error>>
+    F: Fn(&ValueOf<DB>, &mut DB) -> Result<T, Error<DB::Error>>
 {
     let vector = DanglingVector::<DB>::from_leaked(
         (root.clone(), len, max_len)
@@ -257,7 +257,7 @@ impl<DB, T: FromTree<DB>> FromCompositeVectorTree<DB> for ElementalFixedVec<T> w
 {
     fn from_composite_vector_tree(
         root: &ValueOf<DB>,
-        db: &DB,
+        db: &mut DB,
         len: usize,
         max_len: Option<usize>
     ) -> Result<Self, Error<DB::Error>> {

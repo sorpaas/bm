@@ -29,7 +29,7 @@ fn t<T>(value: T, expected: H256) where
     let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
     let actual = value.into_tree(&mut db).unwrap();
     assert_eq!(H256::from_slice(actual.as_ref()), expected);
-    let decoded = T::from_tree(&actual, &db).unwrap();
+    let decoded = T::from_tree(&actual, &mut db).unwrap();
     assert_eq!(value, decoded);
 }
 

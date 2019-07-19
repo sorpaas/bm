@@ -61,7 +61,7 @@ impl<DB, T, ML: Unsigned> FromTree<DB> for MaxVec<T, ML> where
     for<'a> ElementalVariableVec<T>: FromCompositeListTree<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
         let value = ElementalVariableVec::<T>::from_composite_list_tree(
             root, db, Some(ML::to_usize())
         )?;
@@ -91,7 +91,7 @@ impl<DB, T, ML: Unsigned> FromTree<DB> for Compact<MaxVec<T, ML>> where
     for<'a> ElementalVariableVec<T>: FromCompactListTree<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
         let value = ElementalVariableVec::<T>::from_compact_list_tree(
             root, db, Some(ML::to_usize())
         )?;
@@ -121,7 +121,7 @@ impl<DB, T> FromTree<DB> for Vec<T> where
     ElementalVariableVec<T>: FromCompositeListTree<DB>,
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
         ElementalVariableVec::from_composite_list_tree(root, db, None).map(|ret| ret.0)
     }
 }

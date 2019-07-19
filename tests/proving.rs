@@ -49,14 +49,14 @@ fn basic_proving_vec() {
     }
     proving.reset();
 
-    vec.get(&proving, 5usize.into()).unwrap();
-    vec.get(&proving, 7usize.into()).unwrap();
+    vec.get(&mut proving, 5usize.into()).unwrap();
+    vec.get(&mut proving, 7usize.into()).unwrap();
     let vec_hash = vec.deconstruct(&mut proving).unwrap();
     let proofs = proving.reset();
 
     let mut proved = InMemory::new_with_inherited_empty();
     proved.populate(proofs);
     let proved_vec = OwnedList::reconstruct(vec_hash, &mut proved, None).unwrap();
-    assert_eq!(proved_vec.get(&proved, 5usize.into()).unwrap(), Value::End(5usize.into()));
-    assert_eq!(proved_vec.get(&proved, 7usize.into()).unwrap(), Value::End(7usize.into()));
+    assert_eq!(proved_vec.get(&mut proved, 5usize.into()).unwrap(), Value::End(5usize.into()));
+    assert_eq!(proved_vec.get(&mut proved, 7usize.into()).unwrap(), Value::End(7usize.into()));
 }

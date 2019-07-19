@@ -66,7 +66,7 @@ fn test_config() {
         f: MaxVec::from(vec![9, 10]),
     };
     let actual = container.into_tree(&mut db).unwrap();
-    let decoded = ConfigContainer::from_tree(&actual, &db).unwrap();
+    let decoded = ConfigContainer::from_tree(&actual, &mut db).unwrap();
     assert_eq!(container, decoded);
 }
 
@@ -78,11 +78,11 @@ fn test_enum() {
     let e3 = EnumTest::E;
 
     let a1 = e1.into_tree(&mut db).unwrap();
-    let d1 = EnumTest::from_tree(&a1, &db).unwrap();
+    let d1 = EnumTest::from_tree(&a1, &mut db).unwrap();
     let a2 = e2.into_tree(&mut db).unwrap();
-    let d2 = EnumTest::from_tree(&a2, &db).unwrap();
+    let d2 = EnumTest::from_tree(&a2, &mut db).unwrap();
     let a3 = e3.into_tree(&mut db).unwrap();
-    let d3 = EnumTest::from_tree(&a3, &db).unwrap();
+    let d3 = EnumTest::from_tree(&a3, &mut db).unwrap();
     assert_eq!(d1, e1);
     assert_eq!(d2, e2);
     assert_eq!(d3, e3);

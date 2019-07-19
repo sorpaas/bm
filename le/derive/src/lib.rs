@@ -294,7 +294,7 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
             {
                 fn from_tree(
                     root: &bm_le::ValueOf<DB>,
-                    db: &DB,
+                    db: &mut DB,
                 ) -> Result<Self, bm_le::Error<DB::Error>> {
                     #inner
                 }

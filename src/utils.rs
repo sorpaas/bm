@@ -27,7 +27,7 @@ pub fn vector_tree<DB: Backend>(values: &[ValueOf<DB>], db: &mut DB, max_len: Op
             let left = current.pop_front().unwrap_or(db.empty_at(depth_to_bottom)?);
             let right = current.pop_front().unwrap_or(db.empty_at(depth_to_bottom)?);
 
-            let key = db.intermediate_of(&left, &right);
+            let key = DB::intermediate_of(&left, &right);
 
             db.insert(key.clone(), (left, right))?;
             next.push_back(Value::Intermediate(key));

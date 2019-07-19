@@ -49,7 +49,7 @@ impl<R: RootStatus, DB: Backend> Tree for Raw<R, DB> {
 
 impl<R: RootStatus, DB: Backend> Raw<R, DB> {
     /// Return a reference to a subtree.
-    pub fn subtree(&self, db: &DB, index: Index) -> Result<DanglingRaw<DB>, Error<DB::Error>> {
+    pub fn subtree(&self, db: &mut DB, index: Index) -> Result<DanglingRaw<DB>, Error<DB::Error>> {
         let subroot = self.get(db, index)?.ok_or(Error::CorruptedDatabase)?;
         Ok(Raw {
             root: subroot,
@@ -58,7 +58,7 @@ impl<R: RootStatus, DB: Backend> Raw<R, DB> {
     }
 
     /// Get value from the tree via generalized merkle index.
-    pub fn get(&self, db: &DB, index: Index) -> Result<Option<ValueOf<DB>>, Error<DB::Error>> {
+    pub fn get(&self, db: &mut DB, index: Index) -> Result<Option<ValueOf<DB>>, Error<DB::Error>> {
         match index.route() {
             IndexRoute::Root => Ok(Some(self.root.clone())),
             IndexRoute::Select(selections) => {
@@ -166,7 +166,7 @@ impl<R: RootStatus, DB: Backend> Raw<R, DB> {
                 IndexSelection::Right => { value.1 = update.clone(); }
             }
 
-            let intermediate = db.intermediate_of(&value.0, &value.1);
+            let intermediate = DB::intermediate_of(&value.0, &value.1);
 
             db.insert(intermediate.clone(), value)?;
             update = Value::Intermediate(intermediate);
@@ -276,9 +276,9 @@ mod tests {
         let mut list = Raw::<Owned, InMemory>::default();
 
         list.set(&mut db, Index::from_one(4).unwrap(), Value::End(vec![2])).unwrap();
-        assert_eq!(list.get(&db, Index::from_one(4).unwrap()).unwrap(), Some(Value::End(vec![2])));
+        assert_eq!(list.get(&mut db, Index::from_one(4).unwrap()).unwrap(), Some(Value::End(vec![2])));
         list.set(&mut db, Index::from_one(4).unwrap(), Value::End(vec![3])).unwrap();
-        assert_eq!(list.get(&db, Index::from_one(4).unwrap()).unwrap(), Some(Value::End(vec![3])));
+        assert_eq!(list.get(&mut db, Index::from_one(4).unwrap()).unwrap(), Some(Value::End(vec![3])));
     }
 
     #[test]

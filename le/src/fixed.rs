@@ -29,7 +29,7 @@ impl<T, L: ArrayLength<T>, DB> FromTree<DB> for Compact<GenericArray<T, L>> wher
     T: Default,
     ElementalFixedVec<T>: FromCompactVectorTree<DB>,
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
         let value = ElementalFixedVec::<T>::from_compact_vector_tree(root, db, L::to_usize(), None)?;
         let mut ret = GenericArray::default();
         for (i, v) in value.0.into_iter().enumerate() {
@@ -50,7 +50,7 @@ impl<DB> IntoTree<DB> for H256 where
 impl<DB> FromTree<DB> for H256 where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
         let value = ElementalFixedVec::<u8>::from_compact_vector_tree(root, db, 32, None)?;
         Ok(Self::from_slice(value.0.as_ref()))
     }
@@ -67,7 +67,7 @@ impl<DB> IntoTree<DB> for H512 where
 impl<DB> FromTree<DB> for H512 where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
         let value = ElementalFixedVec::<u8>::from_compact_vector_tree(root, db, 32, None)?;
         Ok(Self::from_slice(value.0.as_ref()))
     }
@@ -89,7 +89,7 @@ macro_rules! impl_fixed_array {
             T: Default + Copy,
             for<'a> ElementalFixedVec<T>: FromCompositeVectorTree<DB>,
         {
-            fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+            fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
                 let value = ElementalFixedVec::<T>::from_composite_vector_tree(root, db, $n, None)?;
                 let mut ret = [T::default(); $n];
                 for (i, v) in value.0.into_iter().enumerate() {
@@ -119,7 +119,7 @@ impl<DB, T, L: ArrayLength<T>> FromTree<DB> for GenericArray<T, L> where
     DB: Backend<Intermediate=Intermediate, End=End>,
     for<'a> ElementalFixedVec<T>: FromCompositeVectorTree<DB>,
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
         let value = ElementalFixedVec::<T>::from_composite_vector_tree(root, db, L::to_usize(), None)?;
         Ok(GenericArray::from_exact_iter(value.0)
            .expect("Fixed vec must build vector with L::as_usize; qed"))
@@ -129,7 +129,7 @@ impl<DB, T, L: ArrayLength<T>> FromTree<DB> for GenericArray<T, L> where
 impl<DB> FromTree<DB> for () where
     DB: Backend<Intermediate=Intermediate, End=End>
 {
-    fn from_tree(root: &ValueOf<DB>, _db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, _db: &mut DB) -> Result<Self, Error<DB::Error>> {
         if root == &Value::End(Default::default()) {
             Ok(())
         } else {
@@ -151,7 +151,7 @@ macro_rules! impl_tuple {
         impl<DB, $($t: FromTree<DB>),+> FromTree<DB> for ($($t,)+) where
             DB: Backend<Intermediate=Intermediate, End=End>
         {
-            fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+            fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
                 let vector = DanglingVector::<DB>::from_leaked(
                     (root.clone(), $len, None)
                 );

@@ -50,7 +50,7 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Get value at index.
-    pub fn get(&self, db: &DB, index: usize) -> Result<T, Error<DB::Error>> {
+    pub fn get(&self, db: &mut DB, index: usize) -> Result<T, Error<DB::Error>> {
         let mut ret = GenericArray::<u8, V>::default();
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
@@ -228,7 +228,7 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Get value at index.
-    pub fn get(&self, db: &DB, index: usize) -> Result<T, Error<DB::Error>> {
+    pub fn get(&self, db: &mut DB, index: usize) -> Result<T, Error<DB::Error>> {
         self.0.with(db, |tuple, db| tuple.get(db, index))
     }
 
@@ -369,7 +369,7 @@ mod tests {
         }
 
         for i in 0..100 {
-            let value = tuple.get(&db, i).unwrap();
+            let value = tuple.get(&mut db, i).unwrap();
             assert_eq!(value.as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
@@ -397,7 +397,7 @@ mod tests {
         }
 
         for i in 0..100 {
-            let value = vec.get(&db, i).unwrap();
+            let value = vec.get(&mut db, i).unwrap();
             assert_eq!(value.as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0,

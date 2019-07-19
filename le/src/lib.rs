@@ -77,7 +77,7 @@ pub trait IntoTree<DB: Backend<Intermediate=Intermediate, End=End>> {
 pub trait FromTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
     /// Convert this type from merkle tree, reading nodes from the
     /// given database.
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>>;
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>>;
 }
 
 /// Indicate that the current value should be serialized and

@@ -71,7 +71,7 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
     }
 
     /// Get value at index.
-    pub fn get(&self, db: &DB, index: usize) -> Result<ValueOf<DB>, Error<DB::Error>> {
+    pub fn get(&self, db: &mut DB, index: usize) -> Result<ValueOf<DB>, Error<DB::Error>> {
         if index >= self.len() {
             return Err(Error::AccessOverflowed)
         }

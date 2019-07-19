@@ -18,7 +18,7 @@ impl<DB> IntoTree<DB> for bool where
 impl<DB> FromTree<DB> for bool where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
         Ok(u8::from_tree(root, db)? != 0)
     }
 }
@@ -40,7 +40,7 @@ macro_rules! impl_builtin_uint {
         impl<DB> FromTree<DB> for $t where
             DB: Backend<Intermediate=Intermediate, End=End>,
         {
-            fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+            fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
                 let raw = DanglingRaw::from_leaked(root.clone());
 
                 match raw.get(db, Index::root())?.ok_or(Error::CorruptedDatabase)? {
@@ -74,7 +74,7 @@ impl<DB> IntoTree<DB> for U256 where
 impl<DB> FromTree<DB> for U256 where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
         let raw = DanglingRaw::from_leaked(root.clone());
 
         match raw.get(db, Index::root())?.ok_or(Error::CorruptedDatabase)? {
@@ -97,7 +97,7 @@ impl<DB> IntoTree<DB> for ValueOf<DB> where
 impl<DB> FromTree<DB> for ValueOf<DB> where
     DB: Backend<Intermediate=Intermediate, End=End>,
 {
-    fn from_tree(root: &ValueOf<DB>, _db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, _db: &mut DB) -> Result<Self, Error<DB::Error>> {
         Ok(root.clone())
     }
 }
@@ -106,7 +106,7 @@ impl<T, DB> FromTree<DB> for Option<T> where
     DB: Backend<Intermediate=Intermediate, End=End>,
     T: FromTree<DB>,
 {
-    fn from_tree(root: &ValueOf<DB>, db: &DB) -> Result<Self, Error<DB::Error>> {
+    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>> {
         decode_with_type(root, db, |inner, db, ty| {
             match ty {
                 0 => {

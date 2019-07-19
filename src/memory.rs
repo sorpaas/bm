@@ -38,7 +38,7 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> Backend for NoopBackend<D, V> 
     type End = V;
     type Error = NoopBackendError;
 
-    fn intermediate_of(&self, left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
+    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
         let mut digest = D::new();
         digest.input(&left.as_ref()[..]);
         digest.input(&right.as_ref()[..]);
@@ -52,7 +52,7 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> Backend for NoopBackend<D, V> 
                 let mut current = Value::End(Default::default());
                 for _ in 0..depth_to_bottom {
                     let value = (current.clone(), current);
-                    let key = self.intermediate_of(&value.0, &value.1);
+                    let key = Self::intermediate_of(&value.0, &value.1);
                     self.0.insert(key.clone(), (value, None));
                     current = Value::Intermediate(key);
                 }
@@ -61,7 +61,7 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> Backend for NoopBackend<D, V> 
         }
     }
 
-    fn get(&self, _key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error> {
+    fn get(&mut self, _key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error> {
         Err(NoopBackendError::NotSupported)
     }
 
@@ -150,7 +150,7 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> Backend for InMemoryBackend<D,
     type End = V;
     type Error = InMemoryBackendError;
 
-    fn intermediate_of(&self, left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
+    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
         let mut digest = D::new();
         digest.input(&left.as_ref()[..]);
         digest.input(&right.as_ref()[..]);
@@ -164,7 +164,7 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> Backend for InMemoryBackend<D,
                 let mut current = Value::End(Default::default());
                 for _ in 0..depth_to_bottom {
                     let value = (current.clone(), current);
-                    let key = self.intermediate_of(&value.0, &value.1);
+                    let key = Self::intermediate_of(&value.0, &value.1);
                     self.0.insert(key.clone(), (value, None));
                     current = Value::Intermediate(key);
                 }
@@ -173,7 +173,7 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> Backend for InMemoryBackend<D,
         }
     }
 
-    fn get(&self, key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error> {
+    fn get(&mut self, key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error> {
         self.0.get(key).map(|v| v.0.clone()).ok_or(InMemoryBackendError::FetchingKeyNotExist)
     }
 

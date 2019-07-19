@@ -16,7 +16,7 @@ impl<R: RootStatus, DB: Backend> List<R, DB> where
     EndOf<DB>: From<usize> + Into<usize>,
 {
     /// Get value at index.
-    pub fn get(&self, db: &DB, index: usize) -> Result<ValueOf<DB>, Error<DB::Error>> {
+    pub fn get(&self, db: &mut DB, index: usize) -> Result<ValueOf<DB>, Error<DB::Error>> {
         self.0.with(db, |tuple, db| tuple.get(db, index))
     }
 
@@ -36,12 +36,12 @@ impl<R: RootStatus, DB: Backend> List<R, DB> where
     }
 
     /// Deconstruct the vector into one single hash value, and leak only the hash value.
-    pub fn deconstruct(self, db: &DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+    pub fn deconstruct(self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
         self.0.deconstruct(db)
     }
 
     /// Reconstruct the vector from a single hash value.
-    pub fn reconstruct(root: ValueOf<DB>, db: &DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn reconstruct(root: ValueOf<DB>, db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::reconstruct(root, db, |tuple_raw, _db, len| {
             Ok(Vector::<Dangling, DB>::from_raw(tuple_raw, len, max_len))
         })?))
@@ -172,7 +172,7 @@ mod tests {
             vec.set(&mut db, i, Value::End(i.into())).unwrap();
         }
         for i in 0..100 {
-            assert_eq!(vec.get(&db, i).unwrap(), Value::End(i.into()));
+            assert_eq!(vec.get(&mut db, i).unwrap(), Value::End(i.into()));
         }
     }
 
@@ -190,7 +190,7 @@ mod tests {
         let vec = OwnedList::reconstruct(vec_hash, &mut db, None).unwrap();
         assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
-            assert_eq!(vec.get(&db, i).unwrap(), Value::End(i.into()));
+            assert_eq!(vec.get(&mut db, i).unwrap(), Value::End(i.into()));
         }
     }
 }

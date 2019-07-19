@@ -18,9 +18,9 @@ pub fn mix_in_type<T, DB>(value: &T, db: &mut DB, ty: usize) -> Result<ValueOf<D
 }
 
 /// Decode type.
-pub fn decode_with_type<DB, F, R>(root: &ValueOf<DB>, db: &DB, f: F) -> Result<R, Error<DB::Error>> where
+pub fn decode_with_type<DB, F, R>(root: &ValueOf<DB>, db: &mut DB, f: F) -> Result<R, Error<DB::Error>> where
     DB: Backend<Intermediate=Intermediate, End=End>,
-    F: FnOnce(&ValueOf<DB>, &DB, usize) -> Result<R, Error<DB::Error>>,
+    F: FnOnce(&ValueOf<DB>, &mut DB, usize) -> Result<R, Error<DB::Error>>,
 {
     let (value, ty) = <(ValueOf<DB>, U256)>::from_tree(root, db)?;
 
@@ -43,7 +43,7 @@ pub fn mix_in_length<T, DB>(value: &T, db: &mut DB, len: usize) -> Result<ValueO
 }
 
 /// Decode length.
-pub fn decode_with_length<T, DB>(root: &ValueOf<DB>, db: &DB) -> Result<(T, usize), Error<DB::Error>> where
+pub fn decode_with_length<T, DB>(root: &ValueOf<DB>, db: &mut DB) -> Result<(T, usize), Error<DB::Error>> where
     DB: Backend<Intermediate=Intermediate, End=End>,
     T: FromTree<DB>,
 {

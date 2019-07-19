@@ -35,7 +35,7 @@ pub trait FromCompositeListTree<DB: Backend<Intermediate=Intermediate, End=End>>
     /// given database, with given maximum length.
     fn from_composite_list_tree(
         root: &ValueOf<DB>,
-        db: &DB,
+        db: &mut DB,
         max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>>;
 }
@@ -46,7 +46,7 @@ pub trait FromCompactListTree<DB: Backend<Intermediate=Intermediate, End=End>>: 
     /// given database, with given maximum length.
     fn from_compact_list_tree(
         root: &ValueOf<DB>,
-        db: &DB,
+        db: &mut DB,
         max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>>;
 }
@@ -103,12 +103,12 @@ impl<'a, DB, T> IntoCompositeListTree<DB> for ElementalVariableVecRef<'a, T> whe
 
 fn from_list_tree<T, F, DB>(
     root: &ValueOf<DB>,
-    db: &DB,
+    db: &mut DB,
     max_len: Option<usize>,
     f: F
 ) -> Result<ElementalVariableVec<T>, Error<DB::Error>> where
     DB: Backend<Intermediate=Intermediate, End=End>,
-    F: FnOnce(&ValueOf<DB>, &DB, usize, Option<usize>) -> Result<ElementalFixedVec<T>, Error<DB::Error>>
+    F: FnOnce(&ValueOf<DB>, &mut DB, usize, Option<usize>) -> Result<ElementalFixedVec<T>, Error<DB::Error>>
 {
     let (vector_root, len) = decode_with_length::<ValueOf<DB>, _>(root, db)?;
 
@@ -125,7 +125,7 @@ impl<DB, T> FromCompactListTree<DB> for ElementalVariableVec<T> where
 {
     fn from_compact_list_tree(
         root: &ValueOf<DB>,
-        db: &DB,
+        db: &mut DB,
         max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>> {
         from_list_tree(root, db, max_len, |vector_root, db, len, max_len| {
@@ -142,7 +142,7 @@ impl<DB, T> FromCompositeListTree<DB> for ElementalVariableVec<T> where
 {
     fn from_composite_list_tree(
         root: &ValueOf<DB>,
-        db: &DB,
+        db: &mut DB,
         max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>> {
         from_list_tree(root, db, max_len, |vector_root, db, len, max_len| {
@@ -199,7 +199,7 @@ mod tests {
 
         let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
         let encoded = data.into_tree(&mut db).unwrap();
-        let decoded = Vec::<u16>::from_tree(&encoded, &db).unwrap();
+        let decoded = Vec::<u16>::from_tree(&encoded, &mut db).unwrap();
         assert_eq!(data, decoded);
     }
 }

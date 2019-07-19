@@ -14,7 +14,7 @@ impl<R: RootStatus, DB: Backend, S> LengthMixed<R, DB, S> where
     EndOf<DB>: From<usize> + Into<usize>,
 {
     /// Reconstruct the mixed-length tree.
-    pub fn reconstruct<F>(root: ValueOf<DB>, db: &DB, f: F) -> Result<Self, Error<DB::Error>> where
+    pub fn reconstruct<F>(root: ValueOf<DB>, db: &mut DB, f: F) -> Result<Self, Error<DB::Error>> where
         F: FnOnce(Raw<Dangling, DB>, &DB, usize) -> Result<S, Error<DB::Error>>,
     {
         let raw = Raw::<R, DB>::from_leaked(root);
@@ -30,15 +30,15 @@ impl<R: RootStatus, DB: Backend, S> LengthMixed<R, DB, S> where
     }
 
     /// Deconstruct the mixed-length tree.
-    pub fn deconstruct(self, db: &DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+    pub fn deconstruct(self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
         self.raw.get(db, LEN_INDEX)?;
         self.raw.get(db, ITEM_ROOT_INDEX)?;
         Ok(self.raw.root())
     }
 
     /// Call with the inner sequence.
-    pub fn with<RT, F>(&self, db: &DB, f: F) -> Result<RT, Error<DB::Error>> where
-        F: FnOnce(&S, &DB) -> Result<RT, Error<DB::Error>>
+    pub fn with<RT, F>(&self, db: &mut DB, f: F) -> Result<RT, Error<DB::Error>> where
+        F: FnOnce(&S, &mut DB) -> Result<RT, Error<DB::Error>>
     {
         f(&self.inner, db)
     }
