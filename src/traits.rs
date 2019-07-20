@@ -34,19 +34,33 @@ impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
     }
 }
 
+/// Construct for a merkle tree.
+pub trait Construct {
+    /// Intermediate value stored in this merkle database.
+    type Intermediate: Clone;
+    /// End value stored in this merkle database.
+    type End: Clone + Default;
+
+    /// Get the intermediate value of given left and right child.
+    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> Self::Intermediate;
+}
+
 /// Represents a basic merkle tree with a known root.
 pub trait Tree {
     /// Root status of the tree.
     type RootStatus: RootStatus;
-    /// Backend of the tree.
-    type Backend: Backend;
+    /// Construct of the tree.
+    type Construct: Construct;
 
     /// Root of the merkle tree.
-    fn root(&self) -> ValueOf<Self::Backend>;
+    fn root(&self) -> ValueOf<Self::Construct>;
     /// Drop the merkle tree.
-    fn drop(self, db: &mut Self::Backend) -> Result<(), Error<<Self::Backend as Backend>::Error>>;
+    fn drop<DB: WriteBackend<Construct=Self::Construct>>(
+        self,
+        db: &mut DB
+    ) -> Result<(), Error<DB::Error>>;
     /// Convert the tree into a raw tree.
-    fn into_raw(self) -> crate::Raw<Self::RootStatus, Self::Backend>;
+    fn into_raw(self) -> crate::Raw<Self::RootStatus, Self::Construct>;
 }
 
 /// A merkle tree that is similar to a vector.
@@ -77,12 +91,8 @@ impl RootStatus for Owned {
     fn is_dangling() -> bool { false }
 }
 
-/// Intermediate value of a database.
-pub type IntermediateOf<DB> = <DB as Backend>::Intermediate;
-/// End value of a database.
-pub type EndOf<DB> = <DB as Backend>::End;
-/// Value of a database.
-pub type ValueOf<DB> = Value<IntermediateOf<DB>, EndOf<DB>>;
+/// Value of a construct.
+pub type ValueOf<C> = Value<<C as Construct>::Intermediate, <C as Construct>::End>;
 
 /// Set error.
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -105,26 +115,46 @@ impl<DBError> From<DBError> for Error<DBError> {
 
 /// Traits for a merkle database.
 pub trait Backend {
-    /// Intermediate value stored in this merkle database.
-    type Intermediate: Clone;
-    /// End value stored in this merkle database.
-    type End: Clone + Default;
+    /// Construct of the backend.
+    type Construct: Construct;
     /// Error type for DB access.
     type Error;
+}
 
-    /// Get the intermediate value of given left and right child.
-    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self>;
+/// Read backend.
+pub trait ReadBackend: Backend {
+    /// Get an internal item by key.
+    fn get(
+        &mut self,
+        key: &<Self::Construct as Construct>::Intermediate,
+    ) -> Result<(ValueOf<Self::Construct>, ValueOf<Self::Construct>), Self::Error>;
+}
+
+/// Write backend.
+pub trait WriteBackend: ReadBackend {
+    /// Rootify a key.
+    fn rootify(
+        &mut self,
+        key: &<Self::Construct as Construct>::Intermediate,
+    ) -> Result<(), Self::Error>;
+    /// Unrootify a key.
+    fn unrootify(
+        &mut self,
+        key: &<Self::Construct as Construct>::Intermediate,
+    ) -> Result<(), Self::Error>;
+    /// Insert a new internal item.
+    fn insert(
+        &mut self,
+        key: <Self::Construct as Construct>::Intermediate,
+        value: (ValueOf<Self::Construct>, ValueOf<Self::Construct>)
+    ) -> Result<(), Self::Error>;
+}
+
+/// Empty backend.
+pub trait EmptyBackend: WriteBackend {
     /// Get or create the empty value at given depth-to-bottom for
     /// balanced list / vectors.
-    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self>, Self::Error>;
-    /// Get an internal item by key.
-    fn get(&mut self, key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error>;
-    /// Rootify a key.
-    fn rootify(&mut self, key: &IntermediateOf<Self>) -> Result<(), Self::Error>;
-    /// Unrootify a key.
-    fn unrootify(&mut self, key: &IntermediateOf<Self>) -> Result<(), Self::Error>;
-    /// Insert a new internal item.
-    fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>)) -> Result<(), Self::Error>;
+    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self::Construct>, Self::Error>;
 }
 
 /// Leakable value, whose default behavior of drop is to leak.

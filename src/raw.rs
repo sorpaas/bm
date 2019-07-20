@@ -2,21 +2,22 @@ use core::marker::PhantomData;
 use alloc::vec::Vec;
 
 use crate::index::{Index, IndexSelection, IndexRoute};
-use crate::traits::{Backend, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree};
+use crate::traits::{Construct, ReadBackend, WriteBackend,
+                    Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree};
 
 /// `Raw` with owned root.
-pub type OwnedRaw<DB> = Raw<Owned, DB>;
+pub type OwnedRaw<C> = Raw<Owned, C>;
 
 /// `Raw` with dangling root.
-pub type DanglingRaw<DB> = Raw<Dangling, DB>;
+pub type DanglingRaw<C> = Raw<Dangling, C>;
 
 /// Raw merkle tree.
-pub struct Raw<R: RootStatus, DB: Backend> {
-    root: ValueOf<DB>,
-    _marker: PhantomData<R>,
+pub struct Raw<R: RootStatus, C: Construct> {
+    root: ValueOf<C>,
+    _marker: PhantomData<(R, C)>,
 }
 
-impl<R: RootStatus, DB: Backend> Default for Raw<R, DB> {
+impl<R: RootStatus, C: Construct> Default for Raw<R, C> {
     fn default() -> Self {
         Self {
             root: Value::End(Default::default()),
@@ -25,15 +26,18 @@ impl<R: RootStatus, DB: Backend> Default for Raw<R, DB> {
     }
 }
 
-impl<R: RootStatus, DB: Backend> Tree for Raw<R, DB> {
+impl<R: RootStatus, C: Construct> Tree for Raw<R, C> {
     type RootStatus = R;
-    type Backend = DB;
+    type Construct = C;
 
-    fn root(&self) -> ValueOf<DB> {
+    fn root(&self) -> ValueOf<C> {
         self.root.clone()
     }
 
-    fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn drop<DB: WriteBackend<Construct=C>>(
+        self,
+        db: &mut DB
+    ) -> Result<(), Error<DB::Error>> {
         if R::is_owned() {
             if let Some(key) = self.root().intermediate() {
                 db.unrootify(&key)?;
@@ -42,14 +46,18 @@ impl<R: RootStatus, DB: Backend> Tree for Raw<R, DB> {
         Ok(())
     }
 
-    fn into_raw(self) -> Raw<R, DB> {
+    fn into_raw(self) -> Raw<R, C> {
         self
     }
 }
 
-impl<R: RootStatus, DB: Backend> Raw<R, DB> {
+impl<R: RootStatus, C: Construct> Raw<R, C> {
     /// Return a reference to a subtree.
-    pub fn subtree(&self, db: &mut DB, index: Index) -> Result<DanglingRaw<DB>, Error<DB::Error>> {
+    pub fn subtree<DB: ReadBackend<Construct=C>>(
+        &self,
+        db: &mut DB,
+        index: Index
+    ) -> Result<DanglingRaw<C>, Error<DB::Error>> {
         let subroot = self.get(db, index)?.ok_or(Error::CorruptedDatabase)?;
         Ok(Raw {
             root: subroot,
@@ -58,7 +66,11 @@ impl<R: RootStatus, DB: Backend> Raw<R, DB> {
     }
 
     /// Get value from the tree via generalized merkle index.
-    pub fn get(&self, db: &mut DB, index: Index) -> Result<Option<ValueOf<DB>>, Error<DB::Error>> {
+    pub fn get<DB: ReadBackend<Construct=C>>(
+        &self,
+        db: &mut DB,
+        index: Index
+    ) -> Result<Option<ValueOf<C>>, Error<DB::Error>> {
         match index.route() {
             IndexRoute::Root => Ok(Some(self.root.clone())),
             IndexRoute::Select(selections) => {
@@ -83,11 +95,11 @@ impl<R: RootStatus, DB: Backend> Raw<R, DB> {
     }
 
     /// Set value of the merkle tree via generalized merkle index.
-    pub fn set(
+    pub fn set<DB: WriteBackend<Construct=C>>(
         &mut self,
         db: &mut DB,
         index: Index,
-        set: ValueOf<DB>
+        set: ValueOf<C>
     ) -> Result<(), Error<DB::Error>> {
         let route = index.route();
 
@@ -145,7 +157,9 @@ impl<R: RootStatus, DB: Backend> Raw<R, DB> {
                         };
                     },
                     None => {
-                        values.push((sel, (db.empty_at(0)?, db.empty_at(0)?)));
+                        values.push(
+                            (sel, (Value::End(Default::default()), Value::End(Default::default())))
+                        );
                     },
                 }
                 depth += 1;
@@ -166,7 +180,7 @@ impl<R: RootStatus, DB: Backend> Raw<R, DB> {
                 IndexSelection::Right => { value.1 = update.clone(); }
             }
 
-            let intermediate = DB::intermediate_of(&value.0, &value.1);
+            let intermediate = C::intermediate_of(&value.0, &value.1);
 
             db.insert(intermediate.clone(), value)?;
             update = Value::Intermediate(intermediate);
@@ -194,8 +208,8 @@ impl<R: RootStatus, DB: Backend> Raw<R, DB> {
     }
 }
 
-impl<R: RootStatus, DB: Backend> Leak for Raw<R, DB> {
-    type Metadata = ValueOf<DB>;
+impl<R: RootStatus, C: Construct> Leak for Raw<R, C> {
+    type Metadata = ValueOf<C>;
 
     fn metadata(&self) -> Self::Metadata {
         self.root()

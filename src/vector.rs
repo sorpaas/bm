@@ -1,4 +1,4 @@
-use crate::traits::{Backend, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree, Sequence};
+use crate::traits::{ReadBackend, WriteBackend, EmptyBackend, Construct, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree, Sequence};
 use crate::raw::Raw;
 use crate::index::Index;
 
@@ -7,24 +7,27 @@ const EXTEND_INDEX: Index = Index::root().left();
 const EMPTY_INDEX: Index = Index::root().right();
 
 /// `Vector` with owned root.
-pub type OwnedVector<DB> = Vector<Owned, DB>;
+pub type OwnedVector<C> = Vector<Owned, C>;
 
 /// `Vector` with dangling root.
-pub type DanglingVector<DB> = Vector<Dangling, DB>;
+pub type DanglingVector<C> = Vector<Dangling, C>;
 
 /// Binary merkle tuple.
-pub struct Vector<R: RootStatus, DB: Backend> {
-    raw: Raw<R, DB>,
+pub struct Vector<R: RootStatus, C: Construct> {
+    raw: Raw<R, C>,
     max_len: Option<usize>,
     len: usize,
 }
 
-impl<R: RootStatus, DB: Backend> Vector<R, DB> {
-    fn raw_index(&self, i: usize) -> Result<Index, Error<DB::Error>> {
-        Index::from_one((1 << self.depth()) + i).ok_or(Error::InvalidParameter)
+impl<R: RootStatus, C: Construct> Vector<R, C> {
+    fn raw_index(&self, i: usize) -> Option<Index> {
+        Index::from_one((1 << self.depth()) + i)
     }
 
-    fn extend(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn extend<DB: EmptyBackend<Construct=C>>(
+        &mut self,
+        db: &mut DB
+    ) -> Result<(), Error<DB::Error>> {
         let root = self.root();
         let mut new_raw = Raw::default();
         let empty = db.empty_at(self.depth())?;
@@ -35,7 +38,10 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
         Ok(())
     }
 
-    fn shrink(&mut self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn shrink<DB: WriteBackend<Construct=C>>(
+        &mut self,
+        db: &mut DB
+    ) -> Result<(), Error<DB::Error>> {
         match self.raw.get(db, EXTEND_INDEX)? {
             Some(extended_value) => { self.raw.set(db, ROOT_INDEX, extended_value)?; },
             None => { self.raw.set(db, ROOT_INDEX, Value::End(Default::default()))?; },
@@ -71,28 +77,41 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
     }
 
     /// Get value at index.
-    pub fn get(&self, db: &mut DB, index: usize) -> Result<ValueOf<DB>, Error<DB::Error>> {
+    pub fn get<DB: ReadBackend<Construct=C>>(
+        &self,
+        db: &mut DB,
+        index: usize
+    ) -> Result<ValueOf<C>, Error<DB::Error>> {
         if index >= self.len() {
             return Err(Error::AccessOverflowed)
         }
 
-        let raw_index = self.raw_index(index)?;
+        let raw_index = self.raw_index(index).ok_or(Error::InvalidParameter)?;
         self.raw.get(db, raw_index)?.ok_or(Error::CorruptedDatabase)
     }
 
     /// Set value at index.
-    pub fn set(&mut self, db: &mut DB, index: usize, value: ValueOf<DB>) -> Result<(), Error<DB::Error>> {
+    pub fn set<DB: WriteBackend<Construct=C>>(
+        &mut self,
+        db: &mut DB,
+        index: usize,
+        value: ValueOf<C>
+    ) -> Result<(), Error<DB::Error>> {
         if index >= self.len() {
             return Err(Error::AccessOverflowed)
         }
 
-        let raw_index = self.raw_index(index)?;
+        let raw_index = self.raw_index(index).ok_or(Error::InvalidParameter)?;
         self.raw.set(db, raw_index, value)?;
         Ok(())
     }
 
     /// Push a new value to the vector.
-    pub fn push(&mut self, db: &mut DB, value: ValueOf<DB>) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: EmptyBackend<Construct=C>>(
+        &mut self,
+        db: &mut DB,
+        value: ValueOf<C>
+    ) -> Result<(), Error<DB::Error>> {
         let old_len = self.len();
         if old_len == self.current_max_len() {
             if self.max_len.is_some() {
@@ -105,13 +124,16 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
         let index = old_len;
         self.len = len;
 
-        let raw_index = self.raw_index(index)?;
+        let raw_index = self.raw_index(index).ok_or(Error::InvalidParameter)?;
         self.raw.set(db, raw_index, value)?;
         Ok(())
     }
 
     /// Pop a value from the vector.
-    pub fn pop(&mut self, db: &mut DB) -> Result<Option<ValueOf<DB>>, Error<DB::Error>> {
+    pub fn pop<DB: EmptyBackend<Construct=C>>(
+        &mut self,
+        db: &mut DB
+    ) -> Result<Option<ValueOf<C>>, Error<DB::Error>> {
         let old_len = self.len();
         if old_len == 0 {
             return Ok(None)
@@ -119,7 +141,7 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
 
         let len = old_len - 1;
         let index = old_len - 1;
-        let raw_index = self.raw_index(index)?;
+        let raw_index = self.raw_index(index).ok_or(Error::InvalidParameter)?;
         let value = self.raw.get(db, raw_index)?.ok_or(Error::CorruptedDatabase)?;
 
         let mut empty_depth_to_bottom = 0;
@@ -154,37 +176,40 @@ impl<R: RootStatus, DB: Backend> Vector<R, DB> {
     }
 
     /// Create a tuple from raw merkle tree.
-    pub fn from_raw(raw: Raw<R, DB>, len: usize, max_len: Option<usize>) -> Self {
+    pub fn from_raw(raw: Raw<R, C>, len: usize, max_len: Option<usize>) -> Self {
         Self { raw, len, max_len }
     }
 }
 
-impl<R: RootStatus, DB: Backend> Tree for Vector<R, DB> {
+impl<R: RootStatus, C: Construct> Tree for Vector<R, C> {
     type RootStatus = R;
-    type Backend = DB;
+    type Construct = C;
 
-    fn root(&self) -> ValueOf<DB> {
+    fn root(&self) -> ValueOf<C> {
         self.raw.root()
     }
 
-    fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn drop<DB: WriteBackend<Construct=C>>(
+        self,
+        db: &mut DB
+    ) -> Result<(), Error<DB::Error>> {
         self.raw.drop(db)?;
         Ok(())
     }
 
-    fn into_raw(self) -> Raw<R, DB> {
+    fn into_raw(self) -> Raw<R, C> {
         self.raw
     }
 }
 
-impl<R: RootStatus, DB: Backend> Sequence for Vector<R, DB> {
+impl<R: RootStatus, C: Construct> Sequence for Vector<R, C> {
     fn len(&self) -> usize {
         self.len
     }
 }
 
-impl<R: RootStatus, DB: Backend> Leak for Vector<R, DB> {
-    type Metadata = (ValueOf<DB>, usize, Option<usize>);
+impl<R: RootStatus, C: Construct> Leak for Vector<R, C> {
+    type Metadata = (ValueOf<C>, usize, Option<usize>);
 
     fn metadata(&self) -> Self::Metadata {
         let len = self.len();
@@ -201,16 +226,20 @@ impl<R: RootStatus, DB: Backend> Leak for Vector<R, DB> {
     }
 }
 
-impl<DB: Backend> Vector<Owned, DB> {
+impl<C: Construct> Vector<Owned, C> {
     /// Create a new tuple.
-    pub fn create(db: &mut DB, len: usize, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn create<DB: EmptyBackend<Construct=C>>(
+        db: &mut DB,
+        len: usize,
+        max_len: Option<usize>
+    ) -> Result<Self, Error<DB::Error>> {
         if let Some(max_len) = max_len {
             if len < max_len || max_len == 0 {
                 return Err(Error::InvalidParameter)
             }
         }
 
-        let mut raw = Raw::<Owned, DB>::default();
+        let mut raw = Raw::<Owned, C>::default();
 
         let target_len = max_len.unwrap_or(len);
         let mut current_max_len = 1;

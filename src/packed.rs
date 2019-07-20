@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use crate::length::LengthMixed;
 use crate::vector::Vector;
 use crate::raw::Raw;
-use crate::traits::{Value, EndOf, Backend, ValueOf, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
+use crate::traits::{Value, Construct, ReadBackend, WriteBackend, EmptyBackend, ValueOf, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
 use crate::utils::host_len;
 
 fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
@@ -32,25 +32,25 @@ fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) 
 }
 
 /// `PackedVector` with owned root.
-pub type OwnedPackedVector<DB, T, H, V> = PackedVector<Owned, DB, T, H, V>;
+pub type OwnedPackedVector<C, T, H, V> = PackedVector<Owned, C, T, H, V>;
 
 /// `PackedVector` with dangling root.
-pub type DanglingPackedVector<DB, T, H, V> = PackedVector<Dangling, DB, T, H, V>;
+pub type DanglingPackedVector<C, T, H, V> = PackedVector<Dangling, C, T, H, V>;
 
 /// Packed merkle tuple.
-pub struct PackedVector<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {
-    tuple: Vector<R, DB>,
+pub struct PackedVector<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {
+    tuple: Vector<R, C>,
     len: usize,
     max_len: Option<usize>,
     _marker: PhantomData<(T, H, V)>,
 }
 
-impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<R, DB, T, H, V> where
-    EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<R, C, T, H, V> where
+    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Get value at index.
-    pub fn get(&self, db: &mut DB, index: usize) -> Result<T, Error<DB::Error>> {
+    pub fn get<DB: ReadBackend<Construct=C>>(&self, db: &mut DB, index: usize) -> Result<T, Error<DB::Error>> {
         let mut ret = GenericArray::<u8, V>::default();
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
@@ -66,7 +66,7 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
     }
 
     /// Set value at index.
-    pub fn set(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
+    pub fn set<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
         let value: GenericArray<u8, V> = value.into();
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
@@ -83,7 +83,7 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
     }
 
     /// Push a new value to the tuple.
-    pub fn push(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
         let index = self.len;
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
@@ -96,7 +96,7 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
     }
 
     /// Pop a value from the tuple.
-    pub fn pop(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
+    pub fn pop<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
         if self.len == 0 {
             return Ok(None)
         }
@@ -127,7 +127,7 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
     }
 
     /// Create a packed tuple from raw merkle tree.
-    pub fn from_raw(raw: Raw<R, DB>, len: usize, max_len: Option<usize>) -> Self {
+    pub fn from_raw(raw: Raw<R, C>, len: usize, max_len: Option<usize>) -> Self {
         let host_max_len = max_len.map(|l| host_len::<H, V>(l));
         let host_len = host_len::<H, V>(len);
         Self {
@@ -139,28 +139,28 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pack
     }
 }
 
-impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tree for PackedVector<R, DB, T, H, V> where
-    EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tree for PackedVector<R, C, T, H, V> where
+    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     type RootStatus = R;
-    type Backend = DB;
+    type Construct = C;
 
-    fn root(&self) -> ValueOf<DB> {
+    fn root(&self) -> ValueOf<C> {
         self.tuple.root()
     }
 
-    fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn drop<DB: WriteBackend<Construct=C>>(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         self.tuple.drop(db)
     }
 
-    fn into_raw(self) -> Raw<R, DB> {
+    fn into_raw(self) -> Raw<R, C> {
         self.tuple.into_raw()
     }
 }
 
-impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Sequence for PackedVector<R, DB, T, H, V> where
-    EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Sequence for PackedVector<R, C, T, H, V> where
+    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     fn len(&self) -> usize {
@@ -168,11 +168,11 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Sequ
     }
 }
 
-impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for PackedVector<R, DB, T, H, V> where
-    EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for PackedVector<R, C, T, H, V> where
+    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
-    type Metadata = (ValueOf<DB>, usize, Option<usize>);
+    type Metadata = (ValueOf<C>, usize, Option<usize>);
 
     fn metadata(&self) -> Self::Metadata {
         let value_len = self.len();
@@ -191,12 +191,12 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak
     }
 }
 
-impl<DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<Owned, DB, T, H, V> where
-    EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+impl<C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<Owned, C, T, H, V> where
+    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Create a new tuple.
-    pub fn create(db: &mut DB, value_len: usize, value_max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn create<DB: EmptyBackend<Construct=C>>(db: &mut DB, value_len: usize, value_max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         let host_max_len = value_max_len.map(|l| host_len::<H, V>(l));
         let host_len = host_len::<H, V>(value_len);
 
@@ -211,65 +211,65 @@ impl<DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<Owned,
 }
 
 /// `PackedList` with owned root.
-pub type OwnedPackedList<DB, T, H, V> = PackedList<Owned, DB, T, H, V>;
+pub type OwnedPackedList<C, T, H, V> = PackedList<Owned, C, T, H, V>;
 
 /// `PackedList` with dangling root.
-pub type DanglingPackedList<DB, T, H, V> = PackedList<Dangling, DB, T, H, V>;
+pub type DanglingPackedList<C, T, H, V> = PackedList<Dangling, C, T, H, V>;
 
 /// Packed merkle vector.
-pub struct PackedList<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>>(
-    LengthMixed<R, DB, PackedVector<Dangling, DB, T, H, V>>,
+pub struct PackedList<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>>(
+    LengthMixed<R, C, PackedVector<Dangling, C, T, H, V>>,
 ) where
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
-    EndOf<DB>: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>;
+    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>;
 
-impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<R, DB, T, H, V> where
-    EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<R, C, T, H, V> where
+    C::End: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Get value at index.
-    pub fn get(&self, db: &mut DB, index: usize) -> Result<T, Error<DB::Error>> {
+    pub fn get<DB: ReadBackend<Construct=C>>(&self, db: &mut DB, index: usize) -> Result<T, Error<DB::Error>> {
         self.0.with(db, |tuple, db| tuple.get(db, index))
     }
 
     /// Set value at index.
-    pub fn set(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
+    pub fn set<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.set(db, index, value))
     }
 
     /// Push a new value to the vector.
-    pub fn push(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.push(db, value))
     }
 
     /// Pop a value from the vector.
-    pub fn pop(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
+    pub fn pop<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.pop(db))
     }
 }
 
-impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tree for PackedList<R, DB, T, H, V> where
-    EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tree for PackedList<R, C, T, H, V> where
+    C::End: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     type RootStatus = R;
-    type Backend = DB;
+    type Construct = C;
 
-    fn root(&self) -> ValueOf<DB> {
+    fn root(&self) -> ValueOf<C> {
         self.0.root()
     }
 
-    fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn drop<DB: WriteBackend<Construct=C>>(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         self.0.drop(db)
     }
 
-    fn into_raw(self) -> Raw<R, DB> {
+    fn into_raw(self) -> Raw<R, C> {
         self.0.into_raw()
     }
 }
 
-impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Sequence for PackedList<R, DB, T, H, V> where
-    EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Sequence for PackedList<R, C, T, H, V> where
+    C::End: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     fn len(&self) -> usize {
@@ -277,11 +277,11 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Sequ
     }
 }
 
-impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for PackedList<R, DB, T, H, V> where
-    EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for PackedList<R, C, T, H, V> where
+    C::End: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
-    type Metadata = <LengthMixed<R, DB, Vector<Dangling, DB>> as Leak>::Metadata;
+    type Metadata = <LengthMixed<R, C, Vector<Dangling, C>> as Leak>::Metadata;
 
     fn metadata(&self) -> Self::Metadata {
         self.0.metadata()
@@ -292,12 +292,12 @@ impl<R: RootStatus, DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak
     }
 }
 
-impl<DB: Backend, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<Owned, DB, T, H, V> where
-    EndOf<DB>: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+impl<C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<Owned, C, T, H, V> where
+    C::End: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Create a new vector.
-    pub fn create(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn create<DB: EmptyBackend<Construct=C>>(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::create(db, |db| PackedVector::<Owned, _, T, H, V>::create(db, 0, max_len))?))
     }
 }

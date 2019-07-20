@@ -1,84 +1,84 @@
-use crate::traits::{Backend, EndOf, ValueOf, RootStatus, Dangling, Owned, Leak, Error, Tree, Sequence};
+use crate::traits::{ReadBackend, WriteBackend, EmptyBackend, Construct, ValueOf, RootStatus, Dangling, Owned, Leak, Error, Tree, Sequence};
 use crate::vector::Vector;
 use crate::raw::Raw;
 use crate::length::LengthMixed;
 
 /// `List` with owned root.
-pub type OwnedList<DB> = List<Owned, DB>;
+pub type OwnedList<C> = List<Owned, C>;
 
 /// `List` with dangling root.
-pub type DanglingList<DB> = List<Dangling, DB>;
+pub type DanglingList<C> = List<Dangling, C>;
 
 /// Binary merkle vector.
-pub struct List<R: RootStatus, DB: Backend>(LengthMixed<R, DB, Vector<Dangling, DB>>);
+pub struct List<R: RootStatus, C: Construct>(LengthMixed<R, C, Vector<Dangling, C>>);
 
-impl<R: RootStatus, DB: Backend> List<R, DB> where
-    EndOf<DB>: From<usize> + Into<usize>,
+impl<R: RootStatus, C: Construct> List<R, C> where
+    C::End: From<usize> + Into<usize>,
 {
     /// Get value at index.
-    pub fn get(&self, db: &mut DB, index: usize) -> Result<ValueOf<DB>, Error<DB::Error>> {
+    pub fn get<DB: ReadBackend<Construct=C>>(&self, db: &mut DB, index: usize) -> Result<ValueOf<C>, Error<DB::Error>> {
         self.0.with(db, |tuple, db| tuple.get(db, index))
     }
 
     /// Set value at index.
-    pub fn set(&mut self, db: &mut DB, index: usize, value: ValueOf<DB>) -> Result<(), Error<DB::Error>> {
+    pub fn set<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, index: usize, value: ValueOf<C>) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.set(db, index, value))
     }
 
     /// Push a new value to the vector.
-    pub fn push(&mut self, db: &mut DB, value: ValueOf<DB>) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB, value: ValueOf<C>) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.push(db, value))
     }
 
     /// Pop a value from the vector.
-    pub fn pop(&mut self, db: &mut DB) -> Result<Option<ValueOf<DB>>, Error<DB::Error>> {
+    pub fn pop<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<ValueOf<C>>, Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.pop(db))
     }
 
     /// Deconstruct the vector into one single hash value, and leak only the hash value.
-    pub fn deconstruct(self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>> {
+    pub fn deconstruct<DB: ReadBackend<Construct=C>>(self, db: &mut DB) -> Result<ValueOf<C>, Error<DB::Error>> {
         self.0.deconstruct(db)
     }
 
     /// Reconstruct the vector from a single hash value.
-    pub fn reconstruct(root: ValueOf<DB>, db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn reconstruct<DB: WriteBackend<Construct=C>>(root: ValueOf<C>, db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::reconstruct(root, db, |tuple_raw, _db, len| {
-            Ok(Vector::<Dangling, DB>::from_raw(tuple_raw, len, max_len))
+            Ok(Vector::<Dangling, C>::from_raw(tuple_raw, len, max_len))
         })?))
     }
 }
 
-impl<R: RootStatus, DB: Backend> Tree for List<R, DB> where
-    EndOf<DB>: From<usize> + Into<usize>,
+impl<R: RootStatus, C: Construct> Tree for List<R, C> where
+    C::End: From<usize> + Into<usize>,
 {
     type RootStatus = R;
-    type Backend = DB;
+    type Construct = C;
 
-    fn root(&self) -> ValueOf<DB> {
+    fn root(&self) -> ValueOf<C> {
         self.0.root()
     }
 
-    fn drop(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn drop<DB: WriteBackend<Construct=C>>(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         self.0.drop(db)
     }
 
-    fn into_raw(self) -> Raw<R, DB> {
+    fn into_raw(self) -> Raw<R, C> {
         self.0.into_raw()
     }
 }
 
-impl<R: RootStatus, DB: Backend> Sequence for List<R, DB> where
-    EndOf<DB>: From<usize> + Into<usize>,
+impl<R: RootStatus, C: Construct> Sequence for List<R, C> where
+    C::End: From<usize> + Into<usize>,
 {
     fn len(&self) -> usize {
         self.0.len()
     }
 }
 
-impl<R: RootStatus, DB: Backend> Leak for List<R, DB> where
-    EndOf<DB>: From<usize> + Into<usize>,
+impl<R: RootStatus, C: Construct> Leak for List<R, C> where
+    C::End: From<usize> + Into<usize>,
 {
-    type Metadata = <LengthMixed<R, DB, Vector<Dangling, DB>> as Leak>::Metadata;
+    type Metadata = <LengthMixed<R, C, Vector<Dangling, C>> as Leak>::Metadata;
 
     fn metadata(&self) -> Self::Metadata {
         self.0.metadata()
@@ -89,11 +89,14 @@ impl<R: RootStatus, DB: Backend> Leak for List<R, DB> where
     }
 }
 
-impl<DB: Backend> List<Owned, DB> where
-    EndOf<DB>: From<usize> + Into<usize>
+impl<C: Construct> List<Owned, C> where
+    C::End: From<usize> + Into<usize>
 {
     /// Create a new vector.
-    pub fn create(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn create<DB: EmptyBackend<Construct=C>>(
+        db: &mut DB,
+        max_len: Option<usize>
+    ) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::create(db, |db| Vector::<Owned, _>::create(db, 0, max_len))?))
     }
 }

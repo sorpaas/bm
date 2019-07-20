@@ -4,8 +4,25 @@ use std::collections::HashMap as Map;
 use alloc::collections::BTreeMap as Map;
 use generic_array::GenericArray;
 use digest::Digest;
+use core::marker::PhantomData;
+use core::hash::Hash;
 
-use crate::{Value, ValueOf, IntermediateOf, EndOf, Backend};
+use crate::{Value, ValueOf, Construct, Backend, ReadBackend, WriteBackend, EmptyBackend};
+
+/// Digest construct.
+pub struct DigestConstruct<D: Digest, T: AsRef<[u8]> + Clone + Default>(PhantomData<(D, T)>);
+
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Construct for DigestConstruct<D, T> {
+    type Intermediate = GenericArray<u8, D::OutputSize>;
+    type End = T;
+
+    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> Self::Intermediate {
+        let mut digest = D::new();
+        digest.input(&left.as_ref()[..]);
+        digest.input(&right.as_ref()[..]);
+        digest.result()
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 /// Noop DB error.
@@ -16,14 +33,16 @@ pub enum NoopBackendError {
 
 #[derive(Clone)]
 /// Noop merkle database.
-pub struct NoopBackend<D: Digest, T: AsRef<[u8]> + Clone + Default>(
-    Map<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>,
-    Option<EndOf<Self>>,
+pub struct NoopBackend<C: Construct>(
+    Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>,
+    Option<C::End>,
 );
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> NoopBackend<D, T> {
+impl<C: Construct> NoopBackend<C> where
+    C::Intermediate: Eq + Hash,
+{
     /// Create an in-memory database with unit empty value.
-    pub fn new_with_unit_empty(value: EndOf<Self>) -> Self {
+    pub fn new_with_unit_empty(value: C::End) -> Self {
         Self(Default::default(), Some(value))
     }
 
@@ -33,48 +52,55 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> NoopBackend<D, T> {
     }
 }
 
-impl<D: Digest, V: AsRef<[u8]> + Clone + Default> Backend for NoopBackend<D, V> {
-    type Intermediate = GenericArray<u8, D::OutputSize>;
-    type End = V;
+impl<C: Construct> Backend for NoopBackend<C> {
+    type Construct = C;
     type Error = NoopBackendError;
+}
 
-    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
-        let mut digest = D::new();
-        digest.input(&left.as_ref()[..]);
-        digest.input(&right.as_ref()[..]);
-        digest.result()
+impl<C: Construct> ReadBackend for NoopBackend<C> {
+    fn get(
+        &mut self,
+        _key: &C::Intermediate,
+    ) -> Result<(ValueOf<C>, ValueOf<C>), Self::Error> {
+        Err(NoopBackendError::NotSupported)
+    }
+}
+
+impl<C: Construct> WriteBackend for NoopBackend<C> {
+    fn rootify(&mut self, _key: &C::Intermediate) -> Result<(), Self::Error> {
+        Ok(())
     }
 
-    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self>, Self::Error> {
+    fn unrootify(&mut self, _key: &C::Intermediate) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn insert(
+        &mut self,
+        _key: C::Intermediate,
+        _value: (ValueOf<C>, ValueOf<C>)
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+impl<C: Construct> EmptyBackend for NoopBackend<C> where
+    C::Intermediate: Eq + Hash,
+{
+    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<C>, Self::Error> {
         match &self.1 {
             Some(end) => Ok(Value::End(end.clone())),
             None => {
                 let mut current = Value::End(Default::default());
                 for _ in 0..depth_to_bottom {
                     let value = (current.clone(), current);
-                    let key = Self::intermediate_of(&value.0, &value.1);
+                    let key = C::intermediate_of(&value.0, &value.1);
                     self.0.insert(key.clone(), (value, None));
                     current = Value::Intermediate(key);
                 }
                 Ok(current)
             }
         }
-    }
-
-    fn get(&mut self, _key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error> {
-        Err(NoopBackendError::NotSupported)
-    }
-
-    fn rootify(&mut self, _key: &IntermediateOf<Self>) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn unrootify(&mut self, _key: &IntermediateOf<Self>) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn insert(&mut self, _key: IntermediateOf<Self>, _value: (ValueOf<Self>, ValueOf<Self>)) -> Result<(), Self::Error> {
-        Ok(())
     }
 }
 
@@ -91,13 +117,15 @@ pub enum InMemoryBackendError {
 
 #[derive(Clone)]
 /// In-memory merkle database.
-pub struct InMemoryBackend<D: Digest, T: AsRef<[u8]> + Clone + Default>(
-    Map<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>,
-    Option<EndOf<Self>>,
+pub struct InMemoryBackend<C: Construct>(
+    Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>,
+    Option<C::End>,
 );
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryBackend<D, T> {
-    fn remove(&mut self, old_key: &IntermediateOf<Self>) -> Result<(), InMemoryBackendError> {
+impl<C: Construct> InMemoryBackend<C> where
+    C::Intermediate: Eq + Hash,
+{
+    fn remove(&mut self, old_key: &C::Intermediate) -> Result<(), InMemoryBackendError> {
         let (old_value, to_remove) = {
             let value = self.0.get_mut(old_key).ok_or(InMemoryBackendError::SetIntermediateNotExist)?;
             value.1.as_mut().map(|v| *v -= 1);
@@ -122,7 +150,7 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryBackend<D, T> {
     }
 
     /// Create an in-memory database with unit empty value.
-    pub fn new_with_unit_empty(value: EndOf<Self>) -> Self {
+    pub fn new_with_unit_empty(value: C::End) -> Self {
         Self(Default::default(), Some(value))
     }
 
@@ -132,63 +160,51 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> InMemoryBackend<D, T> {
     }
 
     /// Populate the database with proofs.
-    pub fn populate(&mut self, proofs: Map<IntermediateOf<Self>, (ValueOf<Self>, ValueOf<Self>)>) {
+    pub fn populate(&mut self, proofs: Map<C::Intermediate, (ValueOf<C>, ValueOf<C>)>) {
         for (key, value) in proofs {
             self.0.insert(key, (value, None));
         }
     }
 }
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> AsRef<Map<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)>> for InMemoryBackend<D, T> {
-    fn as_ref(&self) -> &Map<IntermediateOf<Self>, ((ValueOf<Self>, ValueOf<Self>), Option<usize>)> {
+impl<C: Construct> AsRef<Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>> for InMemoryBackend<C> {
+    fn as_ref(&self) -> &Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)> {
         &self.0
     }
 }
 
-impl<D: Digest, V: AsRef<[u8]> + Clone + Default> Backend for InMemoryBackend<D, V> {
-    type Intermediate = GenericArray<u8, D::OutputSize>;
-    type End = V;
+impl<C: Construct> Backend for InMemoryBackend<C> {
+    type Construct = C;
     type Error = InMemoryBackendError;
+}
 
-    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> IntermediateOf<Self> {
-        let mut digest = D::new();
-        digest.input(&left.as_ref()[..]);
-        digest.input(&right.as_ref()[..]);
-        digest.result()
-    }
-
-    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self>, Self::Error> {
-        match &self.1 {
-            Some(end) => Ok(Value::End(end.clone())),
-            None => {
-                let mut current = Value::End(Default::default());
-                for _ in 0..depth_to_bottom {
-                    let value = (current.clone(), current);
-                    let key = Self::intermediate_of(&value.0, &value.1);
-                    self.0.insert(key.clone(), (value, None));
-                    current = Value::Intermediate(key);
-                }
-                Ok(current)
-            }
-        }
-    }
-
-    fn get(&mut self, key: &IntermediateOf<Self>) -> Result<(ValueOf<Self>, ValueOf<Self>), Self::Error> {
+impl<C: Construct> ReadBackend for InMemoryBackend<C> where
+    C::Intermediate: Eq + Hash,
+{
+    fn get(&mut self, key: &C::Intermediate) -> Result<(ValueOf<C>, ValueOf<C>), Self::Error> {
         self.0.get(key).map(|v| v.0.clone()).ok_or(InMemoryBackendError::FetchingKeyNotExist)
     }
+}
 
-    fn rootify(&mut self, key: &IntermediateOf<Self>) -> Result<(), Self::Error> {
+impl<C: Construct> WriteBackend for InMemoryBackend<C> where
+    C::Intermediate: Eq + Hash,
+{
+    fn rootify(&mut self, key: &C::Intermediate) -> Result<(), Self::Error> {
         self.0.get_mut(key).ok_or(InMemoryBackendError::RootifyKeyNotExist)?.1
             .as_mut().map(|v| *v += 1);
         Ok(())
     }
 
-    fn unrootify(&mut self, key: &IntermediateOf<Self>) -> Result<(), Self::Error> {
+    fn unrootify(&mut self, key: &C::Intermediate) -> Result<(), Self::Error> {
         self.remove(key)?;
         Ok(())
     }
 
-    fn insert(&mut self, key: IntermediateOf<Self>, value: (ValueOf<Self>, ValueOf<Self>)) -> Result<(), Self::Error> {
+    fn insert(
+        &mut self,
+        key: C::Intermediate,
+        value: (ValueOf<C>, ValueOf<C>)
+    ) -> Result<(), Self::Error> {
         if self.0.contains_key(&key) {
             return Ok(())
         }
@@ -212,5 +228,25 @@ impl<D: Digest, V: AsRef<[u8]> + Clone + Default> Backend for InMemoryBackend<D,
 
         self.0.insert(key, ((left, right), Some(0)));
         Ok(())
+    }
+}
+
+impl<C: Construct> EmptyBackend for InMemoryBackend<C> where
+    C::Intermediate: Eq + Hash,
+{
+    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<C>, Self::Error> {
+        match &self.1 {
+            Some(end) => Ok(Value::End(end.clone())),
+            None => {
+                let mut current = Value::End(Default::default());
+                for _ in 0..depth_to_bottom {
+                    let value = (current.clone(), current);
+                    let key = C::intermediate_of(&value.0, &value.1);
+                    self.0.insert(key.clone(), (value, None));
+                    current = Value::Intermediate(key);
+                }
+                Ok(current)
+            }
+        }
     }
 }
