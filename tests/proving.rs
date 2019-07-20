@@ -35,7 +35,7 @@ impl Default for VecValue {
     }
 }
 
-type InMemory = bm::InMemoryBackend<bm::InheritedEmpty, bm::DigestConstruct<Sha256, VecValue>>;
+type InMemory = bm::InMemoryBackend<bm::InheritedDigestConstruct<Sha256, VecValue>>;
 
 #[test]
 fn basic_proving_vec() {

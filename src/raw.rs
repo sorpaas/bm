@@ -229,8 +229,8 @@ mod tests {
     use crate::traits::Owned;
     use sha2::Sha256;
 
-    type Construct = crate::DigestConstruct<Sha256, Vec<u8>>;
-    type InMemory = crate::memory::InMemoryBackend<crate::InheritedEmpty, Construct>;
+    type Construct = crate::InheritedDigestConstruct<Sha256, Vec<u8>>;
+    type InMemory = crate::memory::InMemoryBackend<Construct>;
 
     #[test]
     fn test_merkle_selections() {

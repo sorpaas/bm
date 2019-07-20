@@ -1,4 +1,4 @@
-use crate::traits::{ReadBackend, WriteBackend, EmptyBackend, Construct, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree, Sequence};
+use crate::traits::{ReadBackend, WriteBackend, Construct, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree, Sequence};
 use crate::raw::Raw;
 use crate::index::Index;
 
@@ -24,13 +24,13 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
         Index::from_one((1 << self.depth()) + i)
     }
 
-    fn extend<DB: EmptyBackend<Construct=C>>(
+    fn extend<DB: WriteBackend<Construct=C>>(
         &mut self,
         db: &mut DB
     ) -> Result<(), Error<DB::Error>> {
         let root = self.root();
         let mut new_raw = Raw::default();
-        let empty = db.empty_at(self.depth())?;
+        let empty = C::empty_at(db, self.depth())?;
         new_raw.set(db, EXTEND_INDEX, root)?;
         new_raw.set(db, EMPTY_INDEX, empty)?;
         self.raw.set(db, ROOT_INDEX, Value::End(Default::default()))?;
@@ -107,7 +107,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     }
 
     /// Push a new value to the vector.
-    pub fn push<DB: EmptyBackend<Construct=C>>(
+    pub fn push<DB: WriteBackend<Construct=C>>(
         &mut self,
         db: &mut DB,
         value: ValueOf<C>
@@ -130,7 +130,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     }
 
     /// Pop a value from the vector.
-    pub fn pop<DB: EmptyBackend<Construct=C>>(
+    pub fn pop<DB: WriteBackend<Construct=C>>(
         &mut self,
         db: &mut DB
     ) -> Result<Option<ValueOf<C>>, Error<DB::Error>> {
@@ -158,7 +158,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
                 break
             }
         }
-        let empty = db.empty_at(empty_depth_to_bottom)?;
+        let empty = C::empty_at(db, empty_depth_to_bottom)?;
         self.raw.set(db, replace_index, empty)?;
 
         if len <= self.current_max_len() / 2 {
@@ -228,7 +228,7 @@ impl<R: RootStatus, C: Construct> Leak for Vector<R, C> {
 
 impl<C: Construct> Vector<Owned, C> {
     /// Create a new tuple.
-    pub fn create<DB: EmptyBackend<Construct=C>>(
+    pub fn create<DB: WriteBackend<Construct=C>>(
         db: &mut DB,
         len: usize,
         max_len: Option<usize>
@@ -249,7 +249,7 @@ impl<C: Construct> Vector<Owned, C> {
             depth += 1;
         }
 
-        let empty = db.empty_at(depth)?;
+        let empty = C::empty_at(db, depth)?;
         raw.set(db, ROOT_INDEX, empty)?;
 
         Ok(Self {

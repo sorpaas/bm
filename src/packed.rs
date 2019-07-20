@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use crate::length::LengthMixed;
 use crate::vector::Vector;
 use crate::raw::Raw;
-use crate::traits::{Value, Construct, ReadBackend, WriteBackend, EmptyBackend, ValueOf, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
+use crate::traits::{Value, Construct, ReadBackend, WriteBackend, ValueOf, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
 use crate::utils::host_len;
 
 fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
@@ -83,7 +83,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
     }
 
     /// Push a new value to the tuple.
-    pub fn push<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
         let index = self.len;
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
@@ -96,7 +96,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
     }
 
     /// Pop a value from the tuple.
-    pub fn pop<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
+    pub fn pop<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
         if self.len == 0 {
             return Ok(None)
         }
@@ -196,7 +196,7 @@ impl<C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<Owned
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Create a new tuple.
-    pub fn create<DB: EmptyBackend<Construct=C>>(db: &mut DB, value_len: usize, value_max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn create<DB: WriteBackend<Construct=C>>(db: &mut DB, value_len: usize, value_max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         let host_max_len = value_max_len.map(|l| host_len::<H, V>(l));
         let host_len = host_len::<H, V>(value_len);
 
@@ -238,12 +238,12 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
     }
 
     /// Push a new value to the vector.
-    pub fn push<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.push(db, value))
     }
 
     /// Pop a value from the vector.
-    pub fn pop<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
+    pub fn pop<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.pop(db))
     }
 }
@@ -297,7 +297,7 @@ impl<C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<Owned, 
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Create a new vector.
-    pub fn create<DB: EmptyBackend<Construct=C>>(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn create<DB: WriteBackend<Construct=C>>(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::create(db, |db| PackedVector::<Owned, _, T, H, V>::create(db, 0, max_len))?))
     }
 }
@@ -309,7 +309,7 @@ mod tests {
     use crate::traits::Owned;
     use typenum::{U8, U32};
 
-    type InMemory = crate::memory::InMemoryBackend<crate::InheritedEmpty, crate::DigestConstruct<Sha256, ListValue>>;
+    type InMemory = crate::memory::InMemoryBackend<crate::InheritedDigestConstruct<Sha256, ListValue>>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
     struct ListValue([u8; 8]);

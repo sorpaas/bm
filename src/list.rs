@@ -1,4 +1,4 @@
-use crate::traits::{ReadBackend, WriteBackend, EmptyBackend, Construct, ValueOf, RootStatus, Dangling, Owned, Leak, Error, Tree, Sequence};
+use crate::traits::{ReadBackend, WriteBackend, Construct, ValueOf, RootStatus, Dangling, Owned, Leak, Error, Tree, Sequence};
 use crate::vector::Vector;
 use crate::raw::Raw;
 use crate::length::LengthMixed;
@@ -26,12 +26,12 @@ impl<R: RootStatus, C: Construct> List<R, C> where
     }
 
     /// Push a new value to the vector.
-    pub fn push<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB, value: ValueOf<C>) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, value: ValueOf<C>) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.push(db, value))
     }
 
     /// Pop a value from the vector.
-    pub fn pop<DB: EmptyBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<ValueOf<C>>, Error<DB::Error>> {
+    pub fn pop<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<ValueOf<C>>, Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.pop(db))
     }
 
@@ -93,7 +93,7 @@ impl<C: Construct> List<Owned, C> where
     C::End: From<usize> + Into<usize>
 {
     /// Create a new vector.
-    pub fn create<DB: EmptyBackend<Construct=C>>(
+    pub fn create<DB: WriteBackend<Construct=C>>(
         db: &mut DB,
         max_len: Option<usize>
     ) -> Result<Self, Error<DB::Error>> {
@@ -107,8 +107,8 @@ mod tests {
     use crate::Value;
     use sha2::Sha256;
 
-    type InheritedInMemory = crate::memory::InMemoryBackend<crate::InheritedEmpty, crate::DigestConstruct<Sha256, ListValue>>;
-    type UnitInMemory = crate::memory::InMemoryBackend<crate::UnitEmpty, crate::DigestConstruct<Sha256, ListValue>>;
+    type InheritedInMemory = crate::memory::InMemoryBackend<crate::InheritedDigestConstruct<Sha256, ListValue>>;
+    type UnitInMemory = crate::memory::InMemoryBackend<crate::UnitDigestConstruct<Sha256, ListValue>>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
     struct ListValue(Vec<u8>);
@@ -133,7 +133,10 @@ mod tests {
         }
     }
 
-    fn assert_push_pop_with_db<E: crate::EmptyStatus>(mut db: crate::InMemoryBackend<E, crate::DigestConstruct<Sha256, ListValue>>) {
+    #[test]
+    fn test_push_pop_inherited() {
+        let mut db = InheritedInMemory::default();
+
         let mut vec = List::create(&mut db, None).unwrap();
         let mut roots = Vec::new();
 
@@ -153,13 +156,25 @@ mod tests {
     }
 
     #[test]
-    fn test_push_pop_inherited() {
-        assert_push_pop_with_db(InheritedInMemory::default());
-    }
-
-    #[test]
     fn test_push_pop_unit() {
-        assert_push_pop_with_db(UnitInMemory::default())
+        let mut db = UnitInMemory::default();
+
+        let mut vec = List::create(&mut db, None).unwrap();
+        let mut roots = Vec::new();
+
+        for i in 0..100 {
+            assert_eq!(vec.len(), i);
+            vec.push(&mut db, Value::End(i.into())).unwrap();
+            roots.push(vec.root());
+        }
+        assert_eq!(vec.len(), 100);
+        for i in (0..100).rev() {
+            assert_eq!(vec.root(), roots.pop().unwrap());
+            let value = vec.pop(&mut db).unwrap();
+            assert_eq!(value, Some(Value::End(i.into())));
+            assert_eq!(vec.len(), i);
+        }
+        assert_eq!(vec.len(), 0);
     }
 
     #[test]

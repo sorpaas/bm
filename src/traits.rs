@@ -43,6 +43,12 @@ pub trait Construct {
 
     /// Get the intermediate value of given left and right child.
     fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> Self::Intermediate;
+    /// Get or create the empty value given a backend. `empty_at(0)`
+    /// should always equal to `Value::End(Default::default())`.
+    fn empty_at<DB: WriteBackend<Construct=Self>>(
+        db: &mut DB,
+        depth_to_bottom: usize
+    ) -> Result<ValueOf<Self>, DB::Error>;
 }
 
 /// Represents a basic merkle tree with a known root.
@@ -116,7 +122,7 @@ impl<DBError> From<DBError> for Error<DBError> {
 /// Traits for a merkle database.
 pub trait Backend {
     /// Construct of the backend.
-    type Construct: Construct;
+    type Construct: ?Sized + Construct;
     /// Error type for DB access.
     type Error;
 }
@@ -148,14 +154,6 @@ pub trait WriteBackend: ReadBackend {
         key: <Self::Construct as Construct>::Intermediate,
         value: (ValueOf<Self::Construct>, ValueOf<Self::Construct>)
     ) -> Result<(), Self::Error>;
-}
-
-/// Empty backend.
-pub trait EmptyBackend: WriteBackend {
-    /// Get or create the empty value at given depth-to-bottom for
-    /// balanced list / vectors. It must have the property that
-    /// `Value::End(Default::default())` equals `empty_at(0)`.
-    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self::Construct>, Self::Error>;
 }
 
 /// Leakable value, whose default behavior of drop is to leak.

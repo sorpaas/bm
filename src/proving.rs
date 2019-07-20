@@ -1,4 +1,4 @@
-use crate::{Backend, ReadBackend, WriteBackend, EmptyBackend, Construct, ValueOf};
+use crate::{Backend, ReadBackend, WriteBackend, Construct, ValueOf};
 use core::hash::Hash;
 use std::collections::{HashMap, HashSet};
 
@@ -68,13 +68,5 @@ impl<'a, DB: WriteBackend> WriteBackend for ProvingBackend<'a, DB> where
     ) -> Result<(), Self::Error> {
         self.inserts.insert(key.clone());
         self.db.insert(key, value)
-    }
-}
-
-impl<'a, DB: EmptyBackend> EmptyBackend for ProvingBackend<'a, DB> where
-    <DB::Construct as Construct>::Intermediate: Eq + Hash
-{
-    fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<DB::Construct>, Self::Error> {
-        self.db.empty_at(depth_to_bottom)
     }
 }
