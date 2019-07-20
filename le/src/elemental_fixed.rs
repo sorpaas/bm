@@ -1,4 +1,4 @@
-use bm::{ValueOf, ReadBackend, EmptyBackend, Error, Value, DanglingPackedVector, DanglingVector, Leak, Sequence};
+use bm::{ValueOf, ReadBackend, WriteBackend, Error, Value, DanglingPackedVector, DanglingVector, Leak, Sequence};
 use bm::utils::{vector_tree, host_len};
 use primitive_types::U256;
 use generic_array::GenericArray;
@@ -10,7 +10,7 @@ use crate::{IntoTree, FromTree, End, CompatibleConstruct};
 pub trait IntoCompositeVectorTree {
     /// Convert this vector into merkle tree, writing nodes into the
     /// given database, and using the maximum length specified.
-    fn into_composite_vector_tree<DB: EmptyBackend>(
+    fn into_composite_vector_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -22,7 +22,7 @@ pub trait IntoCompositeVectorTree {
 pub trait IntoCompactVectorTree {
     /// Convert this vector into merkle tree, writing nodes into the
     /// given database, and using the maximum length specified.
-    fn into_compact_vector_tree<DB: EmptyBackend>(
+    fn into_compact_vector_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -66,7 +66,7 @@ pub struct ElementalFixedVec<T>(pub Vec<T>);
 macro_rules! impl_builtin_fixed_uint_vector {
     ( $t:ty, $lt:ty ) => {
         impl<'a> IntoCompactVectorTree for ElementalFixedVecRef<'a, $t> {
-            fn into_compact_vector_tree<DB: EmptyBackend>(
+            fn into_compact_vector_tree<DB: WriteBackend>(
                 &self,
                 db: &mut DB,
                 max_len: Option<usize>
@@ -132,7 +132,7 @@ impl_builtin_fixed_uint_vector!(u64, typenum::U8);
 impl_builtin_fixed_uint_vector!(u128, typenum::U16);
 
 impl<'a> IntoCompactVectorTree for ElementalFixedVecRef<'a, U256> {
-    fn into_compact_vector_tree<DB: EmptyBackend>(
+    fn into_compact_vector_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -171,7 +171,7 @@ impl FromCompactVectorTree for ElementalFixedVec<U256> {
 }
 
 impl<'a> IntoCompactVectorTree for ElementalFixedVecRef<'a, bool> {
-    fn into_compact_vector_tree<DB: EmptyBackend>(
+    fn into_compact_vector_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -221,7 +221,7 @@ impl FromCompactVectorTree for ElementalFixedVec<bool> {
 impl<'a, T> IntoCompositeVectorTree for ElementalFixedVecRef<'a, T> where
     T: IntoTree,
 {
-    fn into_composite_vector_tree<DB: EmptyBackend>(
+    fn into_composite_vector_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -273,7 +273,7 @@ impl<T: FromTree> FromCompositeVectorTree for ElementalFixedVec<T> {
 impl<T> IntoCompactVectorTree for ElementalFixedVec<T> where
     for<'a> ElementalFixedVecRef<'a, T>: IntoCompactVectorTree,
 {
-    fn into_compact_vector_tree<DB: EmptyBackend>(
+    fn into_compact_vector_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -287,7 +287,7 @@ impl<T> IntoCompactVectorTree for ElementalFixedVec<T> where
 impl<T> IntoCompositeVectorTree for ElementalFixedVec<T> where
     for<'a> ElementalFixedVecRef<'a, T>: IntoCompositeVectorTree,
 {
-    fn into_composite_vector_tree<DB: EmptyBackend>(
+    fn into_composite_vector_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>

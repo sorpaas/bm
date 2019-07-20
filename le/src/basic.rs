@@ -1,11 +1,11 @@
-use bm::{Value, ReadBackend, EmptyBackend, ValueOf, Error, Index, DanglingRaw, Leak};
+use bm::{Value, ReadBackend, WriteBackend, ValueOf, Error, Index, DanglingRaw, Leak};
 use primitive_types::U256;
 
 use crate::{IntoTree, FromTree, End, Intermediate, CompatibleConstruct};
 use crate::utils::{mix_in_type, decode_with_type};
 
 impl IntoTree for bool {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         match self {
@@ -26,7 +26,7 @@ impl FromTree for bool {
 macro_rules! impl_builtin_uint {
     ( $( $t:ty ),* ) => { $(
         impl IntoTree for $t {
-            fn into_tree<DB: EmptyBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+            fn into_tree<DB: WriteBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
                 DB::Construct: CompatibleConstruct,
             {
                 let mut ret = [0u8; 32];
@@ -61,7 +61,7 @@ macro_rules! impl_builtin_uint {
 impl_builtin_uint!(u8, u16, u32, u64, u128);
 
 impl IntoTree for U256 {
-    fn into_tree<DB: EmptyBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         let mut ret = [0u8; 32];
@@ -87,7 +87,7 @@ impl FromTree for U256 {
 }
 
 impl IntoTree for Value<Intermediate, End> {
-    fn into_tree<DB: EmptyBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         Ok(self.clone())
@@ -124,7 +124,7 @@ impl<T> FromTree for Option<T> where
 impl<T> IntoTree for Option<T> where
     T: IntoTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         match self {

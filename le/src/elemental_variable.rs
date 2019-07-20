@@ -1,4 +1,4 @@
-use bm::{Error, ValueOf, ReadBackend, EmptyBackend};
+use bm::{Error, ValueOf, ReadBackend, WriteBackend};
 use primitive_types::U256;
 use alloc::vec::Vec;
 
@@ -11,7 +11,7 @@ use crate::utils::{mix_in_length, decode_with_length};
 pub trait IntoCompositeListTree {
     /// Convert this list into merkle tree, writing nodes into the
     /// given database, and using the maximum length specified.
-    fn into_composite_list_tree<DB: EmptyBackend>(
+    fn into_composite_list_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -23,7 +23,7 @@ pub trait IntoCompositeListTree {
 pub trait IntoCompactListTree {
     /// Convert this list into merkle tree, writing nodes into the
     /// given database, and using the maximum length specified.
-    fn into_compact_list_tree<DB: EmptyBackend>(
+    fn into_compact_list_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -65,7 +65,7 @@ pub struct ElementalVariableVec<T>(pub Vec<T>);
 macro_rules! impl_packed {
     ( $t:ty ) => {
         impl<'a> IntoCompactListTree for ElementalVariableVecRef<'a, $t> {
-            fn into_compact_list_tree<DB: EmptyBackend>(
+            fn into_compact_list_tree<DB: WriteBackend>(
                 &self,
                 db: &mut DB,
                 max_len: Option<usize>
@@ -92,7 +92,7 @@ impl_packed!(U256);
 impl<'a, T> IntoCompositeListTree for ElementalVariableVecRef<'a, T> where
     for<'b> ElementalFixedVecRef<'b, T>: IntoCompositeVectorTree,
 {
-    fn into_composite_list_tree<DB: EmptyBackend>(
+    fn into_composite_list_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -163,7 +163,7 @@ impl<T> FromCompositeListTree for ElementalVariableVec<T> where
 impl<T> IntoCompactListTree for ElementalVariableVec<T> where
     for<'a> ElementalVariableVecRef<'a, T>: IntoCompactListTree,
 {
-    fn into_compact_list_tree<DB: EmptyBackend>(
+    fn into_compact_list_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>
@@ -177,7 +177,7 @@ impl<T> IntoCompactListTree for ElementalVariableVec<T> where
 impl<T> IntoCompositeListTree for ElementalVariableVec<T> where
     for<'a> ElementalVariableVecRef<'a, T>: IntoCompositeListTree,
 {
-    fn into_composite_list_tree<DB: EmptyBackend>(
+    fn into_composite_list_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
         max_len: Option<usize>

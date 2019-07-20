@@ -1,4 +1,4 @@
-use bm::{ReadBackend, EmptyBackend, ValueOf, Error, Value, DanglingVector, Leak};
+use bm::{ReadBackend, WriteBackend, ValueOf, Error, Value, DanglingVector, Leak};
 use bm::utils::vector_tree;
 use primitive_types::{H256, H512};
 use generic_array::{GenericArray, ArrayLength};
@@ -12,7 +12,7 @@ use crate::{ElementalFixedVecRef, ElementalFixedVec, IntoCompositeVectorTree,
 impl<'a, T, L: ArrayLength<T>> IntoTree for CompactRef<'a, GenericArray<T, L>> where
     for<'b> ElementalFixedVecRef<'b, T>: IntoCompactVectorTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, None)
@@ -22,7 +22,7 @@ impl<'a, T, L: ArrayLength<T>> IntoTree for CompactRef<'a, GenericArray<T, L>> w
 impl<T, L: ArrayLength<T>> IntoTree for Compact<GenericArray<T, L>> where
     for<'a> ElementalFixedVecRef<'a, T>: IntoCompactVectorTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, None)
@@ -48,7 +48,7 @@ impl<T, L: ArrayLength<T>> FromTree for Compact<GenericArray<T, L>> where
 impl<'a, T, L: Unsigned> IntoTree for CompactRef<'a, VecArray<T, L>> where
     for<'b> ElementalFixedVecRef<'b, T>: IntoCompactVectorTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, None)
@@ -58,7 +58,7 @@ impl<'a, T, L: Unsigned> IntoTree for CompactRef<'a, VecArray<T, L>> where
 impl<T, L: Unsigned> IntoTree for Compact<VecArray<T, L>> where
     for<'a> ElementalFixedVecRef<'a, T>: IntoCompactVectorTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, None)
@@ -78,7 +78,7 @@ impl<T, L: Unsigned> FromTree for Compact<VecArray<T, L>> where
 }
 
 impl IntoTree for H256 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalFixedVecRef(&self.0.as_ref()).into_compact_vector_tree(db, None)
@@ -95,7 +95,7 @@ impl FromTree for H256 {
 }
 
 impl IntoTree for H512 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalFixedVecRef(&self.0.as_ref()).into_compact_vector_tree(db, None)
@@ -116,7 +116,7 @@ macro_rules! impl_fixed_array {
         impl<T> IntoTree for [T; $n] where
             for<'a> ElementalFixedVecRef<'a, T>: IntoCompositeVectorTree,
         {
-            fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+            fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
                 DB::Construct: CompatibleConstruct,
             {
                 ElementalFixedVecRef(&self[..]).into_composite_vector_tree(db, None)
@@ -149,7 +149,7 @@ impl_fixed_array!(1, 2, 3, 4, 5, 6, 7, 8,
 impl<T, L: ArrayLength<T>> IntoTree for GenericArray<T, L> where
     for<'a> ElementalFixedVecRef<'a, T>: IntoCompositeVectorTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalFixedVecRef(&self[..]).into_composite_vector_tree(db, None)
@@ -171,7 +171,7 @@ impl<T, L: ArrayLength<T>> FromTree for GenericArray<T, L> where
 impl<T, L: Unsigned> IntoTree for VecArray<T, L> where
     for<'a> ElementalFixedVecRef<'a, T>: IntoCompositeVectorTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalFixedVecRef(&self[..]).into_composite_vector_tree(db, None)
@@ -202,7 +202,7 @@ impl FromTree for () {
 }
 
 impl IntoTree for () {
-    fn into_tree<DB: EmptyBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         Ok(Value::End(Default::default()))
@@ -230,7 +230,7 @@ macro_rules! impl_tuple {
         }
 
         impl<$($t: IntoTree),+> IntoTree for ($($t),+) {
-            fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+            fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
                 DB::Construct: CompatibleConstruct,
             {
                 let ($($i),+) = self;

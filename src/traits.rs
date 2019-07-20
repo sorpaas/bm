@@ -35,7 +35,7 @@ impl<I: AsRef<[u8]>, E: AsRef<[u8]>> AsRef<[u8]> for Value<I, E> {
 }
 
 /// Construct for a merkle tree.
-pub trait Construct {
+pub trait Construct: Sized {
     /// Intermediate value stored in this merkle database.
     type Intermediate: Clone;
     /// End value stored in this merkle database.
@@ -122,7 +122,7 @@ impl<DBError> From<DBError> for Error<DBError> {
 /// Traits for a merkle database.
 pub trait Backend {
     /// Construct of the backend.
-    type Construct: ?Sized + Construct;
+    type Construct: Construct;
     /// Error type for DB access.
     type Error;
 }

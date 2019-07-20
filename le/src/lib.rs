@@ -13,7 +13,7 @@ use generic_array::GenericArray;
 use primitive_types::H256;
 use digest::Digest;
 
-pub use bm::{Backend, ReadBackend, EmptyBackend, DigestConstruct,
+pub use bm::{Backend, ReadBackend, WriteBackend, InheritedDigestConstruct,
              Construct, InheritedEmpty, Error, ValueOf, Value, Vector,
              DanglingVector, List, Leak, NoopBackend,
              InMemoryBackend};
@@ -77,7 +77,10 @@ impl<C: Construct<Intermediate=Intermediate, End=End>> CompatibleConstruct for C
 pub trait IntoTree {
     /// Convert this type into merkle tree, writing nodes into the
     /// given database.
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(
+        &self,
+        db: &mut DB
+    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;
 }
 
@@ -115,7 +118,7 @@ pub fn tree_root<D, T>(value: &T) -> H256 where
     T: IntoTree,
     D: Digest<OutputSize=U32>,
 {
-    value.into_tree(&mut NoopBackend::<InheritedEmpty, DigestConstruct<D, End>>::default())
+    value.into_tree(&mut NoopBackend::<InheritedDigestConstruct<D, End>>::default())
         .map(|ret| H256::from_slice(ret.as_ref()))
         .expect("Noop backend never fails in set; qed")
 }

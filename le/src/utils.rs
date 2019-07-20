@@ -1,13 +1,13 @@
 //! Utilities
 
-use bm::{ValueOf, ReadBackend, EmptyBackend, Error};
+use bm::{ValueOf, ReadBackend, WriteBackend, Error};
 use primitive_types::U256;
 use crate::{CompatibleConstruct, IntoTree, FromTree};
 
 pub use bm::utils::*;
 
 /// Mix in type.
-pub fn mix_in_type<T, DB: EmptyBackend>(value: &T, db: &mut DB, ty: usize) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+pub fn mix_in_type<T, DB: WriteBackend>(value: &T, db: &mut DB, ty: usize) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
     T: IntoTree,
     DB::Construct: CompatibleConstruct,
 {
@@ -32,7 +32,7 @@ pub fn decode_with_type<DB: ReadBackend, F, R>(root: &ValueOf<DB::Construct>, db
 }
 
 /// Mix in length.
-pub fn mix_in_length<T, DB: EmptyBackend>(value: &T, db: &mut DB, len: usize) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+pub fn mix_in_length<T, DB: WriteBackend>(value: &T, db: &mut DB, len: usize) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
     T: IntoTree,
     DB::Construct: CompatibleConstruct,
 {

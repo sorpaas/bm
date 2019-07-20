@@ -1,5 +1,5 @@
 use typenum::Unsigned;
-use bm::{Error, ValueOf, ReadBackend, EmptyBackend};
+use bm::{Error, ValueOf, ReadBackend, WriteBackend};
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 #[cfg(feature = "serde")]
@@ -57,7 +57,7 @@ impl<T, ML> Into<Vec<T>> for MaxVec<T, ML> {
 impl<T, ML: Unsigned> IntoTree for MaxVec<T, ML> where
     for<'b> ElementalVariableVecRef<'b, T>: IntoCompositeListTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self.0).into_composite_list_tree(db, Some(ML::to_usize()))
@@ -80,7 +80,7 @@ impl<T, ML: Unsigned> FromTree for MaxVec<T, ML> where
 impl<'a, T, ML: Unsigned> IntoTree for CompactRef<'a, MaxVec<T, ML>> where
     for<'b> ElementalVariableVecRef<'b, T>: IntoCompactListTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self.0).into_compact_list_tree(db, Some(ML::to_usize()))
@@ -90,7 +90,7 @@ impl<'a, T, ML: Unsigned> IntoTree for CompactRef<'a, MaxVec<T, ML>> where
 impl<T, ML: Unsigned> IntoTree for Compact<MaxVec<T, ML>> where
     for<'b> ElementalVariableVecRef<'b, T>: IntoCompactListTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self.0).into_compact_list_tree(db, Some(ML::to_usize()))
@@ -113,7 +113,7 @@ impl<T, ML: Unsigned> FromTree for Compact<MaxVec<T, ML>> where
 impl<T> IntoTree for [T] where
     for<'a> ElementalVariableVecRef<'a, T>: IntoCompositeListTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self).into_composite_list_tree(db, None)
@@ -123,7 +123,7 @@ impl<T> IntoTree for [T] where
 impl<T> IntoTree for Vec<T> where
     for<'a> ElementalVariableVecRef<'a, T>: IntoCompositeListTree,
 {
-    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self).into_composite_list_tree(db, None)
