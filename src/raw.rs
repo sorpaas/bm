@@ -229,7 +229,8 @@ mod tests {
     use crate::traits::Owned;
     use sha2::Sha256;
 
-    type InMemory = crate::memory::InMemoryBackend<Sha256, Vec<u8>>;
+    type Construct = crate::DigestConstruct<Sha256, Vec<u8>>;
+    type InMemory = crate::memory::InMemoryBackend<Construct>;
 
     #[test]
     fn test_merkle_selections() {
@@ -274,7 +275,7 @@ mod tests {
     #[test]
     fn test_set_empty() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut list = Raw::<Owned, InMemory>::default();
+        let mut list = Raw::<Owned, Construct>::default();
 
         let mut last_root = list.root();
         for _ in 0..3 {
@@ -287,7 +288,7 @@ mod tests {
     #[test]
     fn test_set_skip() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut list = Raw::<Owned, InMemory>::default();
+        let mut list = Raw::<Owned, Construct>::default();
 
         list.set(&mut db, Index::from_one(4).unwrap(), Value::End(vec![2])).unwrap();
         assert_eq!(list.get(&mut db, Index::from_one(4).unwrap()).unwrap(), Some(Value::End(vec![2])));
@@ -298,7 +299,7 @@ mod tests {
     #[test]
     fn test_set_basic() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut list = Raw::<Owned, InMemory>::default();
+        let mut list = Raw::<Owned, Construct>::default();
 
         for i in 4..8 {
             list.set(&mut db, Index::from_one(i).unwrap(), Value::End(vec![i as u8])).unwrap();
@@ -309,8 +310,8 @@ mod tests {
     fn test_set_only() {
         let mut db1 = InMemory::new_with_inherited_empty();
         let mut db2 = InMemory::new_with_inherited_empty();
-        let mut list1 = Raw::<Owned, InMemory>::default();
-        let mut list2 = Raw::<Owned, InMemory>::default();
+        let mut list1 = Raw::<Owned, Construct>::default();
+        let mut list2 = Raw::<Owned, Construct>::default();
 
         for i in 32..64 {
             list1.set(&mut db1, Index::from_one(i).unwrap(), Value::End(vec![i as u8])).unwrap();
@@ -333,7 +334,7 @@ mod tests {
     #[test]
     fn test_intermediate() {
         let mut db = InMemory::new_with_inherited_empty();
-        let mut list = Raw::<Owned, InMemory>::default();
+        let mut list = Raw::<Owned, Construct>::default();
         list.set(&mut db, Index::from_one(2).unwrap(), Value::End(vec![])).unwrap();
         assert_eq!(list.get(&mut db, Index::from_one(3).unwrap()).unwrap().unwrap(), Value::End(vec![]));
 
@@ -346,7 +347,7 @@ mod tests {
         assert_eq!(db.as_ref().len(), 2);
 
         let mut db1 = db.clone();
-        let mut list1 = Raw::<Owned, InMemory>::from_leaked(list.root());
+        let mut list1 = Raw::<Owned, Construct>::from_leaked(list.root());
         list.set(&mut db, Index::from_one(1).unwrap(), empty1.clone()).unwrap();
         assert_eq!(list.get(&mut db, Index::from_one(3).unwrap()).unwrap().unwrap(), Value::End(vec![]));
         assert_eq!(db.as_ref().len(), 1);

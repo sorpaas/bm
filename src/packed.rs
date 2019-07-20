@@ -309,7 +309,7 @@ mod tests {
     use crate::traits::Owned;
     use typenum::{U8, U32};
 
-    type InMemory = crate::memory::InMemoryBackend<Sha256, ListValue>;
+    type InMemory = crate::memory::InMemoryBackend<crate::DigestConstruct<Sha256, ListValue>>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
     struct ListValue([u8; 8]);

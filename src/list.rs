@@ -107,7 +107,7 @@ mod tests {
     use crate::Value;
     use sha2::Sha256;
 
-    type InMemory = crate::memory::InMemoryBackend<Sha256, ListValue>;
+    type InMemory = crate::memory::InMemoryBackend<crate::DigestConstruct<Sha256, ListValue>>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
     struct ListValue(Vec<u8>);

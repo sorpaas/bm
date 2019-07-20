@@ -31,12 +31,17 @@ pub enum NoopBackendError {
     NotSupported,
 }
 
-#[derive(Clone)]
 /// Noop merkle database.
 pub struct NoopBackend<C: Construct>(
     Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>,
     Option<C::End>,
 );
+
+impl<C: Construct> Clone for NoopBackend<C> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone())
+    }
+}
 
 impl<C: Construct> NoopBackend<C> where
     C::Intermediate: Eq + Hash,
@@ -115,12 +120,17 @@ pub enum InMemoryBackendError {
     SetIntermediateNotExist
 }
 
-#[derive(Clone)]
 /// In-memory merkle database.
 pub struct InMemoryBackend<C: Construct>(
     Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>,
     Option<C::End>,
 );
+
+impl<C: Construct> Clone for InMemoryBackend<C> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone())
+    }
+}
 
 impl<C: Construct> InMemoryBackend<C> where
     C::Intermediate: Eq + Hash,
