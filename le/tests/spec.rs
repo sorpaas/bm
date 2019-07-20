@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use typenum::*;
 
-use bm::InMemoryBackend;
+use bm::{InMemoryBackend, InheritedDigestConstruct};
 use generic_array::GenericArray;
 use bm_le::{End, IntoTree, FromTree, Compact, MaxVec};
 
@@ -23,10 +23,10 @@ fn h(a: &[u8], b: &[u8]) -> H256 {
 }
 
 fn t<T>(value: T, expected: H256) where
-    T: IntoTree<InMemoryBackend<Sha256, End>> + FromTree<InMemoryBackend<Sha256, End>>,
+    T: IntoTree + FromTree,
     T: Debug + PartialEq,
 {
-    let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
+    let mut db = InMemoryBackend::<InheritedDigestConstruct<Sha256, End>>::default();
     let actual = value.into_tree(&mut db).unwrap();
     assert_eq!(H256::from_slice(actual.as_ref()), expected);
     let decoded = T::from_tree(&actual, &mut db).unwrap();

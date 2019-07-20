@@ -191,9 +191,9 @@ impl<T> IntoCompositeListTree for ElementalVariableVec<T> where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{IntoTree, FromTree};
+    use crate::{IntoTree, FromTree, End};
 
-    use bm::InMemoryBackend;
+    use bm::{InMemoryBackend, InheritedDigestConstruct};
     use sha2::Sha256;
 
     #[test]
@@ -206,7 +206,7 @@ mod tests {
             ret
         };
 
-        let mut db = InMemoryBackend::<Sha256, End>::new_with_inherited_empty();
+        let mut db = InMemoryBackend::<InheritedDigestConstruct<Sha256, End>>::default();
         let encoded = data.into_tree(&mut db).unwrap();
         let decoded = Vec::<u16>::from_tree(&encoded, &mut db).unwrap();
         assert_eq!(data, decoded);
