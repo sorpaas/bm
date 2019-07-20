@@ -3,7 +3,7 @@
 extern crate proc_macro;
 
 use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, parse2, Generics, Fields, DeriveInput, Data};
+use syn::{parse_macro_input, Fields, DeriveInput, Data};
 use syn::spanned::Spanned;
 use deriving::{has_attribute, normalized_fields, is_fields_variant_unnamed, normalized_variant_match_cause};
 
@@ -15,8 +15,6 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
     let name = &input.ident;
 
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let mut impl_generics = parse2::<Generics>(quote! { #impl_generics }).expect("Parse generic failed");
-    impl_generics.params.push(parse2(quote! { DB }).expect("Parse generic failed"));
 
     let build_fields = |fs, prefix| {
         let where_fields = normalized_fields(fs)
@@ -26,11 +24,11 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
 
                 if has_attribute("bm", &f.1.attrs, "compact") {
                     quote_spanned! {
-		        f.1.span() => for<'a> bm_le::CompactRef<'a, #ty>: bm_le::IntoTree<DB>
+		        f.1.span() => for<'a> bm_le::CompactRef<'a, #ty>: bm_le::IntoTree
 	            }
                 } else {
 	            quote_spanned! {
-		        f.1.span() => #ty: bm_le::IntoTree<DB>
+		        f.1.span() => #ty: bm_le::IntoTree
 	            }
                 }
 	    }).collect::<Vec<_>>();
@@ -96,12 +94,16 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
     };
 
     let expanded = quote! {
-        impl #impl_generics bm_le::IntoTree<DB> for #name #ty_generics where
+        impl #impl_generics bm_le::IntoTree for #name #ty_generics where
             #where_clause
-            #(#where_fields),*,
-            DB: bm_le::Backend<Intermediate=bm_le::Intermediate, End=bm_le::End>
+            #(#where_fields),*
         {
-            fn into_tree(&self, db: &mut DB) -> Result<bm_le::ValueOf<DB>, bm_le::Error<DB::Error>> {
+            fn into_tree<DB: bm_le::WriteBackend>(
+                &self,
+                db: &mut DB
+            ) -> Result<bm_le::ValueOf<DB::Construct>, bm_le::Error<DB::Error>> where
+                DB::Construct: bm_le::CompatibleConstruct
+            {
                 #inner
             }
         }
@@ -116,8 +118,6 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
     let name = input.ident;
 
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let mut impl_generics = parse2::<Generics>(quote! { #impl_generics }).expect("Parse generic failed");
-    impl_generics.params.push(parse2(quote! { DB }).expect("Parse generic failed"));
 
     let build_fields = |fs| {
         let where_fields = normalized_fields(fs)
@@ -127,11 +127,11 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
 
                 if has_attribute("bm", &f.1.attrs, "compact") {
                     quote_spanned! {
-		        f.1.span() => bm_le::Compact<#ty>: bm_le::FromTree<DB>
+		        f.1.span() => bm_le::Compact<#ty>: bm_le::FromTree
 	            }
                 } else {
 	            quote_spanned! {
-		        f.1.span() => #ty: bm_le::FromTree<DB>
+		        f.1.span() => #ty: bm_le::FromTree
 	            }
                 }
 	    }).collect::<Vec<_>>();
@@ -147,7 +147,7 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
                  if has_attribute("bm", &f.1.attrs, "compact") {
                      quote_spanned! {
                          f.1.span() =>
-                             <bm_le::Compact<#ty> as bm_le::FromTree<_>>::from_tree(
+                             <bm_le::Compact<#ty> as bm_le::FromTree>::from_tree(
                                  &vector.get(db, #i)?,
                                  db,
                              )?.0
@@ -184,7 +184,7 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
                 {
                     use bm_le::Leak;
 
-                    let vector = bm_le::DanglingVector::<DB>::from_leaked(
+                    let vector = bm_le::DanglingVector::<DB::Construct>::from_leaked(
                         (root.clone(), #fields_count, None)
                     );
 
@@ -226,7 +226,7 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
                                 #i => {
                                     use bm_le::Leak;
 
-                                    let vector = bm_le::DanglingVector::<DB>::from_leaked(
+                                    let vector = bm_le::DanglingVector::<DB::Construct>::from_leaked(
                                         (vector_root.clone(), #fields_count, None)
                                     );
 
@@ -249,7 +249,7 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
                                 #i => {
                                     use bm_le::Leak;
 
-                                    let vector = bm_le::DanglingVector::<DB>::from_leaked(
+                                    let vector = bm_le::DanglingVector::<DB::Construct>::from_leaked(
                                         (vector_root.clone(), #fields_count, None)
                                     );
 
@@ -287,15 +287,16 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
 
     let expanded =
         quote! {
-            impl #impl_generics bm_le::FromTree<DB> for #name #ty_generics where
+            impl #impl_generics bm_le::FromTree for #name #ty_generics where
                 #where_clause
-                #(#where_fields),*,
-                DB: bm_le::Backend<Intermediate=bm_le::Intermediate, End=bm_le::End>
+                #(#where_fields),*
             {
-                fn from_tree(
-                    root: &bm_le::ValueOf<DB>,
+                fn from_tree<DB: bm_le::ReadBackend>(
+                    root: &bm_le::ValueOf<DB::Construct>,
                     db: &mut DB,
-                ) -> Result<Self, bm_le::Error<DB::Error>> {
+                ) -> Result<Self, bm_le::Error<DB::Error>> where
+                    DB::Construct: bm_le::CompatibleConstruct
+                {
                     #inner
                 }
             }

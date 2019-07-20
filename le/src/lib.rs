@@ -14,9 +14,8 @@ use primitive_types::H256;
 use digest::Digest;
 
 pub use bm::{Backend, ReadBackend, WriteBackend, InheritedDigestConstruct,
-             Construct, InheritedEmpty, Error, ValueOf, Value, Vector,
-             DanglingVector, List, Leak, NoopBackend,
-             InMemoryBackend};
+             UnitDigestConstruct, Construct, InheritedEmpty, Error, ValueOf, Value, Vector,
+             DanglingVector, List, Leak, NoopBackend, InMemoryBackend};
 
 mod basic;
 mod elemental_fixed;
