@@ -13,8 +13,10 @@ use generic_array::GenericArray;
 use primitive_types::H256;
 use digest::Digest;
 
-pub use bm::{Backend, Error, ValueOf, Value, Vector, DanglingVector, List, Leak,
-             NoopBackend, InMemoryBackend};
+pub use bm::{Backend, ReadBackend, EmptyBackend, DigestConstruct,
+             Construct, InheritedEmpty, Error, ValueOf, Value, Vector,
+             DanglingVector, List, Leak, NoopBackend,
+             InMemoryBackend};
 
 mod basic;
 mod elemental_fixed;
@@ -66,18 +68,28 @@ impl Into<GenericArray<u8, typenum::U32>> for End {
 /// Intermediate type for 256-bit ssz binary merkle tree.
 pub type Intermediate = GenericArray<u8, U32>;
 
+/// Special type for le-compatible construct.
+pub trait CompatibleConstruct: Construct<Intermediate=Intermediate, End=End> { }
+
+impl<C: Construct<Intermediate=Intermediate, End=End>> CompatibleConstruct for C { }
+
 /// Traits for type converting into a tree structure.
-pub trait IntoTree<DB: Backend<Intermediate=Intermediate, End=End>> {
+pub trait IntoTree {
     /// Convert this type into merkle tree, writing nodes into the
     /// given database.
-    fn into_tree(&self, db: &mut DB) -> Result<ValueOf<DB>, Error<DB::Error>>;
+    fn into_tree<DB: EmptyBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct;
 }
 
 /// Traits for type converting from a tree structure.
-pub trait FromTree<DB: Backend<Intermediate=Intermediate, End=End>>: Sized {
+pub trait FromTree: Sized {
     /// Convert this type from merkle tree, reading nodes from the
     /// given database.
-    fn from_tree(root: &ValueOf<DB>, db: &mut DB) -> Result<Self, Error<DB::Error>>;
+    fn from_tree<DB: ReadBackend>(
+        root: &ValueOf<DB::Construct>,
+        db: &mut DB
+    ) -> Result<Self, Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct;
 }
 
 /// Indicate that the current value should be serialized and
@@ -100,10 +112,10 @@ impl<T> From<T> for Compact<T> {
 
 /// Calculate a ssz merkle tree root, dismissing the tree.
 pub fn tree_root<D, T>(value: &T) -> H256 where
-    T: IntoTree<NoopBackend<D, End>>,
+    T: IntoTree,
     D: Digest<OutputSize=U32>,
 {
-    value.into_tree(&mut NoopBackend::new_with_inherited_empty())
+    value.into_tree(&mut NoopBackend::<InheritedEmpty, DigestConstruct<D, End>>::default())
         .map(|ret| H256::from_slice(ret.as_ref()))
         .expect("Noop backend never fails in set; qed")
 }
