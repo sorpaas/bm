@@ -309,7 +309,7 @@ mod tests {
     use crate::traits::Owned;
     use typenum::{U8, U32};
 
-    type InMemory = crate::memory::InMemoryBackend<crate::DigestConstruct<Sha256, ListValue>>;
+    type InMemory = crate::memory::InMemoryBackend<crate::InheritedEmpty, crate::DigestConstruct<Sha256, ListValue>>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
     struct ListValue([u8; 8]);
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn test_tuple() {
-        let mut db = InMemory::new_with_inherited_empty();
+        let mut db = InMemory::default();
         let mut tuple = PackedVector::<Owned, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, 0, None).unwrap();
 
         for i in 0..100 {
@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn test_vec() {
-        let mut db = InMemory::new_with_inherited_empty();
+        let mut db = InMemory::default();
         let mut vec = PackedList::<Owned, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, None).unwrap();
 
         for i in 0..100 {

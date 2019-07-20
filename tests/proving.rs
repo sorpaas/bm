@@ -35,11 +35,11 @@ impl Default for VecValue {
     }
 }
 
-type InMemory = bm::InMemoryBackend<bm::DigestConstruct<Sha256, VecValue>>;
+type InMemory = bm::InMemoryBackend<bm::InheritedEmpty, bm::DigestConstruct<Sha256, VecValue>>;
 
 #[test]
 fn basic_proving_vec() {
-    let mut db = InMemory::new_with_inherited_empty();
+    let mut db = InMemory::default();
     let mut proving = ProvingBackend::new(&mut db);
     let mut vec = OwnedList::create(&mut proving, None).unwrap();
 
@@ -54,7 +54,7 @@ fn basic_proving_vec() {
     let vec_hash = vec.deconstruct(&mut proving).unwrap();
     let proofs = proving.reset();
 
-    let mut proved = InMemory::new_with_inherited_empty();
+    let mut proved = InMemory::default();
     proved.populate(proofs);
     let proved_vec = OwnedList::reconstruct(vec_hash, &mut proved, None).unwrap();
     assert_eq!(proved_vec.get(&mut proved, 5usize.into()).unwrap(), Value::End(5usize.into()));

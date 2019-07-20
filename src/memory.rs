@@ -9,6 +9,28 @@ use core::hash::Hash;
 
 use crate::{Value, ValueOf, Construct, Backend, ReadBackend, WriteBackend, EmptyBackend};
 
+/// Empty status.
+pub trait EmptyStatus {
+    /// Is the backend using unit empty.
+    fn is_unit() -> bool { !Self::is_inherited() }
+    /// Is the backend using inherited empty.
+    fn is_inherited() -> bool { !Self::is_unit() }
+}
+
+/// Inherited empty.
+pub struct InheritedEmpty;
+
+impl EmptyStatus for InheritedEmpty {
+    fn is_inherited() -> bool { true }
+}
+
+/// Unit empty.
+pub struct UnitEmpty;
+
+impl EmptyStatus for UnitEmpty {
+    fn is_unit() -> bool { true }
+}
+
 /// Digest construct.
 pub struct DigestConstruct<D: Digest, T: AsRef<[u8]> + Clone + Default>(PhantomData<(D, T)>);
 
@@ -32,37 +54,31 @@ pub enum NoopBackendError {
 }
 
 /// Noop merkle database.
-pub struct NoopBackend<C: Construct>(
+pub struct NoopBackend<E: EmptyStatus, C: Construct>(
     Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>,
-    Option<C::End>,
+    PhantomData<E>,
 );
 
-impl<C: Construct> Clone for NoopBackend<C> {
+impl<C: Construct, E: EmptyStatus> Default for NoopBackend<E, C> where
+    C::Intermediate: Eq + Hash
+{
+    fn default() -> Self {
+        Self(Default::default(), PhantomData)
+    }
+}
+
+impl<C: Construct, E: EmptyStatus> Clone for NoopBackend<E, C> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1.clone())
     }
 }
 
-impl<C: Construct> NoopBackend<C> where
-    C::Intermediate: Eq + Hash,
-{
-    /// Create an in-memory database with unit empty value.
-    pub fn new_with_unit_empty(value: C::End) -> Self {
-        Self(Default::default(), Some(value))
-    }
-
-    /// Create an in-memory database with inherited empty value.
-    pub fn new_with_inherited_empty() -> Self {
-        Self(Default::default(), None)
-    }
-}
-
-impl<C: Construct> Backend for NoopBackend<C> {
+impl<C: Construct, E: EmptyStatus> Backend for NoopBackend<E, C> {
     type Construct = C;
     type Error = NoopBackendError;
 }
 
-impl<C: Construct> ReadBackend for NoopBackend<C> {
+impl<C: Construct, E: EmptyStatus> ReadBackend for NoopBackend<E, C> {
     fn get(
         &mut self,
         _key: &C::Intermediate,
@@ -71,7 +87,7 @@ impl<C: Construct> ReadBackend for NoopBackend<C> {
     }
 }
 
-impl<C: Construct> WriteBackend for NoopBackend<C> {
+impl<C: Construct, E: EmptyStatus> WriteBackend for NoopBackend<E, C> {
     fn rootify(&mut self, _key: &C::Intermediate) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -89,22 +105,21 @@ impl<C: Construct> WriteBackend for NoopBackend<C> {
     }
 }
 
-impl<C: Construct> EmptyBackend for NoopBackend<C> where
+impl<C: Construct, E: EmptyStatus> EmptyBackend for NoopBackend<E, C> where
     C::Intermediate: Eq + Hash,
 {
     fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<C>, Self::Error> {
-        match &self.1 {
-            Some(end) => Ok(Value::End(end.clone())),
-            None => {
-                let mut current = Value::End(Default::default());
-                for _ in 0..depth_to_bottom {
-                    let value = (current.clone(), current);
-                    let key = C::intermediate_of(&value.0, &value.1);
-                    self.0.insert(key.clone(), (value, None));
-                    current = Value::Intermediate(key);
-                }
-                Ok(current)
+        if E::is_unit() {
+            Ok(Value::End(Default::default()))
+        } else {
+            let mut current = Value::End(Default::default());
+            for _ in 0..depth_to_bottom {
+                let value = (current.clone(), current);
+                let key = C::intermediate_of(&value.0, &value.1);
+                self.0.insert(key.clone(), (value, None));
+                current = Value::Intermediate(key);
             }
+            Ok(current)
         }
     }
 }
@@ -121,18 +136,26 @@ pub enum InMemoryBackendError {
 }
 
 /// In-memory merkle database.
-pub struct InMemoryBackend<C: Construct>(
+pub struct InMemoryBackend<E: EmptyStatus, C: Construct>(
     Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>,
-    Option<C::End>,
+    PhantomData<E>,
 );
 
-impl<C: Construct> Clone for InMemoryBackend<C> {
+impl<C: Construct, E: EmptyStatus> Default for InMemoryBackend<E, C> where
+    C::Intermediate: Eq + Hash
+{
+    fn default() -> Self {
+        Self(Default::default(), PhantomData)
+    }
+}
+
+impl<C: Construct, E: EmptyStatus> Clone for InMemoryBackend<E, C> {
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1.clone())
     }
 }
 
-impl<C: Construct> InMemoryBackend<C> where
+impl<C: Construct, E: EmptyStatus> InMemoryBackend<E, C> where
     C::Intermediate: Eq + Hash,
 {
     fn remove(&mut self, old_key: &C::Intermediate) -> Result<(), InMemoryBackendError> {
@@ -159,16 +182,6 @@ impl<C: Construct> InMemoryBackend<C> where
         Ok(())
     }
 
-    /// Create an in-memory database with unit empty value.
-    pub fn new_with_unit_empty(value: C::End) -> Self {
-        Self(Default::default(), Some(value))
-    }
-
-    /// Create an in-memory database with inherited empty value.
-    pub fn new_with_inherited_empty() -> Self {
-        Self(Default::default(), None)
-    }
-
     /// Populate the database with proofs.
     pub fn populate(&mut self, proofs: Map<C::Intermediate, (ValueOf<C>, ValueOf<C>)>) {
         for (key, value) in proofs {
@@ -177,18 +190,18 @@ impl<C: Construct> InMemoryBackend<C> where
     }
 }
 
-impl<C: Construct> AsRef<Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>> for InMemoryBackend<C> {
+impl<C: Construct, E: EmptyStatus> AsRef<Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>> for InMemoryBackend<E, C> {
     fn as_ref(&self) -> &Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)> {
         &self.0
     }
 }
 
-impl<C: Construct> Backend for InMemoryBackend<C> {
+impl<C: Construct, E: EmptyStatus> Backend for InMemoryBackend<E, C> {
     type Construct = C;
     type Error = InMemoryBackendError;
 }
 
-impl<C: Construct> ReadBackend for InMemoryBackend<C> where
+impl<C: Construct, E: EmptyStatus> ReadBackend for InMemoryBackend<E, C> where
     C::Intermediate: Eq + Hash,
 {
     fn get(&mut self, key: &C::Intermediate) -> Result<(ValueOf<C>, ValueOf<C>), Self::Error> {
@@ -196,7 +209,7 @@ impl<C: Construct> ReadBackend for InMemoryBackend<C> where
     }
 }
 
-impl<C: Construct> WriteBackend for InMemoryBackend<C> where
+impl<C: Construct, E: EmptyStatus> WriteBackend for InMemoryBackend<E, C> where
     C::Intermediate: Eq + Hash,
 {
     fn rootify(&mut self, key: &C::Intermediate) -> Result<(), Self::Error> {
@@ -241,22 +254,21 @@ impl<C: Construct> WriteBackend for InMemoryBackend<C> where
     }
 }
 
-impl<C: Construct> EmptyBackend for InMemoryBackend<C> where
+impl<C: Construct, E: EmptyStatus> EmptyBackend for InMemoryBackend<E, C> where
     C::Intermediate: Eq + Hash,
 {
     fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<C>, Self::Error> {
-        match &self.1 {
-            Some(end) => Ok(Value::End(end.clone())),
-            None => {
-                let mut current = Value::End(Default::default());
-                for _ in 0..depth_to_bottom {
-                    let value = (current.clone(), current);
-                    let key = C::intermediate_of(&value.0, &value.1);
-                    self.0.insert(key.clone(), (value, None));
-                    current = Value::Intermediate(key);
-                }
-                Ok(current)
+        if E::is_unit() {
+            Ok(Value::End(Default::default()))
+        } else {
+            let mut current = Value::End(Default::default());
+            for _ in 0..depth_to_bottom {
+                let value = (current.clone(), current);
+                let key = C::intermediate_of(&value.0, &value.1);
+                self.0.insert(key.clone(), (value, None));
+                current = Value::Intermediate(key);
             }
+            Ok(current)
         }
     }
 }

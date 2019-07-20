@@ -18,7 +18,7 @@ mod proving;
 pub mod utils;
 
 pub use crate::traits::{Backend, ReadBackend, WriteBackend, EmptyBackend, Construct, Value, ValueOf, Dangling, Owned, RootStatus, Error, Sequence, Tree, Leak};
-pub use crate::memory::{DigestConstruct, InMemoryBackend, InMemoryBackendError, NoopBackend, NoopBackendError};
+pub use crate::memory::{EmptyStatus, UnitEmpty, InheritedEmpty, DigestConstruct, InMemoryBackend, InMemoryBackendError, NoopBackend, NoopBackendError};
 pub use crate::raw::{Raw, OwnedRaw, DanglingRaw};
 pub use crate::index::{Index, IndexSelection, IndexRoute};
 pub use crate::vector::{Vector, OwnedVector, DanglingVector};

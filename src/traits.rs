@@ -153,7 +153,8 @@ pub trait WriteBackend: ReadBackend {
 /// Empty backend.
 pub trait EmptyBackend: WriteBackend {
     /// Get or create the empty value at given depth-to-bottom for
-    /// balanced list / vectors.
+    /// balanced list / vectors. It must have the property that
+    /// `Value::End(Default::default())` equals `empty_at(0)`.
     fn empty_at(&mut self, depth_to_bottom: usize) -> Result<ValueOf<Self::Construct>, Self::Error>;
 }
 

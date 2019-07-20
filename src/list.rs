@@ -107,7 +107,8 @@ mod tests {
     use crate::Value;
     use sha2::Sha256;
 
-    type InMemory = crate::memory::InMemoryBackend<crate::DigestConstruct<Sha256, ListValue>>;
+    type InheritedInMemory = crate::memory::InMemoryBackend<crate::InheritedEmpty, crate::DigestConstruct<Sha256, ListValue>>;
+    type UnitInMemory = crate::memory::InMemoryBackend<crate::UnitEmpty, crate::DigestConstruct<Sha256, ListValue>>;
 
     #[derive(Clone, PartialEq, Eq, Debug, Default)]
     struct ListValue(Vec<u8>);
@@ -132,7 +133,7 @@ mod tests {
         }
     }
 
-    fn assert_push_pop_with_db(mut db: InMemory) {
+    fn assert_push_pop_with_db<E: crate::EmptyStatus>(mut db: crate::InMemoryBackend<E, crate::DigestConstruct<Sha256, ListValue>>) {
         let mut vec = List::create(&mut db, None).unwrap();
         let mut roots = Vec::new();
 
@@ -153,17 +154,17 @@ mod tests {
 
     #[test]
     fn test_push_pop_inherited() {
-        assert_push_pop_with_db(InMemory::new_with_inherited_empty());
+        assert_push_pop_with_db(InheritedInMemory::default());
     }
 
     #[test]
     fn test_push_pop_unit() {
-        assert_push_pop_with_db(InMemory::new_with_unit_empty(ListValue(vec![255])))
+        assert_push_pop_with_db(UnitInMemory::default())
     }
 
     #[test]
     fn test_set() {
-        let mut db = InMemory::new_with_inherited_empty();
+        let mut db = InheritedInMemory::default();
         let mut vec = OwnedList::create(&mut db, None).unwrap();
 
         for i in 0..100 {
@@ -181,7 +182,7 @@ mod tests {
 
     #[test]
     fn test_deconstruct_reconstruct() {
-        let mut db = InMemory::new_with_inherited_empty();
+        let mut db = InheritedInMemory::default();
         let mut vec = OwnedList::create(&mut db, None).unwrap();
 
         for i in 0..100 {
