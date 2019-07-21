@@ -86,6 +86,16 @@ pub enum CompactValue<C: Construct> {
 impl<C: Construct> CompactValue<C> where
     C::Intermediate: Eq + Hash,
 {
+    /// Get the length of the current value.
+    pub fn len(&self) -> usize {
+        match self {
+            CompactValue::Single(_) => 1,
+            CompactValue::Combined(boxed) => {
+                boxed.as_ref().0.len() + boxed.as_ref().1.len()
+            },
+        }
+    }
+
     /// Create compact merkle proofs from complete entries.
     pub fn from_proofs(root: ValueOf<C>, proofs: &Proofs<C>) -> Self {
         match root {
