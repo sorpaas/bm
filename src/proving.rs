@@ -167,6 +167,8 @@ impl<C: Construct> Proofs<C> where
 
 /// Compact proofs.
 #[derive(Clone, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "parity-scale-codec", derive(parity_scale_codec::Encode, parity_scale_codec::Decode))]
 pub enum CompactValue<I, E> {
     /// Single compact value.
     Single(Value<I, E>),

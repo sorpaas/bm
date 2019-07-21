@@ -36,6 +36,8 @@ pub use bm_le_derive::{FromTree, IntoTree};
 
 /// End value for 256-bit ssz binary merkle tree.
 #[derive(Debug, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "parity-scale-codec", derive(parity_scale_codec::Encode, parity_scale_codec::Decode))]
 pub struct End(pub [u8; 32]);
 
 impl Default for End {

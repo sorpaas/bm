@@ -1,5 +1,7 @@
 /// Value in a merkle tree.
 #[derive(Clone, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "parity-scale-codec", derive(parity_scale_codec::Encode, parity_scale_codec::Decode))]
 pub enum Value<I, E> {
     /// Intermediate, which is hash of two sub-items.
     Intermediate(I),

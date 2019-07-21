@@ -1,5 +1,7 @@
-use bm::{Value, ReadBackend, WriteBackend, ValueOf, Error, Index, DanglingRaw, Leak};
+use bm::{Value, CompactValue, ReadBackend, WriteBackend, ValueOf, Error, Index, DanglingRaw, Leak};
 use primitive_types::U256;
+use alloc::vec::Vec;
+use alloc::boxed::Box;
 
 use crate::{IntoTree, FromTree, End, Intermediate, CompatibleConstruct};
 use crate::utils::{mix_in_type, decode_with_type};
@@ -102,6 +104,28 @@ impl FromTree for Value<Intermediate, End> {
     }
 }
 
+#[cfg(feature = "parity-scale-codec")]
+impl IntoTree for CompactValue<Intermediate, End> {
+    fn into_tree<DB: WriteBackend>(
+        &self, db: &mut DB
+    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct,
+    {
+        let encoded = parity_scale_codec::Encode::encode(self);
+        encoded.into_tree(db)
+    }
+}
+
+#[cfg(feature = "parity-scale-codec")]
+impl FromTree for CompactValue<Intermediate, End> {
+    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct,
+    {
+        let decoded = <Vec::<u8>>::from_tree(root, db)?;
+        parity_scale_codec::Decode::decode(&mut &decoded[..]).map_err(|_| Error::CorruptedDatabase)
+    }
+}
+
 impl<T> FromTree for Option<T> where
     T: FromTree,
 {
@@ -131,5 +155,25 @@ impl<T> IntoTree for Option<T> where
             None => mix_in_type(&(), db, 0),
             Some(value) => mix_in_type(value, db, 1),
         }
+    }
+}
+
+impl<T> FromTree for Box<T> where
+    T: FromTree,
+{
+    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct,
+    {
+        Ok(Box::new(T::from_tree(root, db)?))
+    }
+}
+
+impl<T> IntoTree for Box<T> where
+    T: IntoTree,
+{
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct,
+    {
+        self.as_ref().into_tree(db)
     }
 }
