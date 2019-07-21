@@ -95,7 +95,7 @@ pub struct NoopBackend<C: Construct>(
 );
 
 impl<C: Construct> Default for NoopBackend<C> where
-    C::Intermediate: Eq + Hash
+    C::Intermediate: Eq + Hash + Ord
 {
     fn default() -> Self {
         Self(Default::default())
@@ -157,7 +157,7 @@ pub struct InMemoryBackend<C: Construct>(
 );
 
 impl<C: Construct> Default for InMemoryBackend<C> where
-    C::Intermediate: Eq + Hash
+    C::Intermediate: Eq + Hash + Ord
 {
     fn default() -> Self {
         Self(Default::default())
@@ -171,7 +171,7 @@ impl<C: Construct> Clone for InMemoryBackend<C> {
 }
 
 impl<C: Construct> InMemoryBackend<C> where
-    C::Intermediate: Eq + Hash,
+    C::Intermediate: Eq + Hash + Ord,
 {
     fn remove(&mut self, old_key: &C::Intermediate) -> Result<(), InMemoryBackendError> {
         let (old_value, to_remove) = {
@@ -217,7 +217,7 @@ impl<C: Construct> Backend for InMemoryBackend<C> {
 }
 
 impl<C: Construct> ReadBackend for InMemoryBackend<C> where
-    C::Intermediate: Eq + Hash,
+    C::Intermediate: Eq + Hash + Ord,
 {
     fn get(&mut self, key: &C::Intermediate) -> Result<(ValueOf<C>, ValueOf<C>), Self::Error> {
         self.0.get(key).map(|v| v.0.clone()).ok_or(InMemoryBackendError::FetchingKeyNotExist)
@@ -225,7 +225,7 @@ impl<C: Construct> ReadBackend for InMemoryBackend<C> where
 }
 
 impl<C: Construct> WriteBackend for InMemoryBackend<C> where
-    C::Intermediate: Eq + Hash,
+    C::Intermediate: Eq + Hash + Ord,
 {
     fn rootify(&mut self, key: &C::Intermediate) -> Result<(), Self::Error> {
         self.0.get_mut(key).ok_or(InMemoryBackendError::RootifyKeyNotExist)?.1

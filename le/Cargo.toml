@@ -14,12 +14,12 @@ digest = "0.8"
 typenum = "1.10"
 generic-array = "0.12"
 vecarray = { version = "0.1", default-features = false }
-serde = { version = "1.0", optional = true, default-features = false, features = ["derive"] }
+serde = { version = "1.0", optional = true, default-features = false, features = ["derive", "alloc"] }
 
 [features]
-default = ["derive", "std", "with-serde"]
+default = ["derive", "std"]
 derive = ["bm-le-derive"]
-with-serde = ["serde", "vecarray/serde"]
+with-serde = ["serde", "bm/serde", "vecarray/serde"]
 std = ["bm/std", "primitive-types/std", "vecarray/std"]
 
 [dev-dependencies]

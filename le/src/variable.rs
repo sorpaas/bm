@@ -2,6 +2,7 @@ use typenum::Unsigned;
 use bm::{Error, ValueOf, ReadBackend, WriteBackend};
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
+use alloc::vec::Vec;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::{ElementalVariableVecRef, ElementalVariableVec,

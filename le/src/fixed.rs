@@ -5,6 +5,7 @@ use generic_array::{GenericArray, ArrayLength};
 use vecarray::VecArray;
 use typenum::Unsigned;
 use core::convert::TryFrom;
+use alloc::vec::Vec;
 use crate::{ElementalFixedVecRef, ElementalFixedVec, IntoCompositeVectorTree,
             IntoCompactVectorTree, IntoTree, FromTree, FromCompositeVectorTree,
             FromCompactVectorTree, Compact, CompactRef, CompatibleConstruct};

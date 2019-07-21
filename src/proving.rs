@@ -2,6 +2,7 @@ use crate::{Backend, ReadBackend, WriteBackend, Construct, Value, ValueOf};
 use core::hash::Hash;
 use core::ops::Deref;
 use core::fmt;
+use alloc::boxed::Box;
 #[cfg(feature = "std")]
 use std::collections::{HashMap as Map, HashSet as Set};
 #[cfg(not(feature = "std"))]
@@ -15,7 +16,7 @@ pub struct ProvingBackend<'a, DB: Backend> {
 }
 
 impl<'a, DB: Backend> ProvingBackend<'a, DB> where
-    <DB::Construct as Construct>::Intermediate: Eq + Hash,
+    <DB::Construct as Construct>::Intermediate: Eq + Hash + Ord,
 {
     /// Create a new proving database.
     pub fn new(db: &'a mut DB) -> Self {
@@ -38,7 +39,7 @@ impl<'a, DB: Backend> Backend for ProvingBackend<'a, DB> {
 }
 
 impl<'a, DB: ReadBackend> ReadBackend for ProvingBackend<'a, DB> where
-    <DB::Construct as Construct>::Intermediate: Eq + Hash,
+    <DB::Construct as Construct>::Intermediate: Eq + Hash + Ord,
 {
     fn get(
         &mut self,
@@ -53,7 +54,7 @@ impl<'a, DB: ReadBackend> ReadBackend for ProvingBackend<'a, DB> where
 }
 
 impl<'a, DB: WriteBackend> WriteBackend for ProvingBackend<'a, DB> where
-    <DB::Construct as Construct>::Intermediate: Eq + Hash,
+    <DB::Construct as Construct>::Intermediate: Eq + Hash + Ord,
 {
     fn rootify(&mut self, key: &<DB::Construct as Construct>::Intermediate) -> Result<(), Self::Error> {
         self.db.rootify(key)
@@ -83,7 +84,7 @@ impl<C: Construct> Into<Map<C::Intermediate, (ValueOf<C>, ValueOf<C>)>> for Proo
 }
 
 impl<C: Construct> Default for Proofs<C> where
-    C::Intermediate: Eq + Hash
+    C::Intermediate: Eq + Hash + Ord
 {
     fn default() -> Self {
         Self(Default::default())
@@ -105,7 +106,7 @@ impl<C: Construct> Deref for Proofs<C> {
 }
 
 impl<C: Construct> PartialEq for Proofs<C> where
-    C::Intermediate: Eq + Hash,
+    C::Intermediate: Eq + Hash + Ord,
     C::End: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -114,11 +115,11 @@ impl<C: Construct> PartialEq for Proofs<C> where
 }
 
 impl<C: Construct> Eq for Proofs<C> where
-    C::Intermediate: Eq + Hash,
+    C::Intermediate: Eq + Hash + Ord,
     C::End: Eq { }
 
 impl<C: Construct> fmt::Debug for Proofs<C> where
-    C::Intermediate: Eq + Hash + fmt::Debug,
+    C::Intermediate: Eq + Hash + Ord + fmt::Debug,
     C::End: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -127,7 +128,7 @@ impl<C: Construct> fmt::Debug for Proofs<C> where
 }
 
 impl<C: Construct> Proofs<C> where
-    C::Intermediate: Eq + Hash,
+    C::Intermediate: Eq + Hash + Ord,
 {
     /// Create compact merkle proofs from complete entries.
     pub fn into_compact(&self, root: ValueOf<C>) -> CompactValue<C::Intermediate, C::End> {

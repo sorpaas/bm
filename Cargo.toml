@@ -10,6 +10,7 @@ license = "Apache-2.0"
 digest = "0.8"
 typenum = "1.10"
 generic-array = "0.12"
+serde = { version = "1.0", default-features = false, optional = true, features = ["derive", "alloc"] }
 
 [dev-dependencies]
 sha2 = "0.8"
@@ -19,7 +20,7 @@ primitive-types = "0.4"
 
 [features]
 default = ["std"]
-std = []
+std = ["serde/std"]
 
 [workspace]
 members = [
