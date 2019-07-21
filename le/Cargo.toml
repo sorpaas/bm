@@ -15,14 +15,14 @@ typenum = "1.10"
 generic-array = "0.12"
 vecarray = { version = "0.1", default-features = false }
 serde = { version = "1.0", optional = true, default-features = false, features = ["derive", "alloc"] }
-parity-scale-codec = { git = "https://github.com/paritytech/parity-scale-codec", branch = "shasper", optional = true, default-features = false, features = ["derive", "generic-array"] }
+parity-codec = { version = "4.0", optional = true, default-features = false, features = ["derive"] }
 
 [features]
 default = ["derive", "std"]
 derive = ["bm-le-derive"]
-scale = ["parity-scale-codec", "bm/parity-scale-codec"]
+codec = ["parity-codec", "bm/parity-codec"]
 with-serde = ["serde", "bm/serde", "vecarray/serde"]
-std = ["bm/std", "primitive-types/std", "vecarray/std", "parity-scale-codec/std"]
+std = ["bm/std", "primitive-types/std", "vecarray/std", "parity-codec/std"]
 
 [dev-dependencies]
 sha2 = "0.8"

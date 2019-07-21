@@ -1,6 +1,6 @@
 use bm::{ValueOf, ReadBackend, WriteBackend, Error, Value, DanglingPackedVector, DanglingVector, Leak, Sequence};
 use bm::utils::{vector_tree, host_len};
-use primitive_types::U256;
+use primitive_types::{H256, U256};
 use generic_array::GenericArray;
 use alloc::vec::Vec;
 
@@ -91,9 +91,7 @@ macro_rules! impl_builtin_fixed_uint_vector {
                 }
 
                 vector_tree(&chunks.into_iter().map(|c| {
-                    let mut ret = End::default();
-                    ret.0.copy_from_slice(&c);
-                    Value::End(ret)
+                    Value::End(End(H256::from_slice(&c)))
                 }).collect::<Vec<_>>(), db, max_len.map(|max| host_len::<typenum::U32, $lt>(max)))
             }
         }
@@ -141,7 +139,7 @@ impl<'a> IntoCompactVectorTree for ElementalFixedVecRef<'a, U256> {
     {
         vector_tree(&self.0.iter().map(|uint| {
             let mut ret = End::default();
-            uint.to_little_endian(&mut ret.0);
+            uint.to_little_endian(&mut ret.0.as_mut());
             Value::End(ret)
         }).collect::<Vec<_>>(), db, max_len)
     }

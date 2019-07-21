@@ -1,7 +1,7 @@
 use sha2::{Digest, Sha256};
 use primitive_types::H256;
-use bm::{InMemoryBackend, InheritedDigestConstruct};
-use bm_le::{IntoTree, FromTree, End, MaxVec, tree_root};
+use bm::InMemoryBackend;
+use bm_le::{IntoTree, FromTree, MaxVec, DigestConstruct, tree_root};
 use generic_array::GenericArray;
 
 fn chunk(data: &[u8]) -> H256 {
@@ -56,7 +56,7 @@ fn test_basic() {
 
 #[test]
 fn test_config() {
-    let mut db = InMemoryBackend::<InheritedDigestConstruct<Sha256, End>>::default();
+    let mut db = InMemoryBackend::<DigestConstruct<Sha256>>::default();
     let container = ConfigContainer {
         a: 1,
         b: 2,
@@ -72,7 +72,7 @@ fn test_config() {
 
 #[test]
 fn test_enum() {
-    let mut db = InMemoryBackend::<InheritedDigestConstruct<Sha256, End>>::default();
+    let mut db = InMemoryBackend::<DigestConstruct<Sha256>>::default();
     let e1 = EnumTest::A(123);
     let e2 = EnumTest::B { c: 1, d: 2 };
     let e3 = EnumTest::E;

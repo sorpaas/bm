@@ -12,6 +12,7 @@ use typenum::U32;
 use generic_array::GenericArray;
 use primitive_types::H256;
 use digest::Digest;
+use core::marker::PhantomData;
 
 pub use bm::{Backend, ReadBackend, WriteBackend, InheritedDigestConstruct,
              UnitDigestConstruct, Construct, InheritedEmpty, Error, ValueOf, Value, Vector,
@@ -34,40 +35,67 @@ pub use variable::MaxVec;
 #[cfg(feature = "derive")]
 pub use bm_le_derive::{FromTree, IntoTree};
 
+/// Digest construct for bm-le.
+pub struct DigestConstruct<D: Digest<OutputSize=U32>>(PhantomData<D>);
+
+impl<D: Digest<OutputSize=U32>> Construct for DigestConstruct<D> {
+    type Intermediate = Intermediate;
+    type End = End;
+
+    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> Self::Intermediate {
+        let mut digest = D::new();
+        digest.input(&left.as_ref()[..]);
+        digest.input(&right.as_ref()[..]);
+        H256::from_slice(digest.result().as_slice())
+    }
+
+    fn empty_at<DB: WriteBackend<Construct=Self>>(
+        db: &mut DB,
+        depth_to_bottom: usize
+    ) -> Result<ValueOf<Self>, DB::Error> {
+        let mut current = Value::End(Default::default());
+        for _ in 0..depth_to_bottom {
+            let value = (current.clone(), current);
+            let key = Self::intermediate_of(&value.0, &value.1);
+            db.insert(key.clone(), value)?;
+            current = Value::Intermediate(key);
+        }
+        Ok(current)
+    }
+}
+
 /// End value for 256-bit ssz binary merkle tree.
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "parity-scale-codec", derive(parity_scale_codec::Encode, parity_scale_codec::Decode))]
-pub struct End(pub [u8; 32]);
+#[cfg_attr(feature = "parity-codec", derive(parity_codec::Encode, parity_codec::Decode))]
+pub struct End(pub H256);
 
 impl Default for End {
     fn default() -> Self {
-        Self([0; 32])
+        Self(H256::default())
     }
 }
 
 impl AsRef<[u8]> for End {
     fn as_ref(&self) -> &[u8] {
-        &self.0
+        self.0.as_ref()
     }
 }
 
 impl From<GenericArray<u8, typenum::U32>> for End {
     fn from(array: GenericArray<u8, typenum::U32>) -> Self {
-        let mut ret = [0u8; 32];
-        ret.copy_from_slice(array.as_slice());
-        Self(ret)
+        Self(H256::from_slice(array.as_slice()))
     }
 }
 
 impl Into<GenericArray<u8, typenum::U32>> for End {
     fn into(self) -> GenericArray<u8, typenum::U32> {
-        GenericArray::from_exact_iter(self.0.into_iter().cloned()).expect("Size equals to U32; qed")
+        GenericArray::from_exact_iter(self.0.as_ref().iter().cloned()).expect("Size equals to U32; qed")
     }
 }
 
 /// Intermediate type for 256-bit ssz binary merkle tree.
-pub type Intermediate = GenericArray<u8, U32>;
+pub type Intermediate = H256;
 
 /// Special type for le-compatible construct.
 pub trait CompatibleConstruct: Construct<Intermediate=Intermediate, End=End> { }
@@ -119,7 +147,7 @@ pub fn tree_root<D, T>(value: &T) -> H256 where
     T: IntoTree,
     D: Digest<OutputSize=U32>,
 {
-    value.into_tree(&mut NoopBackend::<InheritedDigestConstruct<D, End>>::default())
+    value.into_tree(&mut NoopBackend::<DigestConstruct<D>>::default())
         .map(|ret| H256::from_slice(ret.as_ref()))
         .expect("Noop backend never fails in set; qed")
 }

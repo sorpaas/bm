@@ -1,6 +1,5 @@
-use bm::{Value, CompactValue, ReadBackend, WriteBackend, ValueOf, Error, Index, DanglingRaw, Leak};
-use primitive_types::U256;
-use alloc::vec::Vec;
+use bm::{Value, ReadBackend, WriteBackend, ValueOf, Error, Index, DanglingRaw, Leak};
+use primitive_types::{H256, U256};
 use alloc::boxed::Box;
 
 use crate::{IntoTree, FromTree, End, Intermediate, CompatibleConstruct};
@@ -35,7 +34,7 @@ macro_rules! impl_builtin_uint {
                 let bytes = self.to_le_bytes();
                 ret[..bytes.len()].copy_from_slice(&bytes);
 
-                Ok(Value::End(End(ret)))
+                Ok(Value::End(End(H256::from(ret))))
             }
         }
 
@@ -69,7 +68,7 @@ impl IntoTree for U256 {
         let mut ret = [0u8; 32];
         self.to_little_endian(&mut ret);
 
-        Ok(Value::End(End(ret)))
+        Ok(Value::End(End(H256::from(ret))))
     }
 }
 
@@ -82,7 +81,7 @@ impl FromTree for U256 {
         match raw.get(db, Index::root())?.ok_or(Error::CorruptedDatabase)? {
             Value::Intermediate(_) => Err(Error::CorruptedDatabase),
             Value::End(value) => {
-                Ok(U256::from_little_endian(&value.0))
+                Ok(U256::from_little_endian(&value.as_ref()))
             },
         }
     }
@@ -105,7 +104,7 @@ impl FromTree for Value<Intermediate, End> {
 }
 
 #[cfg(feature = "parity-scale-codec")]
-impl IntoTree for CompactValue<Intermediate, End> {
+impl IntoTree for bm::CompactValue<Intermediate, End> {
     fn into_tree<DB: WriteBackend>(
         &self, db: &mut DB
     ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
@@ -117,11 +116,11 @@ impl IntoTree for CompactValue<Intermediate, End> {
 }
 
 #[cfg(feature = "parity-scale-codec")]
-impl FromTree for CompactValue<Intermediate, End> {
+impl FromTree for bm::CompactValue<Intermediate, End> {
     fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
-        let decoded = <Vec::<u8>>::from_tree(root, db)?;
+        let decoded = <alloc::vec::Vec::<u8>>::from_tree(root, db)?;
         parity_scale_codec::Decode::decode(&mut &decoded[..]).map_err(|_| Error::CorruptedDatabase)
     }
 }
