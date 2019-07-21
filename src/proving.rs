@@ -74,62 +74,49 @@ impl<'a, DB: WriteBackend> WriteBackend for ProvingBackend<'a, DB> where
     }
 }
 
-/// A compact proof entry.
-pub type CompactValue<C> = Option<Value<<C as Construct>::Intermediate, <C as Construct>::End>>;
-
-/// Compact merkle proofs.
-pub struct CompactProofs<C: Construct>(Map<C::Intermediate, (CompactValue<C>, CompactValue<C>)>);
-
-impl<C: Construct> AsRef<Map<C::Intermediate, (CompactValue<C>, CompactValue<C>)>> for CompactProofs<C> {
-    fn as_ref(&self) -> &Map<C::Intermediate, (CompactValue<C>, CompactValue<C>)> {
-        &self.0
-    }
+/// Compact proofs.
+#[derive(Clone)]
+pub enum CompactValue<C: Construct> {
+    /// Single compact value.
+    Single(ValueOf<C>),
+    /// Value is combined by other left and right entries.
+    Combined(Box<(CompactValue<C>, CompactValue<C>)>),
 }
 
-impl<C: Construct> CompactProofs<C> where
+impl<C: Construct> CompactValue<C> where
     C::Intermediate: Eq + Hash,
 {
     /// Create compact merkle proofs from complete entries.
-    pub fn from_full(proofs: Proofs<C>) -> Self {
-        let mut compacts = Map::new();
-
-        for (key, (left, right)) in proofs.clone() {
-            let left = match left {
-                Value::Intermediate(left) => {
-                    if proofs.contains_key(&left) {
-                        None
-                    } else {
-                        Some(Value::Intermediate(left))
-                    }
-                },
-                Value::End(left) => Some(Value::End(left)),
-            };
-
-            let right = match right {
-                Value::Intermediate(right) => {
-                    if proofs.contains_key(&right) {
-                        None
-                    } else {
-                        Some(Value::Intermediate(right))
-                    }
-                },
-                Value::End(right) => Some(Value::End(right)),
-            };
-
-            let skip_key = match (&left, &right) {
-                (None, None) => true,
-                _ => false,
-            };
-
-            if !skip_key {
-                compacts.insert(key, (left, right));
-            }
+    pub fn from_proofs(root: ValueOf<C>, proofs: &Proofs<C>) -> Self {
+        match root {
+            Value::End(end) => CompactValue::Single(Value::End(end)),
+            Value::Intermediate(intermediate) => {
+                if let Some((left, right)) = proofs.get(&intermediate) {
+                    let compact_left = Self::from_proofs(left.clone(), proofs);
+                    let compact_right = Self::from_proofs(right.clone(), proofs);
+                    CompactValue::Combined(Box::new((compact_left, compact_right)))
+                } else {
+                    CompactValue::Single(Value::Intermediate(intermediate))
+                }
+            },
         }
-        Self(compacts)
     }
 
-    /// Convert the compact proof into full proofs.
-    pub fn into_full(self) -> Proofs<C> {
-        unimplemented!()
+    /// Convert the compact value into full proofs.
+    pub fn into_proofs(self) -> (ValueOf<C>, Proofs<C>) {
+        match self {
+            CompactValue::Single(root) => (root, Default::default()),
+            CompactValue::Combined(boxed) => {
+                let (compact_left, compact_right) = *boxed;
+                let (left, left_proofs) = compact_left.into_proofs();
+                let (right, right_proofs) = compact_right.into_proofs();
+                let mut proofs = left_proofs.into_iter()
+                    .chain(right_proofs.into_iter())
+                    .collect::<Proofs<C>>();
+                let key = C::intermediate_of(&left, &right);
+                proofs.insert(key.clone(), (left, right));
+                (Value::Intermediate(key), proofs)
+            },
+        }
     }
 }

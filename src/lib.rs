@@ -26,4 +26,4 @@ pub use crate::list::{List, OwnedList, DanglingList};
 pub use crate::packed::{PackedVector, OwnedPackedVector, DanglingPackedVector,
                         PackedList, OwnedPackedList, DanglingPackedList};
 pub use crate::length::LengthMixed;
-pub use crate::proving::{ProvingBackend, Proofs, CompactProofs, CompactValue};
+pub use crate::proving::{ProvingBackend, Proofs, CompactValue};
