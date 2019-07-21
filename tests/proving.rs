@@ -1,4 +1,4 @@
-use bm::{OwnedList, ProvingBackend, CompactValue, Sequence, Value};
+use bm::{OwnedList, ProvingBackend, Sequence, Proofs, Value};
 use sha2::Sha256;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -54,15 +54,13 @@ fn basic_proving_vec() {
     vec.get(&mut proving, 7usize.into()).unwrap();
     let vec_hash = vec.deconstruct(&mut proving).unwrap();
     let proofs = proving.into_proofs();
-    let compact_proofs = CompactValue::<bm::InheritedDigestConstruct<Sha256, VecValue>>::from_proofs(
-        vec_hash.clone(), &proofs
-    );
-    let (uncompacted_vec_hash, uncompacted_proofs) = compact_proofs.into_proofs();
+    let compact_proofs = proofs.into_compact(vec_hash.clone());
+    let (uncompacted_proofs, uncompacted_vec_hash) = Proofs::from_compact(compact_proofs);
     assert_eq!(vec_hash, uncompacted_vec_hash);
     assert_eq!(proofs, uncompacted_proofs);
 
     let mut proved = InMemory::default();
-    proved.populate(proofs);
+    proved.populate(proofs.into());
     let proved_vec = OwnedList::reconstruct(vec_hash, &mut proved, None).unwrap();
     assert_eq!(proved_vec.get(&mut proved, 5usize.into()).unwrap(), Value::End(5usize.into()));
     assert_eq!(proved_vec.get(&mut proved, 7usize.into()).unwrap(), Value::End(7usize.into()));
