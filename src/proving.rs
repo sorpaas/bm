@@ -21,12 +21,9 @@ impl<'a, DB: Backend> ProvingBackend<'a, DB> where
         }
     }
 
-    /// Reset the proving database and get all the proofs.
-    pub fn reset(&mut self) -> HashMap<<DB::Construct as Construct>::Intermediate, (ValueOf<DB::Construct>, ValueOf<DB::Construct>)> {
-        let proofs = self.proofs.clone();
-        self.proofs = Default::default();
-        self.inserts = Default::default();
-        proofs
+    /// Get the current pooofs.
+    pub fn into_proofs(self) -> HashMap<<DB::Construct as Construct>::Intermediate, (ValueOf<DB::Construct>, ValueOf<DB::Construct>)> {
+        self.proofs
     }
 }
 

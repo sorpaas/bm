@@ -47,12 +47,13 @@ fn basic_proving_vec() {
         assert_eq!(vec.len(), i);
         vec.push(&mut proving, Value::End(i.into())).unwrap();
     }
-    proving.reset();
+    drop(proving);
 
+    let mut proving = ProvingBackend::new(&mut db);
     vec.get(&mut proving, 5usize.into()).unwrap();
     vec.get(&mut proving, 7usize.into()).unwrap();
     let vec_hash = vec.deconstruct(&mut proving).unwrap();
-    let proofs = proving.reset();
+    let proofs = proving.into_proofs();
 
     let mut proved = InMemory::default();
     proved.populate(proofs);
