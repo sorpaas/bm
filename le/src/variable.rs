@@ -3,8 +3,6 @@ use bm::{Error, ValueOf, ReadBackend, WriteBackend};
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 use alloc::vec::Vec;
-#[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
 use crate::{ElementalVariableVecRef, ElementalVariableVec,
             IntoTree, IntoCompactListTree, IntoCompositeListTree,
             FromTree, FromCompactListTree, FromCompositeListTree,
@@ -12,9 +10,6 @@ use crate::{ElementalVariableVecRef, ElementalVariableVec,
 
 /// Vec value with maximum length.
 #[derive(Debug, Clone, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(from = "Vec<T>", into = "Vec<T>"))]
-#[cfg_attr(feature = "serde", serde(bound = "T: Clone + Serialize + DeserializeOwned + 'static, ML: Clone"))]
 pub struct MaxVec<T, ML>(pub Vec<T>, PhantomData<ML>);
 
 impl<T, ML> Deref for MaxVec<T, ML> {
@@ -52,6 +47,48 @@ impl<T, ML> From<Vec<T>> for MaxVec<T, ML> {
 impl<T, ML> Into<Vec<T>> for MaxVec<T, ML> {
     fn into(self) -> Vec<T> {
         self.0
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: serde::Serialize, N: Unsigned> serde::Serialize for MaxVec<T, N> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: serde::Deserialize<'de>, N: Unsigned> serde::Deserialize<'de> for MaxVec<T, N> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where
+        D: serde::Deserializer<'de>,
+    {
+        let vec = Vec::<T>::deserialize(deserializer)?;
+        if vec.len() > N::to_usize() {
+            return Err(<D::Error as serde::de::Error>::custom("invalid length"))
+        }
+
+        Ok(Self(vec, PhantomData))
+    }
+}
+
+#[cfg(feature = "parity-codec")]
+impl<T: parity_codec::Encode, N: Unsigned> parity_codec::Encode for MaxVec<T, N> {
+    fn encode_to<W: parity_codec::Output>(&self, dest: &mut W) {
+        self.0.encode_to(dest)
+    }
+}
+
+#[cfg(feature = "parity-codec")]
+impl<T: parity_codec::Decode, N: Unsigned> parity_codec::Decode for MaxVec<T, N> {
+    fn decode<I: parity_codec::Input>(input: &mut I) -> Option<Self> {
+        let decoded = Vec::<T>::decode(input)?;
+        if decoded.len() <= N::to_usize() {
+            Some(Self(decoded, PhantomData))
+        } else {
+            None
+        }
     }
 }
 
