@@ -91,7 +91,7 @@ pub enum NoopBackendError {
 
 /// Noop merkle database.
 pub struct NoopBackend<C: Construct>(
-    Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>,
+    PhantomData<C>,
 );
 
 impl<C: Construct> Default for NoopBackend<C> where
