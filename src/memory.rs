@@ -32,16 +32,18 @@ impl EmptyStatus for UnitEmpty {
 }
 
 /// Unit Digest construct.
-pub struct UnitDigestConstruct<D: Digest, T: AsRef<[u8]> + Clone + Default>(PhantomData<(D, T)>);
+pub struct UnitDigestConstruct<D: Digest, T: AsRef<[u8]> + Clone + Default, V=GenericArray<u8, <D as Digest>::OutputSize>>(PhantomData<(D, T, V)>);
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Construct for UnitDigestConstruct<D, T> {
-    type Value = GenericArray<u8, D::OutputSize>;
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default, V> Construct for UnitDigestConstruct<D, T, V> where
+    V: From<GenericArray<u8, D::OutputSize>> + Into<GenericArray<u8, D::OutputSize>> + Default + Clone,
+{
+    type Value = V;
 
     fn intermediate_of(left: &Self::Value, right: &Self::Value) -> Self::Value {
         let mut digest = D::new();
-        digest.input(&left.as_ref()[..]);
-        digest.input(&right.as_ref()[..]);
-        digest.result()
+        digest.input(&left.clone().into().as_ref()[..]);
+        digest.input(&right.clone().into().as_ref()[..]);
+        digest.result().into()
     }
 
     fn empty_at<DB: WriteBackend<Construct=Self>>(
@@ -53,16 +55,18 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Construct for UnitDigestConstr
 }
 
 /// Inherited Digest construct.
-pub struct InheritedDigestConstruct<D: Digest, T: AsRef<[u8]> + Clone + Default>(PhantomData<(D, T)>);
+pub struct InheritedDigestConstruct<D: Digest, T: AsRef<[u8]> + Clone + Default, V=GenericArray<u8, <D as Digest>::OutputSize>>(PhantomData<(D, T, V)>);
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Construct for InheritedDigestConstruct<D, T> {
-    type Value = GenericArray<u8, D::OutputSize>;
+impl<D: Digest, T: AsRef<[u8]> + Clone + Default, V> Construct for InheritedDigestConstruct<D, T, V> where
+    V: From<GenericArray<u8, D::OutputSize>> + Into<GenericArray<u8, D::OutputSize>> + Default + Clone,
+{
+    type Value = V;
 
     fn intermediate_of(left: &Self::Value, right: &Self::Value) -> Self::Value {
         let mut digest = D::new();
-        digest.input(&left.as_ref()[..]);
-        digest.input(&right.as_ref()[..]);
-        digest.result()
+        digest.input(&left.clone().into().as_ref()[..]);
+        digest.input(&right.clone().into().as_ref()[..]);
+        digest.result().into()
     }
 
     fn empty_at<DB: WriteBackend<Construct=Self>>(

@@ -1,4 +1,4 @@
-use crate::traits::{ReadBackend, WriteBackend, Construct, Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree, Sequence};
+use crate::traits::{ReadBackend, WriteBackend, Construct, RootStatus, Owned, Dangling, Leak, Error, Tree, Sequence};
 use crate::raw::Raw;
 use crate::index::Index;
 
@@ -33,7 +33,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
         let empty = C::empty_at(db, self.depth())?;
         new_raw.set(db, EXTEND_INDEX, root)?;
         new_raw.set(db, EMPTY_INDEX, empty)?;
-        self.raw.set(db, ROOT_INDEX, Value::End(Default::default()))?;
+        self.raw.set(db, ROOT_INDEX, Default::default())?;
         self.raw = new_raw;
         Ok(())
     }
@@ -44,7 +44,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     ) -> Result<(), Error<DB::Error>> {
         match self.raw.get(db, EXTEND_INDEX)? {
             Some(extended_value) => { self.raw.set(db, ROOT_INDEX, extended_value)?; },
-            None => { self.raw.set(db, ROOT_INDEX, Value::End(Default::default()))?; },
+            None => { self.raw.set(db, ROOT_INDEX, Default::default())?; },
         }
         Ok(())
     }
@@ -81,7 +81,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
         &self,
         db: &mut DB,
         index: usize
-    ) -> Result<ValueOf<C>, Error<DB::Error>> {
+    ) -> Result<C::Value, Error<DB::Error>> {
         if index >= self.len() {
             return Err(Error::AccessOverflowed)
         }
@@ -95,7 +95,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
         &mut self,
         db: &mut DB,
         index: usize,
-        value: ValueOf<C>
+        value: C::Value
     ) -> Result<(), Error<DB::Error>> {
         if index >= self.len() {
             return Err(Error::AccessOverflowed)
@@ -110,7 +110,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     pub fn push<DB: WriteBackend<Construct=C>>(
         &mut self,
         db: &mut DB,
-        value: ValueOf<C>
+        value: C::Value
     ) -> Result<(), Error<DB::Error>> {
         let old_len = self.len();
         if old_len == self.current_max_len() {
@@ -133,7 +133,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     pub fn pop<DB: WriteBackend<Construct=C>>(
         &mut self,
         db: &mut DB
-    ) -> Result<Option<ValueOf<C>>, Error<DB::Error>> {
+    ) -> Result<Option<C::Value>, Error<DB::Error>> {
         let old_len = self.len();
         if old_len == 0 {
             return Ok(None)
@@ -185,7 +185,7 @@ impl<R: RootStatus, C: Construct> Tree for Vector<R, C> {
     type RootStatus = R;
     type Construct = C;
 
-    fn root(&self) -> ValueOf<C> {
+    fn root(&self) -> C::Value {
         self.raw.root()
     }
 
@@ -209,7 +209,7 @@ impl<R: RootStatus, C: Construct> Sequence for Vector<R, C> {
 }
 
 impl<R: RootStatus, C: Construct> Leak for Vector<R, C> {
-    type Metadata = (ValueOf<C>, usize, Option<usize>);
+    type Metadata = (C::Value, usize, Option<usize>);
 
     fn metadata(&self) -> Self::Metadata {
         let len = self.len();

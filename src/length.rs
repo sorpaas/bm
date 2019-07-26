@@ -1,4 +1,4 @@
-use crate::{RootStatus, Construct, Backend, ReadBackend, WriteBackend, Sequence, Raw, Dangling, Error, ValueOf, Index, Leak, Value, Tree, Owned};
+use crate::{RootStatus, Construct, Backend, ReadBackend, WriteBackend, Sequence, Raw, Dangling, Error, Index, Leak, Tree, Owned};
 
 const LEN_INDEX: Index = Index::root().right();
 const ITEM_ROOT_INDEX: Index = Index::root().left();
@@ -11,11 +11,11 @@ pub struct LengthMixed<R: RootStatus, C: Construct, S: Sequence<Construct=C, Roo
 
 impl<R: RootStatus, C: Construct, S> LengthMixed<R, C, S> where
     S: Sequence<Construct=C, RootStatus=Dangling>,
-    C::End: From<usize> + Into<usize>,
+    C::Value: From<usize> + Into<usize>,
 {
     /// Reconstruct the mixed-length tree.
     pub fn reconstruct<DB: WriteBackend<Construct=C>, F>(
-        root: ValueOf<C>,
+        root: C::Value,
         db: &mut DB,
         f: F
     ) -> Result<Self, Error<DB::Error>> where
@@ -23,8 +23,6 @@ impl<R: RootStatus, C: Construct, S> LengthMixed<R, C, S> where
     {
         let raw = Raw::<R, C>::from_leaked(root);
         let len: usize = raw.get(db, LEN_INDEX)?
-            .ok_or(Error::CorruptedDatabase)?
-            .end()
             .ok_or(Error::CorruptedDatabase)?
             .into();
         let inner_raw = raw.subtree(db, ITEM_ROOT_INDEX)?;
@@ -37,7 +35,7 @@ impl<R: RootStatus, C: Construct, S> LengthMixed<R, C, S> where
     pub fn deconstruct<DB: ReadBackend<Construct=C>>(
         self,
         db: &mut DB
-    ) -> Result<ValueOf<C>, Error<DB::Error>> {
+    ) -> Result<C::Value, Error<DB::Error>> {
         self.raw.get(db, LEN_INDEX)?;
         self.raw.get(db, ITEM_ROOT_INDEX)?;
         Ok(self.raw.root())
@@ -67,7 +65,7 @@ impl<R: RootStatus, C: Construct, S> LengthMixed<R, C, S> where
         let new_inner_root = self.inner.root();
 
         self.raw.set(db, ITEM_ROOT_INDEX, new_inner_root)?;
-        self.raw.set(db, LEN_INDEX, Value::End(new_len.into()))?;
+        self.raw.set(db, LEN_INDEX, new_len.into())?;
 
         Ok(ret)
     }
@@ -75,7 +73,7 @@ impl<R: RootStatus, C: Construct, S> LengthMixed<R, C, S> where
 
 impl<C: Construct, S> LengthMixed<Owned, C, S> where
     S: Sequence<Construct=C, RootStatus=Dangling> + Leak,
-    C::End: From<usize> + Into<usize>,
+    C::Value: From<usize> + Into<usize>,
 {
     /// Create a new mixed-length tree.
     pub fn create<DB: WriteBackend<Construct=C>, OS, F>(
@@ -90,7 +88,7 @@ impl<C: Construct, S> LengthMixed<Owned, C, S> where
         let mut raw = Raw::default();
 
         raw.set(db, ITEM_ROOT_INDEX, inner.root())?;
-        raw.set(db, LEN_INDEX, Value::End(len.into()))?;
+        raw.set(db, LEN_INDEX, len.into())?;
         let metadata = inner.metadata();
         inner.drop(db)?;
         let dangling_inner = S::from_leaked(metadata);
@@ -105,7 +103,7 @@ impl<R: RootStatus, C: Construct, S> Tree for LengthMixed<R, C, S> where
     type RootStatus = R;
     type Construct = C;
 
-    fn root(&self) -> ValueOf<C> {
+    fn root(&self) -> C::Value {
         self.raw.root()
     }
 
@@ -134,7 +132,7 @@ impl<R: RootStatus, C: Construct, S> Sequence for LengthMixed<R, C, S> where
 impl<R: RootStatus, C: Construct, S> Leak for LengthMixed<R, C, S> where
     S: Sequence<Construct=C, RootStatus=Dangling> + Leak,
 {
-    type Metadata = (ValueOf<C>, S::Metadata);
+    type Metadata = (C::Value, S::Metadata);
 
     fn metadata(&self) -> Self::Metadata {
         let inner_metadata = self.inner.metadata();
