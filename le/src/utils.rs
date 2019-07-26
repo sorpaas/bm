@@ -1,13 +1,13 @@
 //! Utilities
 
-use bm::{ValueOf, ReadBackend, WriteBackend, Error};
+use bm::{ReadBackend, WriteBackend, Construct, Error};
 use primitive_types::U256;
 use crate::{CompatibleConstruct, IntoTree, FromTree};
 
 pub use bm::utils::*;
 
 /// Mix in type.
-pub fn mix_in_type<T, DB: WriteBackend>(value: &T, db: &mut DB, ty: usize) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+pub fn mix_in_type<T, DB: WriteBackend>(value: &T, db: &mut DB, ty: usize) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
     T: IntoTree,
     DB::Construct: CompatibleConstruct,
 {
@@ -18,11 +18,11 @@ pub fn mix_in_type<T, DB: WriteBackend>(value: &T, db: &mut DB, ty: usize) -> Re
 }
 
 /// Decode type.
-pub fn decode_with_type<DB: ReadBackend, F, R>(root: &ValueOf<DB::Construct>, db: &mut DB, f: F) -> Result<R, Error<DB::Error>> where
-    F: FnOnce(&ValueOf<DB::Construct>, &mut DB, usize) -> Result<R, Error<DB::Error>>,
+pub fn decode_with_type<DB: ReadBackend, F, R>(root: &<DB::Construct as Construct>::Value, db: &mut DB, f: F) -> Result<R, Error<DB::Error>> where
+    F: FnOnce(&<DB::Construct as Construct>::Value, &mut DB, usize) -> Result<R, Error<DB::Error>>,
     DB::Construct: CompatibleConstruct,
 {
-    let (value, ty) = <(ValueOf<DB::Construct>, U256)>::from_tree(root, db)?;
+    let (value, ty) = <(<DB::Construct as Construct>::Value, U256)>::from_tree(root, db)?;
 
     if ty > U256::from(usize::max_value()) {
         Err(Error::CorruptedDatabase)
@@ -32,7 +32,7 @@ pub fn decode_with_type<DB: ReadBackend, F, R>(root: &ValueOf<DB::Construct>, db
 }
 
 /// Mix in length.
-pub fn mix_in_length<T, DB: WriteBackend>(value: &T, db: &mut DB, len: usize) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+pub fn mix_in_length<T, DB: WriteBackend>(value: &T, db: &mut DB, len: usize) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
     T: IntoTree,
     DB::Construct: CompatibleConstruct,
 {
@@ -43,7 +43,7 @@ pub fn mix_in_length<T, DB: WriteBackend>(value: &T, db: &mut DB, len: usize) ->
 }
 
 /// Decode length.
-pub fn decode_with_length<T, DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<(T, usize), Error<DB::Error>> where
+pub fn decode_with_length<T, DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<(T, usize), Error<DB::Error>> where
     T: FromTree,
     DB::Construct: CompatibleConstruct,
 {

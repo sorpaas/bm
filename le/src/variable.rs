@@ -1,5 +1,5 @@
 use typenum::Unsigned;
-use bm::{Error, ValueOf, ReadBackend, WriteBackend};
+use bm::{Error, Construct, ReadBackend, WriteBackend};
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 use alloc::vec::Vec;
@@ -95,7 +95,7 @@ impl<T: parity_codec::Decode, N: Unsigned> parity_codec::Decode for MaxVec<T, N>
 impl<T, ML: Unsigned> IntoTree for MaxVec<T, ML> where
     for<'b> ElementalVariableVecRef<'b, T>: IntoCompositeListTree,
 {
-    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self.0).into_composite_list_tree(db, Some(ML::to_usize()))
@@ -105,7 +105,7 @@ impl<T, ML: Unsigned> IntoTree for MaxVec<T, ML> where
 impl<T, ML: Unsigned> FromTree for MaxVec<T, ML> where
     for<'a> ElementalVariableVec<T>: FromCompositeListTree,
 {
-    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+    fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         let value = ElementalVariableVec::<T>::from_composite_list_tree(
@@ -118,7 +118,7 @@ impl<T, ML: Unsigned> FromTree for MaxVec<T, ML> where
 impl<'a, T, ML: Unsigned> IntoTree for CompactRef<'a, MaxVec<T, ML>> where
     for<'b> ElementalVariableVecRef<'b, T>: IntoCompactListTree,
 {
-    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self.0).into_compact_list_tree(db, Some(ML::to_usize()))
@@ -128,7 +128,7 @@ impl<'a, T, ML: Unsigned> IntoTree for CompactRef<'a, MaxVec<T, ML>> where
 impl<T, ML: Unsigned> IntoTree for Compact<MaxVec<T, ML>> where
     for<'b> ElementalVariableVecRef<'b, T>: IntoCompactListTree,
 {
-    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self.0).into_compact_list_tree(db, Some(ML::to_usize()))
@@ -138,7 +138,7 @@ impl<T, ML: Unsigned> IntoTree for Compact<MaxVec<T, ML>> where
 impl<T, ML: Unsigned> FromTree for Compact<MaxVec<T, ML>> where
     for<'a> ElementalVariableVec<T>: FromCompactListTree,
 {
-    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+    fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         let value = ElementalVariableVec::<T>::from_compact_list_tree(
@@ -151,7 +151,7 @@ impl<T, ML: Unsigned> FromTree for Compact<MaxVec<T, ML>> where
 impl<T> IntoTree for [T] where
     for<'a> ElementalVariableVecRef<'a, T>: IntoCompositeListTree,
 {
-    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self).into_composite_list_tree(db, None)
@@ -161,7 +161,7 @@ impl<T> IntoTree for [T] where
 impl<T> IntoTree for Vec<T> where
     for<'a> ElementalVariableVecRef<'a, T>: IntoCompositeListTree,
 {
-    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self).into_composite_list_tree(db, None)
@@ -171,7 +171,7 @@ impl<T> IntoTree for Vec<T> where
 impl<T> FromTree for Vec<T> where
     ElementalVariableVec<T>: FromCompositeListTree,
 {
-    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+    fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVec::from_composite_list_tree(root, db, None).map(|ret| ret.0)

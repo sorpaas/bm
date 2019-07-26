@@ -101,7 +101,7 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
             fn into_tree<DB: bm_le::WriteBackend>(
                 &self,
                 db: &mut DB
-            ) -> Result<bm_le::ValueOf<DB::Construct>, bm_le::Error<DB::Error>> where
+            ) -> Result<<DB::Construct as bm_le::Construct>::Value, bm_le::Error<DB::Error>> where
                 DB::Construct: bm_le::CompatibleConstruct
             {
                 #inner
@@ -262,7 +262,7 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
                         Fields::Unit => {
                             quote! {
                                 #i => {
-                                    if vector_root != &bm_le::Value::End(Default::default()) {
+                                    if vector_root != &Default::default() {
                                         return Err(bm_le::Error::CorruptedDatabase)
                                     }
 
@@ -292,7 +292,7 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
                 #(#where_fields),*
             {
                 fn from_tree<DB: bm_le::ReadBackend>(
-                    root: &bm_le::ValueOf<DB::Construct>,
+                    root: &<DB::Construct as bm_le::Construct>::Value,
                     db: &mut DB,
                 ) -> Result<Self, bm_le::Error<DB::Error>> where
                     DB::Construct: bm_le::CompatibleConstruct

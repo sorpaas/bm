@@ -1,12 +1,12 @@
-use bm::{Value, ReadBackend, WriteBackend, ValueOf, Error, Index, DanglingRaw, Leak};
+use bm::{ReadBackend, WriteBackend, Construct, Error, Index, DanglingRaw, Leak};
 use primitive_types::{H256, U256};
 use alloc::boxed::Box;
 
-use crate::{IntoTree, FromTree, End, Intermediate, CompatibleConstruct};
+use crate::{IntoTree, FromTree, Value, CompatibleConstruct};
 use crate::utils::{mix_in_type, decode_with_type};
 
 impl IntoTree for bool {
-    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         match self {
@@ -17,7 +17,7 @@ impl IntoTree for bool {
 }
 
 impl FromTree for bool {
-    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+    fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         Ok(u8::from_tree(root, db)? != 0)
@@ -27,26 +27,26 @@ impl FromTree for bool {
 macro_rules! impl_builtin_uint {
     ( $( $t:ty ),* ) => { $(
         impl IntoTree for $t {
-            fn into_tree<DB: WriteBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+            fn into_tree<DB: WriteBackend>(&self, _db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
                 DB::Construct: CompatibleConstruct,
             {
                 let mut ret = [0u8; 32];
                 let bytes = self.to_le_bytes();
                 ret[..bytes.len()].copy_from_slice(&bytes);
 
-                Ok(Value::End(End(H256::from(ret))))
+                Ok(Value(H256::from(ret)))
             }
         }
 
         impl FromTree for $t {
-            fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+            fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<Self, Error<DB::Error>> where
                 DB::Construct: CompatibleConstruct,
             {
                 let raw = DanglingRaw::from_leaked(root.clone());
 
-                match raw.get(db, Index::root())?.ok_or(Error::CorruptedDatabase)? {
-                    Value::Intermediate(_) => Err(Error::CorruptedDatabase),
-                    Value::End(value) => {
+                match raw.get(db, Index::root())? {
+                    None => Err(Error::CorruptedDatabase),
+                    Some(value) => {
                         let mut bytes = Self::default().to_le_bytes();
                         let bytes_len = bytes.len();
                         bytes.copy_from_slice(&value.0[..bytes_len]);
@@ -62,41 +62,41 @@ macro_rules! impl_builtin_uint {
 impl_builtin_uint!(u8, u16, u32, u64, u128);
 
 impl IntoTree for U256 {
-    fn into_tree<DB: WriteBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, _db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         let mut ret = [0u8; 32];
         self.to_little_endian(&mut ret);
 
-        Ok(Value::End(End(H256::from(ret))))
+        Ok(Value(H256::from(ret)))
     }
 }
 
 impl FromTree for U256 {
-    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+    fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         let raw = DanglingRaw::from_leaked(root.clone());
 
-        match raw.get(db, Index::root())?.ok_or(Error::CorruptedDatabase)? {
-            Value::Intermediate(_) => Err(Error::CorruptedDatabase),
-            Value::End(value) => {
+        match raw.get(db, Index::root())? {
+            None => Err(Error::CorruptedDatabase),
+            Some(value) => {
                 Ok(U256::from_little_endian(&value.as_ref()))
             },
         }
     }
 }
 
-impl IntoTree for Value<Intermediate, End> {
-    fn into_tree<DB: WriteBackend>(&self, _db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+impl IntoTree for Value {
+    fn into_tree<DB: WriteBackend>(&self, _db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         Ok(self.clone())
     }
 }
 
-impl FromTree for Value<Intermediate, End> {
-    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, _db: &mut DB) -> Result<Self, Error<DB::Error>> where
+impl FromTree for Value {
+    fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, _db: &mut DB) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         Ok(root.clone())
@@ -107,7 +107,7 @@ impl FromTree for Value<Intermediate, End> {
 impl IntoTree for bm::CompactValue<Intermediate, End> {
     fn into_tree<DB: WriteBackend>(
         &self, db: &mut DB
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         let encoded = parity_scale_codec::Encode::encode(self);
@@ -117,7 +117,7 @@ impl IntoTree for bm::CompactValue<Intermediate, End> {
 
 #[cfg(feature = "parity-scale-codec")]
 impl FromTree for bm::CompactValue<Intermediate, End> {
-    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+    fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         let decoded = <alloc::vec::Vec::<u8>>::from_tree(root, db)?;
@@ -128,7 +128,7 @@ impl FromTree for bm::CompactValue<Intermediate, End> {
 impl<T> FromTree for Option<T> where
     T: FromTree,
 {
-    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+    fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         decode_with_type(root, db, |inner, db, ty| {
@@ -147,7 +147,7 @@ impl<T> FromTree for Option<T> where
 impl<T> IntoTree for Option<T> where
     T: IntoTree,
 {
-    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         match self {
@@ -160,7 +160,7 @@ impl<T> IntoTree for Option<T> where
 impl<T> FromTree for Box<T> where
     T: FromTree,
 {
-    fn from_tree<DB: ReadBackend>(root: &ValueOf<DB::Construct>, db: &mut DB) -> Result<Self, Error<DB::Error>> where
+    fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         Ok(Box::new(T::from_tree(root, db)?))
@@ -170,7 +170,7 @@ impl<T> FromTree for Box<T> where
 impl<T> IntoTree for Box<T> where
     T: IntoTree,
 {
-    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         self.as_ref().into_tree(db)

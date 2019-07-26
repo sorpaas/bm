@@ -1,4 +1,4 @@
-use bm::{Error, ValueOf, ReadBackend, WriteBackend};
+use bm::{Error, ReadBackend, WriteBackend, Construct};
 use primitive_types::U256;
 use alloc::vec::Vec;
 
@@ -15,7 +15,7 @@ pub trait IntoCompositeListTree {
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;
 }
 
@@ -27,7 +27,7 @@ pub trait IntoCompactListTree {
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;
 }
 
@@ -36,7 +36,7 @@ pub trait FromCompositeListTree: Sized {
     /// Convert this type from merkle tree, reading nodes from the
     /// given database, with given maximum length.
     fn from_composite_list_tree<DB: ReadBackend>(
-        root: &ValueOf<DB::Construct>,
+        root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
         max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>> where
@@ -48,7 +48,7 @@ pub trait FromCompactListTree: Sized {
     /// Convert this type from merkle tree, reading nodes from the
     /// given database, with given maximum length.
     fn from_compact_list_tree<DB: ReadBackend>(
-        root: &ValueOf<DB::Construct>,
+        root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
         max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>> where
@@ -69,7 +69,7 @@ macro_rules! impl_packed {
                 &self,
                 db: &mut DB,
                 max_len: Option<usize>
-            ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+            ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
                 DB::Construct: CompatibleConstruct,
             {
                 let len = self.0.len();
@@ -96,7 +96,7 @@ impl<'a, T> IntoCompositeListTree for ElementalVariableVecRef<'a, T> where
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         let len = self.0.len();
@@ -107,15 +107,15 @@ impl<'a, T> IntoCompositeListTree for ElementalVariableVecRef<'a, T> where
 }
 
 fn from_list_tree<T, F, DB: ReadBackend>(
-    root: &ValueOf<DB::Construct>,
+    root: &<DB::Construct as Construct>::Value,
     db: &mut DB,
     max_len: Option<usize>,
     f: F
 ) -> Result<ElementalVariableVec<T>, Error<DB::Error>> where
     DB::Construct: CompatibleConstruct,
-    F: FnOnce(&ValueOf<DB::Construct>, &mut DB, usize, Option<usize>) -> Result<ElementalFixedVec<T>, Error<DB::Error>>
+    F: FnOnce(&<DB::Construct as Construct>::Value, &mut DB, usize, Option<usize>) -> Result<ElementalFixedVec<T>, Error<DB::Error>>
 {
-    let (vector_root, len) = decode_with_length::<ValueOf<DB::Construct>, _>(root, db)?;
+    let (vector_root, len) = decode_with_length::<<DB::Construct as Construct>::Value, _>(root, db)?;
 
     let vector = f(
         &vector_root, db, len, max_len
@@ -128,7 +128,7 @@ impl<T> FromCompactListTree for ElementalVariableVec<T> where
     ElementalFixedVec<T>: FromCompactVectorTree,
 {
     fn from_compact_list_tree<DB: ReadBackend>(
-        root: &ValueOf<DB::Construct>,
+        root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
         max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>> where
@@ -136,7 +136,7 @@ impl<T> FromCompactListTree for ElementalVariableVec<T> where
     {
         from_list_tree(root, db, max_len, |vector_root, db, len, max_len| {
             ElementalFixedVec::<T>::from_compact_vector_tree(
-                &vector_root, db, len, max_len
+                vector_root, db, len, max_len
             )
         })
     }
@@ -146,7 +146,7 @@ impl<T> FromCompositeListTree for ElementalVariableVec<T> where
     ElementalFixedVec<T>: FromCompositeVectorTree,
 {
     fn from_composite_list_tree<DB: ReadBackend>(
-        root: &ValueOf<DB::Construct>,
+        root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
         max_len: Option<usize>,
     ) -> Result<Self, Error<DB::Error>> where
@@ -154,7 +154,7 @@ impl<T> FromCompositeListTree for ElementalVariableVec<T> where
     {
         from_list_tree(root, db, max_len, |vector_root, db, len, max_len| {
             ElementalFixedVec::<T>::from_composite_vector_tree(
-                &vector_root, db, len, max_len
+                vector_root, db, len, max_len
             )
         })
     }
@@ -167,7 +167,7 @@ impl<T> IntoCompactListTree for ElementalVariableVec<T> where
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self.0).into_compact_list_tree(db, max_len)
@@ -181,7 +181,7 @@ impl<T> IntoCompositeListTree for ElementalVariableVec<T> where
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalVariableVecRef(&self.0).into_composite_list_tree(db, max_len)

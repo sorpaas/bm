@@ -12,10 +12,9 @@ use typenum::U32;
 use generic_array::GenericArray;
 use primitive_types::H256;
 use digest::Digest;
-use core::marker::PhantomData;
 
 pub use bm::{Backend, ReadBackend, WriteBackend, InheritedDigestConstruct,
-             UnitDigestConstruct, Construct, InheritedEmpty, Error, ValueOf, Value, Vector,
+             UnitDigestConstruct, Construct, InheritedEmpty, Error, Vector,
              DanglingVector, List, Leak, NoopBackend, InMemoryBackend};
 
 mod basic;
@@ -36,61 +35,52 @@ pub use variable::MaxVec;
 pub use bm_le_derive::{FromTree, IntoTree};
 
 /// Digest construct for bm-le.
-pub struct DigestConstruct<D: Digest<OutputSize=U32>>(PhantomData<D>);
-
-impl<D: Digest<OutputSize=U32>> Construct for DigestConstruct<D> {
-    type Intermediate = Intermediate;
-    type End = End;
-
-    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> Self::Intermediate {
-        let mut digest = D::new();
-        digest.input(&left.as_ref()[..]);
-        digest.input(&right.as_ref()[..]);
-        H256::from_slice(digest.result().as_slice())
-    }
-
-    fn empty_at<DB: WriteBackend<Construct=Self>>(
-        db: &mut DB,
-        depth_to_bottom: usize
-    ) -> Result<ValueOf<Self>, DB::Error> {
-        let mut current = Value::End(Default::default());
-        for _ in 0..depth_to_bottom {
-            let value = (current.clone(), current);
-            let key = Self::intermediate_of(&value.0, &value.1);
-            db.insert(key.clone(), value)?;
-            current = Value::Intermediate(key);
-        }
-        Ok(current)
-    }
-}
+pub type DigestConstruct<D> = bm::InheritedDigestConstruct<D, Value>;
 
 /// End value for 256-bit ssz binary merkle tree.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "parity-codec", derive(parity_codec::Encode, parity_codec::Decode))]
-pub struct End(pub H256);
+pub struct Value(pub H256);
 
-impl Default for End {
+impl Default for Value {
     fn default() -> Self {
         Self(H256::default())
     }
 }
 
-impl AsRef<[u8]> for End {
+impl AsRef<[u8]> for Value {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
 
-impl From<GenericArray<u8, typenum::U32>> for End {
-    fn from(array: GenericArray<u8, typenum::U32>) -> Self {
-        Self(H256::from_slice(array.as_slice()))
+impl AsMut<[u8]> for Value {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut()
     }
 }
 
-impl Into<GenericArray<u8, typenum::U32>> for End {
-    fn into(self) -> GenericArray<u8, typenum::U32> {
-        GenericArray::from_exact_iter(self.0.as_ref().iter().cloned()).expect("Size equals to U32; qed")
+impl From<usize> for Value {
+    fn from(value: usize) -> Self {
+        let mut ret = [0u8; 32];
+        let bytes = (value as u64).to_le_bytes();
+        (&mut ret[0..8]).copy_from_slice(&bytes);
+        Value(H256::from(ret))
+    }
+}
+
+impl Into<usize> for Value {
+    fn into(self) -> usize {
+        let mut raw = [0u8; 8];
+        (&mut raw).copy_from_slice(&self.0[0..8]);
+        u64::from_le_bytes(raw) as usize
+    }
+}
+
+impl From<GenericArray<u8, typenum::U32>> for Value {
+    fn from(array: GenericArray<u8, typenum::U32>) -> Self {
+        Self(H256::from_slice(array.as_slice()))
     }
 }
 
@@ -98,9 +88,9 @@ impl Into<GenericArray<u8, typenum::U32>> for End {
 pub type Intermediate = H256;
 
 /// Special type for le-compatible construct.
-pub trait CompatibleConstruct: Construct<Intermediate=Intermediate, End=End> { }
+pub trait CompatibleConstruct: Construct<Value=Value> { }
 
-impl<C: Construct<Intermediate=Intermediate, End=End>> CompatibleConstruct for C { }
+impl<C: Construct<Value=Value>> CompatibleConstruct for C { }
 
 /// Traits for type converting into a tree structure.
 pub trait IntoTree {
@@ -109,7 +99,7 @@ pub trait IntoTree {
     fn into_tree<DB: WriteBackend>(
         &self,
         db: &mut DB
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;
 }
 
@@ -118,7 +108,7 @@ pub trait FromTree: Sized {
     /// Convert this type from merkle tree, reading nodes from the
     /// given database.
     fn from_tree<DB: ReadBackend>(
-        root: &ValueOf<DB::Construct>,
+        root: &<DB::Construct as Construct>::Value,
         db: &mut DB
     ) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;

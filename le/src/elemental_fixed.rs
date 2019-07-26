@@ -1,10 +1,10 @@
-use bm::{ValueOf, ReadBackend, WriteBackend, Error, Value, DanglingPackedVector, DanglingVector, Leak, Sequence};
+use bm::{ReadBackend, WriteBackend, Construct, Error, DanglingPackedVector, DanglingVector, Leak, Sequence};
 use bm::utils::{vector_tree, host_len};
 use primitive_types::{H256, U256};
 use generic_array::GenericArray;
 use alloc::vec::Vec;
 
-use crate::{IntoTree, FromTree, End, CompatibleConstruct};
+use crate::{IntoTree, FromTree, Value, CompatibleConstruct};
 
 /// Traits for vector converting into a composite tree structure.
 pub trait IntoCompositeVectorTree {
@@ -14,7 +14,7 @@ pub trait IntoCompositeVectorTree {
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;
 }
 
@@ -26,7 +26,7 @@ pub trait IntoCompactVectorTree {
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;
 }
 
@@ -35,7 +35,7 @@ pub trait FromCompositeVectorTree: Sized {
     /// Convert this type from merkle tree, reading nodes from the
     /// given database, with given length and maximum length.
     fn from_composite_vector_tree<DB: ReadBackend>(
-        root: &ValueOf<DB::Construct>,
+        root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
         len: usize,
         max_len: Option<usize>,
@@ -48,7 +48,7 @@ pub trait FromCompactVectorTree: Sized {
     /// Convert this type from merkle tree, reading nodes from the
     /// given database, with given length and maximum length.
     fn from_compact_vector_tree<DB: ReadBackend>(
-        root: &ValueOf<DB::Construct>,
+        root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
         len: usize,
         max_len: Option<usize>,
@@ -70,7 +70,7 @@ macro_rules! impl_builtin_fixed_uint_vector {
                 &self,
                 db: &mut DB,
                 max_len: Option<usize>
-            ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+            ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
                 DB::Construct: CompatibleConstruct,
             {
                 let mut chunks: Vec<Vec<u8>> = Vec::new();
@@ -91,14 +91,14 @@ macro_rules! impl_builtin_fixed_uint_vector {
                 }
 
                 vector_tree(&chunks.into_iter().map(|c| {
-                    Value::End(End(H256::from_slice(&c)))
+                    Value(H256::from_slice(&c))
                 }).collect::<Vec<_>>(), db, max_len.map(|max| host_len::<typenum::U32, $lt>(max)))
             }
         }
 
         impl FromCompactVectorTree for ElementalFixedVec<$t> {
             fn from_compact_vector_tree<DB: ReadBackend>(
-                root: &ValueOf<DB::Construct>,
+                root: &<DB::Construct as Construct>::Value,
                 db: &mut DB,
                 len: usize,
                 max_len: Option<usize>
@@ -134,20 +134,20 @@ impl<'a> IntoCompactVectorTree for ElementalFixedVecRef<'a, U256> {
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         vector_tree(&self.0.iter().map(|uint| {
-            let mut ret = End::default();
+            let mut ret = Value::default();
             uint.to_little_endian(&mut ret.0.as_mut());
-            Value::End(ret)
+            ret
         }).collect::<Vec<_>>(), db, max_len)
     }
 }
 
 impl FromCompactVectorTree for ElementalFixedVec<U256> {
     fn from_compact_vector_tree<DB: ReadBackend>(
-        root: &ValueOf<DB::Construct>,
+        root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
         len: usize,
         max_len: Option<usize>
@@ -173,7 +173,7 @@ impl<'a> IntoCompactVectorTree for ElementalFixedVecRef<'a, bool> {
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         let mut bytes = Vec::new();
@@ -191,7 +191,7 @@ impl<'a> IntoCompactVectorTree for ElementalFixedVecRef<'a, bool> {
 
 impl FromCompactVectorTree for ElementalFixedVec<bool> {
     fn from_compact_vector_tree<DB: ReadBackend>(
-        root: &ValueOf<DB::Construct>,
+        root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
         len: usize,
         max_len: Option<usize>
@@ -223,7 +223,7 @@ impl<'a, T> IntoCompositeVectorTree for ElementalFixedVecRef<'a, T> where
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         vector_tree(&self.0.iter().map(|value| {
@@ -233,14 +233,14 @@ impl<'a, T> IntoCompositeVectorTree for ElementalFixedVecRef<'a, T> where
 }
 
 fn from_composite_vector_tree<T, F, DB: ReadBackend>(
-    root: &ValueOf<DB::Construct>,
+    root: &<DB::Construct as Construct>::Value,
     db: &mut DB,
     len: usize,
     max_len: Option<usize>,
     f: F
 ) -> Result<ElementalFixedVec<T>, Error<DB::Error>> where
     DB::Construct: CompatibleConstruct,
-    F: Fn(&ValueOf<DB::Construct>, &mut DB) -> Result<T, Error<DB::Error>>
+    F: Fn(&<DB::Construct as Construct>::Value, &mut DB) -> Result<T, Error<DB::Error>>
 {
     let vector = DanglingVector::<DB::Construct>::from_leaked(
         (root.clone(), len, max_len)
@@ -257,7 +257,7 @@ fn from_composite_vector_tree<T, F, DB: ReadBackend>(
 
 impl<T: FromTree> FromCompositeVectorTree for ElementalFixedVec<T> {
     fn from_composite_vector_tree<DB: ReadBackend>(
-        root: &ValueOf<DB::Construct>,
+        root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
         len: usize,
         max_len: Option<usize>
@@ -275,7 +275,7 @@ impl<T> IntoCompactVectorTree for ElementalFixedVec<T> where
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalFixedVecRef(&self.0).into_compact_vector_tree(db, max_len)
@@ -289,7 +289,7 @@ impl<T> IntoCompositeVectorTree for ElementalFixedVec<T> where
         &self,
         db: &mut DB,
         max_len: Option<usize>
-    ) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> where
+    ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         ElementalFixedVecRef(&self.0).into_composite_vector_tree(db, max_len)
