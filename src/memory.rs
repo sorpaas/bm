@@ -7,7 +7,7 @@ use digest::Digest;
 use core::marker::PhantomData;
 use core::hash::Hash;
 
-use crate::{Value, ValueOf, Construct, Backend, ReadBackend, WriteBackend};
+use crate::{Construct, Backend, ReadBackend, WriteBackend};
 
 /// Empty status.
 pub trait EmptyStatus {

@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 
 use crate::index::{Index, IndexSelection, IndexRoute};
 use crate::traits::{Construct, ReadBackend, WriteBackend,
-                    Value, ValueOf, RootStatus, Owned, Dangling, Leak, Error, Tree};
+                    RootStatus, Owned, Dangling, Leak, Error, Tree};
 
 /// `Raw` with owned root.
 pub type OwnedRaw<C> = Raw<Owned, C>;
@@ -13,14 +13,14 @@ pub type DanglingRaw<C> = Raw<Dangling, C>;
 
 /// Raw merkle tree.
 pub struct Raw<R: RootStatus, C: Construct> {
-    root: ValueOf<C>,
+    root: C::Value,
     _marker: PhantomData<(R, C)>,
 }
 
 impl<R: RootStatus, C: Construct> Default for Raw<R, C> {
     fn default() -> Self {
         Self {
-            root: Value::End(Default::default()),
+            root: Default::default(),
             _marker: PhantomData,
         }
     }
@@ -30,7 +30,7 @@ impl<R: RootStatus, C: Construct> Tree for Raw<R, C> {
     type RootStatus = R;
     type Construct = C;
 
-    fn root(&self) -> ValueOf<C> {
+    fn root(&self) -> C::Value {
         self.root.clone()
     }
 
@@ -39,9 +39,7 @@ impl<R: RootStatus, C: Construct> Tree for Raw<R, C> {
         db: &mut DB
     ) -> Result<(), Error<DB::Error>> {
         if R::is_owned() {
-            if let Some(key) = self.root().intermediate() {
-                db.unrootify(&key)?;
-            }
+            db.unrootify(&self.root())?;
         }
         Ok(())
     }
@@ -70,19 +68,17 @@ impl<R: RootStatus, C: Construct> Raw<R, C> {
         &self,
         db: &mut DB,
         index: Index
-    ) -> Result<Option<ValueOf<C>>, Error<DB::Error>> {
+    ) -> Result<Option<C::Value>, Error<DB::Error>> {
         match index.route() {
             IndexRoute::Root => Ok(Some(self.root.clone())),
             IndexRoute::Select(selections) => {
                 let mut current = self.root.clone();
 
                 for selection in selections {
-                    let intermediate = match current {
-                        Value::Intermediate(intermediate) => intermediate,
-                        Value::End(_) => return Ok(None),
+                    let pair = match db.get(&current)? {
+                        Some(pair) => pair,
+                        None => return Ok(None),
                     };
-
-                    let pair = db.get(&intermediate)?;
                     current = match selection {
                         IndexSelection::Left => pair.0.clone(),
                         IndexSelection::Right => pair.1.clone(),
@@ -99,48 +95,15 @@ impl<R: RootStatus, C: Construct> Raw<R, C> {
         &mut self,
         db: &mut DB,
         index: Index,
-        set: ValueOf<C>
+        set: C::Value,
     ) -> Result<(), Error<DB::Error>> {
+        db.insert(set.clone(), None)?;
+
         let route = index.route();
-
-        match set.clone() {
-            Value::End(_) => (),
-            Value::Intermediate(key) => {
-                let value = db.get(&key)?;
-                db.insert(key, value)?;
-            },
-        };
-
         let mut values = {
             let mut values = Vec::new();
             let mut depth = 1;
-            let mut current = match self.root.clone() {
-                Value::Intermediate(intermediate) => {
-                    Some(intermediate)
-                },
-                Value::End(_) => {
-                    let sel = match route.at_depth(depth) {
-                        Some(sel) => sel,
-                        None => {
-                            match &set {
-                                Value::End(_) => (),
-                                Value::Intermediate(key) => {
-                                    if R::is_owned() {
-                                        db.rootify(key)?;
-                                    }
-                                }
-                            }
-                            self.root = set;
-                            return Ok(())
-                        },
-                    };
-                    values.push(
-                        (sel, (Value::End(Default::default()), Value::End(Default::default())))
-                    );
-                    depth += 1;
-                    None
-                },
-            };
+            let mut current = Some(self.root.clone());
 
             loop {
                 let sel = match route.at_depth(depth) {
@@ -150,16 +113,21 @@ impl<R: RootStatus, C: Construct> Raw<R, C> {
                 match current.clone() {
                     Some(cur) => {
                         let value = db.get(&cur)?;
-                        values.push((sel, value.clone()));
-                        current = match sel {
-                            IndexSelection::Left => value.0.intermediate(),
-                            IndexSelection::Right => value.1.intermediate(),
-                        };
+                        match value {
+                            Some((left, right)) => {
+                                values.push((sel, (left.clone(), right.clone())));
+                                current = Some(match sel {
+                                    IndexSelection::Left => left,
+                                    IndexSelection::Right => right,
+                                });
+                            },
+                            None => {
+                                values.push((sel, Default::default()));
+                            },
+                        }
                     },
                     None => {
-                        values.push(
-                            (sel, (Value::End(Default::default()), Value::End(Default::default())))
-                        );
+                        values.push((sel, Default::default()));
                     },
                 }
                 depth += 1;
@@ -182,25 +150,14 @@ impl<R: RootStatus, C: Construct> Raw<R, C> {
 
             let intermediate = C::intermediate_of(&value.0, &value.1);
 
-            db.insert(intermediate.clone(), value)?;
-            update = Value::Intermediate(intermediate);
+            db.insert(intermediate.clone(), Some(value))?;
+            update = intermediate;
         }
 
-        match &update {
-            Value::Intermediate(ref key) => {
-                if R::is_owned() {
-                    db.rootify(key)?;
-                }
-            }
-            Value::End(_) => (),
-        }
-        match &self.root {
-            Value::Intermediate(ref key) => {
-                if R::is_owned() {
-                    db.unrootify(key)?;
-                }
-            }
-            Value::End(_) => (),
+
+        if R::is_owned() {
+            db.rootify(&update)?;
+            db.unrootify(&self.root)?;
         }
 
         self.root = update;
@@ -209,7 +166,7 @@ impl<R: RootStatus, C: Construct> Raw<R, C> {
 }
 
 impl<R: RootStatus, C: Construct> Leak for Raw<R, C> {
-    type Metadata = ValueOf<C>;
+    type Metadata = C::Value;
 
     fn metadata(&self) -> Self::Metadata {
         self.root()
