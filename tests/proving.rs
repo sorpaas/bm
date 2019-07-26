@@ -1,7 +1,8 @@
-use bm::{OwnedList, ProvingBackend, Sequence, Proofs, Value};
+use bm::{OwnedList, ProvingBackend, Sequence, Proofs};
 use sha2::Sha256;
+use generic_array::GenericArray;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Ord, PartialOrd, Hash)]
 struct VecValue([u8; 32]);
 
 impl AsRef<[u8]> for VecValue {
@@ -26,6 +27,14 @@ impl Into<usize> for VecValue {
     }
 }
 
+impl From<GenericArray<u8, typenum::U32>> for VecValue {
+    fn from(array: GenericArray<u8, typenum::U32>) -> VecValue {
+        let mut ret = [0u8; 32];
+        ret.copy_from_slice(&array[0..32]);
+        VecValue(ret)
+    }
+}
+
 impl Default for VecValue {
     fn default() -> Self {
         VecValue([0, 0, 0, 0, 0, 0, 0, 0,
@@ -45,7 +54,7 @@ fn basic_proving_vec() {
 
     for i in 0..100 {
         assert_eq!(vec.len(), i);
-        vec.push(&mut proving, Value::End(i.into())).unwrap();
+        vec.push(&mut proving, i.into()).unwrap();
     }
     drop(proving);
 
@@ -55,6 +64,7 @@ fn basic_proving_vec() {
     let vec_hash = vec.deconstruct(&mut proving).unwrap();
     let proofs = proving.into_proofs();
     let compact_proofs = proofs.into_compact(vec_hash.clone());
+    assert_eq!(compact_proofs.len(), 10);
     let (uncompacted_proofs, uncompacted_vec_hash) = Proofs::from_compact(compact_proofs);
     assert_eq!(vec_hash, uncompacted_vec_hash);
     assert_eq!(proofs, uncompacted_proofs);
@@ -62,6 +72,6 @@ fn basic_proving_vec() {
     let mut proved = InMemory::default();
     proved.populate(proofs.into());
     let proved_vec = OwnedList::reconstruct(vec_hash, &mut proved, None).unwrap();
-    assert_eq!(proved_vec.get(&mut proved, 5usize.into()).unwrap(), Value::End(5usize.into()));
-    assert_eq!(proved_vec.get(&mut proved, 7usize.into()).unwrap(), Value::End(7usize.into()));
+    assert_eq!(proved_vec.get(&mut proved, 5usize.into()).unwrap(), 5usize.into());
+    assert_eq!(proved_vec.get(&mut proved, 7usize.into()).unwrap(), 7usize.into());
 }

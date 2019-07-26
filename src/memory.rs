@@ -201,9 +201,11 @@ impl<C: Construct> InMemoryBackend<C> where
     }
 
     /// Populate the database with proofs.
-    pub fn populate(&mut self, proofs: Map<C::Value, Option<(C::Value, C::Value)>>) {
-        for (key, value) in proofs {
-            self.0.insert(key, (value, None));
+    pub fn populate(&mut self, proofs: Map<C::Value, (C::Value, C::Value)>) {
+        for (key, (left, right)) in proofs {
+            self.0.insert(key, (Some((left.clone(), right.clone())), None));
+            self.0.entry(left).or_insert((None, None));
+            self.0.entry(right).or_insert((None, None));
         }
     }
 }
