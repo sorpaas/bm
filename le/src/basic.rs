@@ -103,25 +103,22 @@ impl FromTree for Value {
     }
 }
 
-#[cfg(feature = "parity-scale-codec")]
-impl IntoTree for bm::CompactValue<Intermediate, End> {
+impl IntoTree for bm::CompactValue<Value> {
     fn into_tree<DB: WriteBackend>(
         &self, db: &mut DB
     ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
-        let encoded = parity_scale_codec::Encode::encode(self);
-        encoded.into_tree(db)
-    }
-}
-
-#[cfg(feature = "parity-scale-codec")]
-impl FromTree for bm::CompactValue<Intermediate, End> {
-    fn from_tree<DB: ReadBackend>(root: &<DB::Construct as Construct>::Value, db: &mut DB) -> Result<Self, Error<DB::Error>> where
-        DB::Construct: CompatibleConstruct,
-    {
-        let decoded = <alloc::vec::Vec::<u8>>::from_tree(root, db)?;
-        parity_scale_codec::Decode::decode(&mut &decoded[..]).map_err(|_| Error::CorruptedDatabase)
+        match self {
+            bm::CompactValue::Single(value) => Ok(value.clone()),
+            bm::CompactValue::Combined(boxed) => {
+                let left = boxed.as_ref().0.into_tree(db)?;
+                let right = boxed.as_ref().1.into_tree(db)?;
+                let key = DB::Construct::intermediate_of(&left, &right);
+                db.insert(key.clone(), (left, right))?;
+                Ok(key)
+            },
+        }
     }
 }
 
