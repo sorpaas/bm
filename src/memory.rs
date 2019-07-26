@@ -35,10 +35,9 @@ impl EmptyStatus for UnitEmpty {
 pub struct UnitDigestConstruct<D: Digest, T: AsRef<[u8]> + Clone + Default>(PhantomData<(D, T)>);
 
 impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Construct for UnitDigestConstruct<D, T> {
-    type Intermediate = GenericArray<u8, D::OutputSize>;
-    type End = T;
+    type Value = GenericArray<u8, D::OutputSize>;
 
-    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> Self::Intermediate {
+    fn intermediate_of(left: &Self::Value, right: &Self::Value) -> Self::Value {
         let mut digest = D::new();
         digest.input(&left.as_ref()[..]);
         digest.input(&right.as_ref()[..]);
@@ -48,8 +47,8 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Construct for UnitDigestConstr
     fn empty_at<DB: WriteBackend<Construct=Self>>(
         _db: &mut DB,
         _depth_to_bottom: usize
-    ) -> Result<ValueOf<Self>, DB::Error> {
-        Ok(Value::End(Default::default()))
+    ) -> Result<Self::Value, DB::Error> {
+        Ok(Default::default())
     }
 }
 
@@ -57,10 +56,9 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Construct for UnitDigestConstr
 pub struct InheritedDigestConstruct<D: Digest, T: AsRef<[u8]> + Clone + Default>(PhantomData<(D, T)>);
 
 impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Construct for InheritedDigestConstruct<D, T> {
-    type Intermediate = GenericArray<u8, D::OutputSize>;
-    type End = T;
+    type Value = GenericArray<u8, D::OutputSize>;
 
-    fn intermediate_of(left: &ValueOf<Self>, right: &ValueOf<Self>) -> Self::Intermediate {
+    fn intermediate_of(left: &Self::Value, right: &Self::Value) -> Self::Value {
         let mut digest = D::new();
         digest.input(&left.as_ref()[..]);
         digest.input(&right.as_ref()[..]);
@@ -70,13 +68,13 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default> Construct for InheritedDigestC
     fn empty_at<DB: WriteBackend<Construct=Self>>(
         db: &mut DB,
         depth_to_bottom: usize
-    ) -> Result<ValueOf<Self>, DB::Error> {
-        let mut current = Value::End(Default::default());
+    ) -> Result<Self::Value, DB::Error> {
+        let mut current = Self::Value::default();
         for _ in 0..depth_to_bottom {
             let value = (current.clone(), current);
             let key = Self::intermediate_of(&value.0, &value.1);
             db.insert(key.clone(), value)?;
-            current = Value::Intermediate(key);
+            current = key;
         }
         Ok(current)
     }
@@ -95,7 +93,7 @@ pub struct NoopBackend<C: Construct>(
 );
 
 impl<C: Construct> Default for NoopBackend<C> where
-    C::Intermediate: Eq + Hash + Ord
+    C::Value: Eq + Hash + Ord
 {
     fn default() -> Self {
         Self(Default::default())
@@ -116,25 +114,25 @@ impl<C: Construct> Backend for NoopBackend<C> {
 impl<C: Construct> ReadBackend for NoopBackend<C> {
     fn get(
         &mut self,
-        _key: &C::Intermediate,
-    ) -> Result<(ValueOf<C>, ValueOf<C>), Self::Error> {
+        _key: &C::Value,
+    ) -> Result<Option<(C::Value, C::Value)>, Self::Error> {
         Err(NoopBackendError::NotSupported)
     }
 }
 
 impl<C: Construct> WriteBackend for NoopBackend<C> {
-    fn rootify(&mut self, _key: &C::Intermediate) -> Result<(), Self::Error> {
+    fn rootify(&mut self, _key: &C::Value) -> Result<(), Self::Error> {
         Ok(())
     }
 
-    fn unrootify(&mut self, _key: &C::Intermediate) -> Result<(), Self::Error> {
+    fn unrootify(&mut self, _key: &C::Value) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn insert(
         &mut self,
-        _key: C::Intermediate,
-        _value: (ValueOf<C>, ValueOf<C>)
+        _key: C::Value,
+        _value: (C::Value, C::Value)
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -153,14 +151,17 @@ pub enum InMemoryBackendError {
 
 /// In-memory merkle database.
 pub struct InMemoryBackend<C: Construct>(
-    Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>,
+    Map<C::Value, (Option<(C::Value, C::Value)>, Option<usize>)>,
 );
 
 impl<C: Construct> Default for InMemoryBackend<C> where
-    C::Intermediate: Eq + Hash + Ord
+    C::Value: Eq + Hash + Ord
 {
     fn default() -> Self {
-        Self(Default::default())
+        let mut map = Map::default();
+        map.insert(Default::default(), (None, None));
+
+        Self(map)
     }
 }
 
@@ -171,24 +172,22 @@ impl<C: Construct> Clone for InMemoryBackend<C> {
 }
 
 impl<C: Construct> InMemoryBackend<C> where
-    C::Intermediate: Eq + Hash + Ord,
+    C::Value: Eq + Hash + Ord,
 {
-    fn remove(&mut self, old_key: &C::Intermediate) -> Result<(), InMemoryBackendError> {
+    fn remove(&mut self, old_key: &C::Value) -> Result<(), InMemoryBackendError> {
         let (old_value, to_remove) = {
-            let value = self.0.get_mut(old_key).ok_or(InMemoryBackendError::SetIntermediateNotExist)?;
+            let value = match self.0.get_mut(old_key) {
+                Some(value) => value,
+                None => return Ok(()),
+            };
             value.1.as_mut().map(|v| *v -= 1);
             (value.0.clone(), value.1.map(|v| v == 0).unwrap_or(false))
         };
 
         if to_remove {
-            match old_value.0 {
-                Value::Intermediate(subkey) => { self.remove(&subkey)?; },
-                Value::End(_) => (),
-            }
-
-            match old_value.1 {
-                Value::Intermediate(subkey) => { self.remove(&subkey)?; },
-                Value::End(_) => (),
+            if let Some(old_value) = old_value {
+                self.remove(&old_value.0)?;
+                self.remove(&old_value.1)?;
             }
 
             self.0.remove(old_key);
@@ -198,15 +197,15 @@ impl<C: Construct> InMemoryBackend<C> where
     }
 
     /// Populate the database with proofs.
-    pub fn populate(&mut self, proofs: Map<C::Intermediate, (ValueOf<C>, ValueOf<C>)>) {
+    pub fn populate(&mut self, proofs: Map<C::Value, Option<(C::Value, C::Value)>>) {
         for (key, value) in proofs {
             self.0.insert(key, (value, None));
         }
     }
 }
 
-impl<C: Construct> AsRef<Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)>> for InMemoryBackend<C> {
-    fn as_ref(&self) -> &Map<C::Intermediate, ((ValueOf<C>, ValueOf<C>), Option<usize>)> {
+impl<C: Construct> AsRef<Map<C::Value, (Option<(C::Value, C::Value)>, Option<usize>)>> for InMemoryBackend<C> {
+    fn as_ref(&self) -> &Map<C::Value, (Option<(C::Value, C::Value)>, Option<usize>)> {
         &self.0
     }
 }
@@ -217,31 +216,31 @@ impl<C: Construct> Backend for InMemoryBackend<C> {
 }
 
 impl<C: Construct> ReadBackend for InMemoryBackend<C> where
-    C::Intermediate: Eq + Hash + Ord,
+    C::Value: Eq + Hash + Ord,
 {
-    fn get(&mut self, key: &C::Intermediate) -> Result<(ValueOf<C>, ValueOf<C>), Self::Error> {
-        self.0.get(key).map(|v| v.0.clone()).ok_or(InMemoryBackendError::FetchingKeyNotExist)
+    fn get(&mut self, key: &C::Value) -> Result<Option<(C::Value, C::Value)>, Self::Error> {
+        Ok(self.0.get(key).map(|v| v.0.clone()).unwrap_or(None))
     }
 }
 
 impl<C: Construct> WriteBackend for InMemoryBackend<C> where
-    C::Intermediate: Eq + Hash + Ord,
+    C::Value: Eq + Hash + Ord,
 {
-    fn rootify(&mut self, key: &C::Intermediate) -> Result<(), Self::Error> {
-        self.0.get_mut(key).ok_or(InMemoryBackendError::RootifyKeyNotExist)?.1
+    fn rootify(&mut self, key: &C::Value) -> Result<(), Self::Error> {
+        self.0.entry(key.clone()).or_insert((None, Some(0))).1
             .as_mut().map(|v| *v += 1);
         Ok(())
     }
 
-    fn unrootify(&mut self, key: &C::Intermediate) -> Result<(), Self::Error> {
+    fn unrootify(&mut self, key: &C::Value) -> Result<(), Self::Error> {
         self.remove(key)?;
         Ok(())
     }
 
     fn insert(
         &mut self,
-        key: C::Intermediate,
-        value: (ValueOf<C>, ValueOf<C>)
+        key: C::Value,
+        value: (C::Value, C::Value)
     ) -> Result<(), Self::Error> {
         if self.0.contains_key(&key) {
             return Ok(())
@@ -249,22 +248,12 @@ impl<C: Construct> WriteBackend for InMemoryBackend<C> where
 
         let (left, right) = value;
 
-        match &left {
-            Value::Intermediate(ref subkey) => {
-                self.0.get_mut(subkey).ok_or(InMemoryBackendError::SetIntermediateNotExist)?.1
-                    .as_mut().map(|v| *v += 1);
-            },
-            Value::End(_) => (),
-        }
-        match &right {
-            Value::Intermediate(ref subkey) => {
-                self.0.get_mut(subkey).ok_or(InMemoryBackendError::SetIntermediateNotExist)?.1
-                    .as_mut().map(|v| *v += 1);
-            },
-            Value::End(_) => (),
-        }
+        self.0.entry(left.clone()).or_insert((None, Some(0))).1
+            .as_mut().map(|v| *v += 1);
+        self.0.entry(right.clone()).or_insert((None, Some(0))).1
+            .as_mut().map(|v| *v += 1);
 
-        self.0.insert(key, ((left, right), Some(0)));
+        self.0.insert(key, (Some((left, right)), Some(0)));
         Ok(())
     }
 }

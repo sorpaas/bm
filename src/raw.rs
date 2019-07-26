@@ -97,8 +97,6 @@ impl<R: RootStatus, C: Construct> Raw<R, C> {
         index: Index,
         set: C::Value,
     ) -> Result<(), Error<DB::Error>> {
-        db.insert(set.clone(), None)?;
-
         let route = index.route();
         let mut values = {
             let mut values = Vec::new();
@@ -150,7 +148,7 @@ impl<R: RootStatus, C: Construct> Raw<R, C> {
 
             let intermediate = C::intermediate_of(&value.0, &value.1);
 
-            db.insert(intermediate.clone(), Some(value))?;
+            db.insert(intermediate.clone(), value)?;
             update = intermediate;
         }
 
@@ -184,6 +182,7 @@ impl<R: RootStatus, C: Construct> Leak for Raw<R, C> {
 mod tests {
     use super::*;
     use crate::traits::Owned;
+    use generic_array::{arr, arr_impl};
     use sha2::Sha256;
 
     type Construct = crate::InheritedDigestConstruct<Sha256, Vec<u8>>;
@@ -242,15 +241,25 @@ mod tests {
         }
     }
 
+    macro_rules! sinarr {
+        ( $x:expr ) => (
+            arr![u8;
+                 $x, 0, 0, 0, 0, 0, 0, 0,
+                 0, 0, 0, 0, 0, 0, 0, 0,
+                 0, 0, 0, 0, 0, 0, 0, 0,
+                 0, 0, 0, 0, 0, 0, 0, 0]
+        )
+    }
+
     #[test]
     fn test_set_skip() {
         let mut db = InMemory::default();
         let mut list = Raw::<Owned, Construct>::default();
 
-        list.set(&mut db, Index::from_one(4).unwrap(), Value::End(vec![2])).unwrap();
-        assert_eq!(list.get(&mut db, Index::from_one(4).unwrap()).unwrap(), Some(Value::End(vec![2])));
-        list.set(&mut db, Index::from_one(4).unwrap(), Value::End(vec![3])).unwrap();
-        assert_eq!(list.get(&mut db, Index::from_one(4).unwrap()).unwrap(), Some(Value::End(vec![3])));
+        list.set(&mut db, Index::from_one(4).unwrap(), sinarr!(2)).unwrap();
+        assert_eq!(list.get(&mut db, Index::from_one(4).unwrap()).unwrap(), Some(sinarr!(2)));
+        list.set(&mut db, Index::from_one(4).unwrap(), sinarr!(3)).unwrap();
+        assert_eq!(list.get(&mut db, Index::from_one(4).unwrap()).unwrap(), Some(sinarr!(3)));
     }
 
     #[test]
@@ -259,7 +268,7 @@ mod tests {
         let mut list = Raw::<Owned, Construct>::default();
 
         for i in 4..8 {
-            list.set(&mut db, Index::from_one(i).unwrap(), Value::End(vec![i as u8])).unwrap();
+            list.set(&mut db, Index::from_one(i).unwrap(), sinarr!(i as u8)).unwrap();
         }
     }
 
@@ -271,46 +280,46 @@ mod tests {
         let mut list2 = Raw::<Owned, Construct>::default();
 
         for i in 32..64 {
-            list1.set(&mut db1, Index::from_one(i).unwrap(), Value::End(vec![i as u8])).unwrap();
+            list1.set(&mut db1, Index::from_one(i).unwrap(), sinarr!(i as u8)).unwrap();
         }
         for i in (32..64).rev() {
-            list2.set(&mut db2, Index::from_one(i).unwrap(), Value::End(vec![i as u8])).unwrap();
+            list2.set(&mut db2, Index::from_one(i).unwrap(), sinarr!(i as u8)).unwrap();
         }
         assert_eq!(db1.as_ref(), db2.as_ref());
         for i in 32..64 {
             let val1 = list1.get(&mut db1, Index::from_one(i).unwrap()).unwrap().unwrap();
             let val2 = list2.get(&mut db2, Index::from_one(i).unwrap()).unwrap().unwrap();
-            assert_eq!(val1, Value::End(vec![i as u8]));
-            assert_eq!(val2, Value::End(vec![i as u8]));
+            assert_eq!(val1, sinarr!(i as u8));
+            assert_eq!(val2, sinarr!(i as u8));
         }
 
-        list1.set(&mut db1, Index::from_one(1).unwrap(), Value::End(vec![1])).unwrap();
-        assert!(db1.as_ref().is_empty());
+        list1.set(&mut db1, Index::from_one(1).unwrap(), sinarr!(1)).unwrap();
+        assert_eq!(db1.as_ref().len(), 2);
     }
 
     #[test]
     fn test_intermediate() {
         let mut db = InMemory::default();
         let mut list = Raw::<Owned, Construct>::default();
-        list.set(&mut db, Index::from_one(2).unwrap(), Value::End(vec![])).unwrap();
-        assert_eq!(list.get(&mut db, Index::from_one(3).unwrap()).unwrap().unwrap(), Value::End(vec![]));
+        list.set(&mut db, Index::from_one(2).unwrap(), Default::default()).unwrap();
+        assert_eq!(list.get(&mut db, Index::from_one(3).unwrap()).unwrap().unwrap(), Default::default());
 
         let empty1 = list.get(&mut db, Index::from_one(1).unwrap()).unwrap().unwrap();
         list.set(&mut db, Index::from_one(2).unwrap(), empty1.clone()).unwrap();
         list.set(&mut db, Index::from_one(3).unwrap(), empty1.clone()).unwrap();
         for i in 4..8 {
-            assert_eq!(list.get(&mut db, Index::from_one(i).unwrap()).unwrap().unwrap(), Value::End(vec![]));
+            assert_eq!(list.get(&mut db, Index::from_one(i).unwrap()).unwrap().unwrap(), Default::default());
         }
-        assert_eq!(db.as_ref().len(), 2);
+        assert_eq!(db.as_ref().len(), 3);
 
         let mut db1 = db.clone();
         let mut list1 = Raw::<Owned, Construct>::from_leaked(list.root());
         list.set(&mut db, Index::from_one(1).unwrap(), empty1.clone()).unwrap();
-        assert_eq!(list.get(&mut db, Index::from_one(3).unwrap()).unwrap().unwrap(), Value::End(vec![]));
-        assert_eq!(db.as_ref().len(), 1);
+        assert_eq!(list.get(&mut db, Index::from_one(3).unwrap()).unwrap().unwrap(), Default::default());
+        assert_eq!(db.as_ref().len(), 2);
 
-        list1.set(&mut db1, Index::from_one(1).unwrap(), Value::End(vec![0])).unwrap();
-        assert_eq!(list1.get(&mut db1, Index::from_one(1).unwrap()).unwrap().unwrap(), Value::End(vec![0]));
-        assert!(db1.as_ref().is_empty());
+        list1.set(&mut db1, Index::from_one(1).unwrap(), sinarr!(0)).unwrap();
+        assert_eq!(list1.get(&mut db1, Index::from_one(1).unwrap()).unwrap().unwrap(), sinarr!(0));
+        assert_eq!(db1.as_ref().len(), 1);
     }
 }

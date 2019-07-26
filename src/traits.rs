@@ -112,7 +112,7 @@ pub trait WriteBackend: ReadBackend {
     fn insert(
         &mut self,
         key: <Self::Construct as Construct>::Value,
-        value: Option<(<Self::Construct as Construct>::Value, <Self::Construct as Construct>::Value)>
+        value: (<Self::Construct as Construct>::Value, <Self::Construct as Construct>::Value)
     ) -> Result<(), Self::Error>;
 }
 
