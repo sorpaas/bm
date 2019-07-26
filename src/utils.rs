@@ -1,6 +1,6 @@
 //! Utilities
 
-use crate::{Construct, WriteBackend, ValueOf, Error, Value};
+use crate::{Construct, WriteBackend, Error};
 use alloc::collections::VecDeque;
 use generic_array::ArrayLength;
 
@@ -16,7 +16,7 @@ pub fn required_depth(len: usize) -> usize {
 }
 
 /// Serialize a vector at given depth.
-pub fn vector_tree<DB: WriteBackend>(values: &[ValueOf<DB::Construct>], db: &mut DB, max_len: Option<usize>) -> Result<ValueOf<DB::Construct>, Error<DB::Error>> {
+pub fn vector_tree<DB: WriteBackend>(values: &[<DB::Construct as Construct>::Value], db: &mut DB, max_len: Option<usize>) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> {
     let total_depth = required_depth(max_len.unwrap_or(values.len()));
 
     let mut current = values.iter().cloned().collect::<VecDeque<_>>();
@@ -30,7 +30,7 @@ pub fn vector_tree<DB: WriteBackend>(values: &[ValueOf<DB::Construct>], db: &mut
             let key = <DB::Construct as Construct>::intermediate_of(&left, &right);
 
             db.insert(key.clone(), (left, right))?;
-            next.push_back(Value::Intermediate(key));
+            next.push_back(key);
         }
         current = next;
         next = VecDeque::new();

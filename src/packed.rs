@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use crate::length::LengthMixed;
 use crate::vector::Vector;
 use crate::raw::Raw;
-use crate::traits::{Value, Construct, ReadBackend, WriteBackend, ValueOf, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
+use crate::traits::{Construct, ReadBackend, WriteBackend, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
 use crate::utils::host_len;
 
 fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
@@ -46,7 +46,7 @@ pub struct PackedVector<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: A
 }
 
 impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<R, C, T, H, V> where
-    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+    C::Value: From<GenericArray<u8, H>> + AsRef<[u8]> + AsMut<[u8]>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Get value at index.
@@ -56,9 +56,8 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
 
         let mut value_offset = 0;
         for (i, range) in covering_ranges.into_iter().enumerate() {
-            let host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i)?
-                .end().ok_or(Error::CorruptedDatabase)?.into();
-            (&mut ret[value_offset..(value_offset + range.end - range.start)]).copy_from_slice(&host_value[range.clone()]);
+            let host_value = self.tuple.get(db, covering_base + i)?;
+            (&mut ret[value_offset..(value_offset + range.end - range.start)]).copy_from_slice(&host_value.as_ref()[range.clone()]);
             value_offset += range.end - range.start;
         }
 
@@ -72,10 +71,9 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
 
         let mut value_offset = 0;
         for (i, range) in covering_ranges.into_iter().enumerate() {
-            let mut host_value: GenericArray<u8, H> = self.tuple.get(db, covering_base + i)?
-                .end().ok_or(Error::CorruptedDatabase)?.into();
-            (&mut host_value[range.clone()]).copy_from_slice(&value[value_offset..(value_offset + range.end - range.start)]);
-            self.tuple.set(db, covering_base + i, Value::End(host_value.into()))?;
+            let mut host_value = self.tuple.get(db, covering_base + i)?;
+            host_value.as_mut()[range.clone()].copy_from_slice(&value[value_offset..(value_offset + range.end - range.start)]);
+            self.tuple.set(db, covering_base + i, host_value)?;
             value_offset += range.end - range.start;
         }
 
@@ -88,7 +86,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
         while self.tuple.len() < covering_base + covering_ranges.len() {
-            self.tuple.push(db, Value::End(Default::default()))?;
+            self.tuple.push(db, Default::default())?;
         }
         self.set(db, index, value)?;
         self.len += 1;
@@ -118,7 +116,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
 
             let last_value = self.get(db, last_index)?;
             self.tuple.pop(db)?;
-            self.tuple.push(db, Value::End(Default::default()))?;
+            self.tuple.push(db, Default::default())?;
             self.set(db, last_index, last_value)?;
         }
 
@@ -140,13 +138,13 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
 }
 
 impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tree for PackedVector<R, C, T, H, V> where
-    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
-    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+    C::Value: From<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>>,
 {
     type RootStatus = R;
     type Construct = C;
 
-    fn root(&self) -> ValueOf<C> {
+    fn root(&self) -> C::Value {
         self.tuple.root()
     }
 
@@ -160,8 +158,8 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tre
 }
 
 impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Sequence for PackedVector<R, C, T, H, V> where
-    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
-    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+    C::Value: From<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>>,
 {
     fn len(&self) -> usize {
         self.len
@@ -169,10 +167,10 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Seq
 }
 
 impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for PackedVector<R, C, T, H, V> where
-    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
-    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+    C::Value: From<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>>,
 {
-    type Metadata = (ValueOf<C>, usize, Option<usize>);
+    type Metadata = (C::Value, usize, Option<usize>);
 
     fn metadata(&self) -> Self::Metadata {
         let value_len = self.len();
@@ -192,8 +190,8 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Lea
 }
 
 impl<C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<Owned, C, T, H, V> where
-    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
-    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+    C::Value: From<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>>,
 {
     /// Create a new tuple.
     pub fn create<DB: WriteBackend<Construct=C>>(db: &mut DB, value_len: usize, value_max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
@@ -220,11 +218,11 @@ pub type DanglingPackedList<C, T, H, V> = PackedList<Dangling, C, T, H, V>;
 pub struct PackedList<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>>(
     LengthMixed<R, C, PackedVector<Dangling, C, T, H, V>>,
 ) where
-    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
-    C::End: From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>;
+    C::Value: From<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>>;
 
 impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<R, C, T, H, V> where
-    C::End: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
+    C::Value: From<usize> + Into<usize> + From<GenericArray<u8, H>> + AsRef<[u8]> + AsMut<[u8]>,
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Get value at index.
@@ -249,13 +247,13 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
 }
 
 impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tree for PackedList<R, C, T, H, V> where
-    C::End: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
-    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+    C::Value: From<usize> + Into<usize> + From<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>>,
 {
     type RootStatus = R;
     type Construct = C;
 
-    fn root(&self) -> ValueOf<C> {
+    fn root(&self) -> C::Value {
         self.0.root()
     }
 
@@ -269,8 +267,8 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tre
 }
 
 impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Sequence for PackedList<R, C, T, H, V> where
-    C::End: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
-    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+    C::Value: From<usize> + Into<usize> + From<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>>,
 {
     fn len(&self) -> usize {
         self.0.len()
@@ -278,8 +276,8 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Seq
 }
 
 impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Leak for PackedList<R, C, T, H, V> where
-    C::End: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
-    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+    C::Value: From<usize> + Into<usize> + From<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>>,
 {
     type Metadata = <LengthMixed<R, C, Vector<Dangling, C>> as Leak>::Metadata;
 
@@ -293,8 +291,8 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Lea
 }
 
 impl<C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<Owned, C, T, H, V> where
-    C::End: From<usize> + Into<usize> + From<GenericArray<u8, H>> + Into<GenericArray<u8, H>>,
-    T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
+    C::Value: From<usize> + Into<usize> + From<GenericArray<u8, H>>,
+    T: From<GenericArray<u8, V>>,
 {
     /// Create a new vector.
     pub fn create<DB: WriteBackend<Construct=C>>(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
@@ -307,12 +305,12 @@ mod tests {
     use super::*;
     use sha2::Sha256;
     use crate::traits::Owned;
-    use typenum::{U8, U32};
+    use typenum::{U32, U64};
 
     type InMemory = crate::memory::InMemoryBackend<crate::InheritedDigestConstruct<Sha256, ListValue>>;
 
-    #[derive(Clone, PartialEq, Eq, Debug, Default)]
-    struct ListValue([u8; 8]);
+    #[derive(Clone, PartialEq, Eq, Debug, Default, Ord, PartialOrd, Hash)]
+    struct ListValue([u8; 32]);
 
     impl AsRef<[u8]> for ListValue {
         fn as_ref(&self) -> &[u8] {
@@ -320,9 +318,18 @@ mod tests {
         }
     }
 
+    impl AsMut<[u8]> for ListValue {
+        fn as_mut(&mut self) -> &mut [u8] {
+            self.0.as_mut()
+        }
+    }
+
     impl From<usize> for ListValue {
         fn from(value: usize) -> Self {
-            ListValue((value as u64).to_le_bytes())
+            let mut ret = [0u8; 32];
+            let bytes = (value as u64).to_le_bytes();
+            (&mut ret[0..8]).copy_from_slice(&bytes);
+            ListValue(ret)
         }
     }
 
@@ -334,82 +341,90 @@ mod tests {
         }
     }
 
-    impl From<GenericArray<u8, U8>> for ListValue {
-        fn from(arr: GenericArray<u8, U8>) -> ListValue {
-            let mut raw = [0u8; 8];
-            (&mut raw).copy_from_slice(&arr[0..8]);
+    impl From<GenericArray<u8, U32>> for ListValue {
+        fn from(arr: GenericArray<u8, U32>) -> ListValue {
+            let mut raw = [0u8; 32];
+            (&mut raw[0..8]).copy_from_slice(&arr[0..8]);
             ListValue(raw)
-        }
-    }
-
-    impl Into<GenericArray<u8, U8>> for ListValue {
-        fn into(self) -> GenericArray<u8, U8> {
-            let mut arr: GenericArray<u8, U8> = Default::default();
-            (&mut arr[..]).copy_from_slice(&self.0[..]);
-            arr
         }
     }
 
     #[test]
     fn test_coverings() {
-        assert_eq!(coverings::<U32, U8>(3), (0, vec![24..32]));
-        assert_eq!(coverings::<U32, U8>(4), (1, vec![0..8]));
-        assert_eq!(coverings::<U8, U32>(1), (4, vec![0..8, 0..8, 0..8, 0..8]));
+        assert_eq!(coverings::<U32, typenum::U8>(3), (0, vec![24..32]));
+        assert_eq!(coverings::<U32, typenum::U8>(4), (1, vec![0..8]));
+        assert_eq!(coverings::<typenum::U8, U32>(1), (4, vec![0..8, 0..8, 0..8, 0..8]));
     }
 
     #[test]
     fn test_tuple() {
         let mut db = InMemory::default();
-        let mut tuple = PackedVector::<Owned, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, 0, None).unwrap();
+        let mut tuple = PackedVector::<Owned, _, GenericArray<u8, U64>, U32, U64>::create(&mut db, 0, None).unwrap();
 
         for i in 0..100 {
-            let mut value = GenericArray::<u8, U32>::default();
+            let mut value = GenericArray::<u8, U64>::default();
             value[0] = i as u8;
             tuple.push(&mut db, value).unwrap();
         }
 
         for i in 0..100 {
             let value = tuple.get(&mut db, i).unwrap();
-            assert_eq!(value.as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(value.as_ref(), [i as u8, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0].as_ref());
         }
 
         for i in (0..100).rev() {
             let value = tuple.pop(&mut db).unwrap();
-            assert_eq!(value.unwrap().as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(value.unwrap().as_ref(), [i as u8, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0].as_ref());
         }
     }
 
     #[test]
     fn test_vec() {
         let mut db = InMemory::default();
-        let mut vec = PackedList::<Owned, _, GenericArray<u8, U32>, U8, U32>::create(&mut db, None).unwrap();
+        let mut vec = PackedList::<Owned, _, GenericArray<u8, U64>, U32, U64>::create(&mut db, None).unwrap();
 
         for i in 0..100 {
-            let mut value = GenericArray::<u8, U32>::default();
+            let mut value = GenericArray::<u8, U64>::default();
             value[0] = i as u8;
             vec.push(&mut db, value).unwrap();
         }
 
         for i in 0..100 {
             let value = vec.get(&mut db, i).unwrap();
-            assert_eq!(value.as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0,
-                                            0, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(value.as_ref(), [i as u8, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0, 0, 0, 0, 0, 0].as_ref());
         }
 
         for i in (0..100).rev() {
             let value = vec.pop(&mut db).unwrap();
-            assert_eq!(value.unwrap().as_ref(), &[i as u8, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(value.unwrap().as_ref(), [i as u8, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0,
+                                                 0, 0, 0, 0, 0, 0, 0, 0].as_ref());
         }
     }
 }
