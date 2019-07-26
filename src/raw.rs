@@ -185,7 +185,7 @@ mod tests {
     use generic_array::{arr, arr_impl};
     use sha2::Sha256;
 
-    type Construct = crate::InheritedDigestConstruct<Sha256, Vec<u8>>;
+    type Construct = crate::InheritedDigestConstruct<Sha256>;
     type InMemory = crate::memory::InMemoryBackend<Construct>;
 
     #[test]

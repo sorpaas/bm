@@ -1,4 +1,4 @@
-use crate::traits::{ReadBackend, WriteBackend, Construct, ValueOf, RootStatus, Dangling, Owned, Leak, Error, Tree, Sequence};
+use crate::traits::{ReadBackend, WriteBackend, Construct, RootStatus, Dangling, Owned, Leak, Error, Tree, Sequence};
 use crate::vector::Vector;
 use crate::raw::Raw;
 use crate::length::LengthMixed;
@@ -13,35 +13,35 @@ pub type DanglingList<C> = List<Dangling, C>;
 pub struct List<R: RootStatus, C: Construct>(LengthMixed<R, C, Vector<Dangling, C>>);
 
 impl<R: RootStatus, C: Construct> List<R, C> where
-    C::End: From<usize> + Into<usize>,
+    C::Value: From<usize> + Into<usize>,
 {
     /// Get value at index.
-    pub fn get<DB: ReadBackend<Construct=C>>(&self, db: &mut DB, index: usize) -> Result<ValueOf<C>, Error<DB::Error>> {
+    pub fn get<DB: ReadBackend<Construct=C>>(&self, db: &mut DB, index: usize) -> Result<C::Value, Error<DB::Error>> {
         self.0.with(db, |tuple, db| tuple.get(db, index))
     }
 
     /// Set value at index.
-    pub fn set<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, index: usize, value: ValueOf<C>) -> Result<(), Error<DB::Error>> {
+    pub fn set<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, index: usize, value: C::Value) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.set(db, index, value))
     }
 
     /// Push a new value to the vector.
-    pub fn push<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, value: ValueOf<C>) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, value: C::Value) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.push(db, value))
     }
 
     /// Pop a value from the vector.
-    pub fn pop<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<ValueOf<C>>, Error<DB::Error>> {
+    pub fn pop<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<C::Value>, Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.pop(db))
     }
 
     /// Deconstruct the vector into one single hash value, and leak only the hash value.
-    pub fn deconstruct<DB: ReadBackend<Construct=C>>(self, db: &mut DB) -> Result<ValueOf<C>, Error<DB::Error>> {
+    pub fn deconstruct<DB: ReadBackend<Construct=C>>(self, db: &mut DB) -> Result<C::Value, Error<DB::Error>> {
         self.0.deconstruct(db)
     }
 
     /// Reconstruct the vector from a single hash value.
-    pub fn reconstruct<DB: WriteBackend<Construct=C>>(root: ValueOf<C>, db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn reconstruct<DB: WriteBackend<Construct=C>>(root: C::Value, db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::reconstruct(root, db, |tuple_raw, _db, len| {
             Ok(Vector::<Dangling, C>::from_raw(tuple_raw, len, max_len))
         })?))
@@ -49,12 +49,12 @@ impl<R: RootStatus, C: Construct> List<R, C> where
 }
 
 impl<R: RootStatus, C: Construct> Tree for List<R, C> where
-    C::End: From<usize> + Into<usize>,
+    C::Value: From<usize> + Into<usize>,
 {
     type RootStatus = R;
     type Construct = C;
 
-    fn root(&self) -> ValueOf<C> {
+    fn root(&self) -> C::Value {
         self.0.root()
     }
 
@@ -68,7 +68,7 @@ impl<R: RootStatus, C: Construct> Tree for List<R, C> where
 }
 
 impl<R: RootStatus, C: Construct> Sequence for List<R, C> where
-    C::End: From<usize> + Into<usize>,
+    C::Value: From<usize> + Into<usize>,
 {
     fn len(&self) -> usize {
         self.0.len()
@@ -76,7 +76,7 @@ impl<R: RootStatus, C: Construct> Sequence for List<R, C> where
 }
 
 impl<R: RootStatus, C: Construct> Leak for List<R, C> where
-    C::End: From<usize> + Into<usize>,
+    C::Value: From<usize> + Into<usize>,
 {
     type Metadata = <LengthMixed<R, C, Vector<Dangling, C>> as Leak>::Metadata;
 
@@ -90,7 +90,7 @@ impl<R: RootStatus, C: Construct> Leak for List<R, C> where
 }
 
 impl<C: Construct> List<Owned, C> where
-    C::End: From<usize> + Into<usize>
+    C::Value: From<usize> + Into<usize>
 {
     /// Create a new vector.
     pub fn create<DB: WriteBackend<Construct=C>>(
@@ -104,14 +104,20 @@ impl<C: Construct> List<Owned, C> where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Value;
+    use generic_array::GenericArray;
     use sha2::Sha256;
 
     type InheritedInMemory = crate::memory::InMemoryBackend<crate::InheritedDigestConstruct<Sha256, ListValue>>;
     type UnitInMemory = crate::memory::InMemoryBackend<crate::UnitDigestConstruct<Sha256, ListValue>>;
 
-    #[derive(Clone, PartialEq, Eq, Debug, Default)]
+    #[derive(Clone, PartialEq, Eq, Debug, Default, Ord, PartialOrd, Hash)]
     struct ListValue(Vec<u8>);
+
+    impl From<GenericArray<u8, typenum::U32>> for ListValue {
+        fn from(array: GenericArray<u8, typenum::U32>) -> ListValue {
+            ListValue(array.as_slice().to_vec())
+        }
+    }
 
     impl AsRef<[u8]> for ListValue {
         fn as_ref(&self) -> &[u8] {
@@ -142,14 +148,14 @@ mod tests {
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
-            vec.push(&mut db, Value::End(i.into())).unwrap();
+            vec.push(&mut db, i.into()).unwrap();
             roots.push(vec.root());
         }
         assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
             assert_eq!(vec.root(), roots.pop().unwrap());
             let value = vec.pop(&mut db).unwrap();
-            assert_eq!(value, Some(Value::End(i.into())));
+            assert_eq!(value, Some(i.into()));
             assert_eq!(vec.len(), i);
         }
         assert_eq!(vec.len(), 0);
@@ -164,14 +170,14 @@ mod tests {
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
-            vec.push(&mut db, Value::End(i.into())).unwrap();
+            vec.push(&mut db, i.into()).unwrap();
             roots.push(vec.root());
         }
         assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
             assert_eq!(vec.root(), roots.pop().unwrap());
             let value = vec.pop(&mut db).unwrap();
-            assert_eq!(value, Some(Value::End(i.into())));
+            assert_eq!(value, Some(i.into()));
             assert_eq!(vec.len(), i);
         }
         assert_eq!(vec.len(), 0);
@@ -184,14 +190,14 @@ mod tests {
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
-            vec.push(&mut db, Value::End(Default::default())).unwrap();
+            vec.push(&mut db, Default::default()).unwrap();
         }
 
         for i in 0..100 {
-            vec.set(&mut db, i, Value::End(i.into())).unwrap();
+            vec.set(&mut db, i, i.into()).unwrap();
         }
         for i in 0..100 {
-            assert_eq!(vec.get(&mut db, i).unwrap(), Value::End(i.into()));
+            assert_eq!(vec.get(&mut db, i).unwrap(), i.into());
         }
     }
 
@@ -202,14 +208,14 @@ mod tests {
 
         for i in 0..100 {
             assert_eq!(vec.len(), i);
-            vec.push(&mut db, Value::End(i.into())).unwrap();
+            vec.push(&mut db, i.into()).unwrap();
         }
         let vec_hash = vec.deconstruct(&mut db).unwrap();
 
         let vec = OwnedList::reconstruct(vec_hash, &mut db, None).unwrap();
         assert_eq!(vec.len(), 100);
         for i in (0..100).rev() {
-            assert_eq!(vec.get(&mut db, i).unwrap(), Value::End(i.into()));
+            assert_eq!(vec.get(&mut db, i).unwrap(), i.into());
         }
     }
 }

@@ -32,17 +32,17 @@ impl EmptyStatus for UnitEmpty {
 }
 
 /// Unit Digest construct.
-pub struct UnitDigestConstruct<D: Digest, T: AsRef<[u8]> + Clone + Default, V=GenericArray<u8, <D as Digest>::OutputSize>>(PhantomData<(D, T, V)>);
+pub struct UnitDigestConstruct<D: Digest, V=GenericArray<u8, <D as Digest>::OutputSize>>(PhantomData<(D, V)>);
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default, V> Construct for UnitDigestConstruct<D, T, V> where
-    V: From<GenericArray<u8, D::OutputSize>> + Into<GenericArray<u8, D::OutputSize>> + Default + Clone,
+impl<D: Digest, V> Construct for UnitDigestConstruct<D, V> where
+    V: From<GenericArray<u8, D::OutputSize>> + AsRef<[u8]> + Default + Clone,
 {
     type Value = V;
 
     fn intermediate_of(left: &Self::Value, right: &Self::Value) -> Self::Value {
         let mut digest = D::new();
-        digest.input(&left.clone().into().as_ref()[..]);
-        digest.input(&right.clone().into().as_ref()[..]);
+        digest.input(&left.as_ref()[..]);
+        digest.input(&right.as_ref()[..]);
         digest.result().into()
     }
 
@@ -55,17 +55,17 @@ impl<D: Digest, T: AsRef<[u8]> + Clone + Default, V> Construct for UnitDigestCon
 }
 
 /// Inherited Digest construct.
-pub struct InheritedDigestConstruct<D: Digest, T: AsRef<[u8]> + Clone + Default, V=GenericArray<u8, <D as Digest>::OutputSize>>(PhantomData<(D, T, V)>);
+pub struct InheritedDigestConstruct<D: Digest, V=GenericArray<u8, <D as Digest>::OutputSize>>(PhantomData<(D, V)>);
 
-impl<D: Digest, T: AsRef<[u8]> + Clone + Default, V> Construct for InheritedDigestConstruct<D, T, V> where
-    V: From<GenericArray<u8, D::OutputSize>> + Into<GenericArray<u8, D::OutputSize>> + Default + Clone,
+impl<D: Digest, V> Construct for InheritedDigestConstruct<D, V> where
+    V: From<GenericArray<u8, D::OutputSize>> + AsRef<[u8]> + Default + Clone,
 {
     type Value = V;
 
     fn intermediate_of(left: &Self::Value, right: &Self::Value) -> Self::Value {
         let mut digest = D::new();
-        digest.input(&left.clone().into().as_ref()[..]);
-        digest.input(&right.clone().into().as_ref()[..]);
+        digest.input(&left.as_ref()[..]);
+        digest.input(&right.as_ref()[..]);
         digest.result().into()
     }
 
