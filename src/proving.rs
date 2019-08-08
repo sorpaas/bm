@@ -10,7 +10,9 @@ use alloc::collections::{BTreeMap as Map, BTreeSet as Set};
 
 /// Proving state.
 pub struct ProvingState<V> {
+    /// Proofs required for operations.
     pub proofs: Map<V, (V, V)>,
+    /// Inserts of operations, which do not go into the proof.
     pub inserts: Set<V>,
 }
 
