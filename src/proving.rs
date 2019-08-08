@@ -9,6 +9,7 @@ use std::collections::{HashMap as Map, HashSet as Set};
 use alloc::collections::{BTreeMap as Map, BTreeSet as Set};
 
 /// Proving state.
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct ProvingState<V> {
     /// Proofs required for operations.
     pub proofs: Map<V, (V, V)>,
