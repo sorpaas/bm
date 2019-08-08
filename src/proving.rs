@@ -10,7 +10,7 @@ use alloc::collections::{BTreeMap as Map, BTreeSet as Set};
 
 /// Proving state.
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct ProvingState<V> {
+pub struct ProvingState<V: Eq + Hash + Ord> {
     /// Proofs required for operations.
     pub proofs: Map<V, (V, V)>,
     /// Inserts of operations, which do not go into the proof.
@@ -26,14 +26,16 @@ impl<V: Eq + Hash + Ord> Default for ProvingState<V> {
     }
 }
 
-impl<V> From<ProvingState<V>> for Proofs<V> {
+impl<V: Eq + Hash + Ord> From<ProvingState<V>> for Proofs<V> {
     fn from(state: ProvingState<V>) -> Self {
         Self(state.proofs)
     }
 }
 
 /// Proving merkle database.
-pub struct ProvingBackend<'a, DB: Backend> {
+pub struct ProvingBackend<'a, DB: Backend> where
+    <DB::Construct as Construct>::Value: Eq + Hash + Ord
+{
     db: &'a mut DB,
     state: ProvingState<<DB::Construct as Construct>::Value>,
 }
@@ -58,7 +60,9 @@ impl<'a, DB: Backend> From<ProvingBackend<'a, DB>> for Proofs<<DB::Construct as 
     }
 }
 
-impl<'a, DB: Backend> Backend for ProvingBackend<'a, DB> {
+impl<'a, DB: Backend> Backend for ProvingBackend<'a, DB> where
+    <DB::Construct as Construct>::Value: Eq + Hash + Ord,
+{
     type Construct = DB::Construct;
     type Error = DB::Error;
 }
