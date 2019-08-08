@@ -8,12 +8,31 @@ use std::collections::{HashMap as Map, HashSet as Set};
 #[cfg(not(feature = "std"))]
 use alloc::collections::{BTreeMap as Map, BTreeSet as Set};
 
+/// Proving state.
+pub struct ProvingState<V> {
+    pub proofs: Map<V, (V, V)>,
+    pub inserts: Set<V>,
+}
+
+impl<V: Eq + Hash + Ord> Default for ProvingState<V> {
+    fn default() -> Self {
+        Self {
+            proofs: Default::default(),
+            inserts: Default::default(),
+        }
+    }
+}
+
+impl<V> From<ProvingState<V>> for Proofs<V> {
+    fn from(state: ProvingState<V>) -> Self {
+        Self(state.proofs)
+    }
+}
+
 /// Proving merkle database.
 pub struct ProvingBackend<'a, DB: Backend> {
     db: &'a mut DB,
-    proofs: Map<<DB::Construct as Construct>::Value,
-                (<DB::Construct as Construct>::Value, <DB::Construct as Construct>::Value)>,
-    inserts: Set<<DB::Construct as Construct>::Value>,
+    state: ProvingState<<DB::Construct as Construct>::Value>,
 }
 
 impl<'a, DB: Backend> ProvingBackend<'a, DB> where
@@ -23,14 +42,16 @@ impl<'a, DB: Backend> ProvingBackend<'a, DB> where
     pub fn new(db: &'a mut DB) -> Self {
         Self {
             db,
-            proofs: Default::default(),
-            inserts: Default::default(),
+            state: Default::default(),
         }
     }
+}
 
-    /// Get the current pooofs.
-    pub fn into_proofs(self) -> Proofs<DB::Construct> {
-        Proofs(self.proofs)
+impl<'a, DB: Backend> From<ProvingBackend<'a, DB>> for Proofs<<DB::Construct as Construct>::Value> where
+    <DB::Construct as Construct>::Value: Eq + Hash + Ord,
+{
+    fn from(backend: ProvingBackend<'a, DB>) -> Self {
+        backend.state.into()
     }
 }
 
@@ -50,8 +71,8 @@ impl<'a, DB: ReadBackend> ReadBackend for ProvingBackend<'a, DB> where
             Some(value) => value,
             None => return Ok(None),
         };
-        if !self.inserts.contains(key) {
-            self.proofs.insert(key.clone(), value.clone());
+        if !self.state.inserts.contains(key) {
+            self.state.proofs.insert(key.clone(), value.clone());
         }
         Ok(Some(value))
     }
@@ -73,66 +94,57 @@ impl<'a, DB: WriteBackend> WriteBackend for ProvingBackend<'a, DB> where
         key: <DB::Construct as Construct>::Value,
         value: (<DB::Construct as Construct>::Value, <DB::Construct as Construct>::Value)
     ) -> Result<(), Self::Error> {
-        self.inserts.insert(key.clone());
+        self.state.inserts.insert(key.clone());
         self.db.insert(key, value)
     }
 }
 
 /// Type of proofs.
-pub struct Proofs<C: Construct>(Map<C::Value, (C::Value, C::Value)>);
+pub struct Proofs<V>(Map<V, (V, V)>);
 
-impl<C: Construct> Into<Map<C::Value, (C::Value, C::Value)>> for Proofs<C> {
-    fn into(self) -> Map<C::Value, (C::Value, C::Value)> {
+impl<V> Into<Map<V, (V, V)>> for Proofs<V> {
+    fn into(self) -> Map<V, (V, V)> {
         self.0
     }
 }
 
-impl<C: Construct> Default for Proofs<C> where
-    C::Value: Eq + Hash + Ord
-{
+impl<V: Eq + Hash + Ord> Default for Proofs<V> {
     fn default() -> Self {
         Self(Default::default())
     }
 }
 
-impl<C: Construct> Clone for Proofs<C> {
+impl<V: Clone> Clone for Proofs<V> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<C: Construct> Deref for Proofs<C> {
-    type Target = Map<C::Value, (C::Value, C::Value)>;
+impl<V> Deref for Proofs<V> {
+    type Target = Map<V, (V, V)>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<C: Construct> PartialEq for Proofs<C> where
-    C::Value: Eq + Hash + Ord,
-{
+impl<V: Eq + Hash + Ord> PartialEq for Proofs<V> {
     fn eq(&self, other: &Self) -> bool {
         self.0.eq(&other.0)
     }
 }
 
-impl<C: Construct> Eq for Proofs<C> where
-    C::Value: Eq + Hash + Ord { }
+impl<V: Eq + Hash + Ord> Eq for Proofs<V>  { }
 
-impl<C: Construct> fmt::Debug for Proofs<C> where
-    C::Value: Eq + Hash + Ord + fmt::Debug,
-{
+impl<V: Eq + Hash + Ord + fmt::Debug> fmt::Debug for Proofs<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl<C: Construct> Proofs<C> where
-    C::Value: Eq + Hash + Ord,
-{
+impl<V: Eq + Hash + Ord + Clone + Default> Proofs<V> {
     /// Create compact merkle proofs from complete entries.
-    pub fn into_compact(&self, root: C::Value) -> CompactValue<C::Value> {
+    pub fn into_compact(&self, root: V) -> CompactValue<V> {
         if let Some((left, right)) = self.0.get(&root) {
             let compact_left = self.into_compact(left.clone());
             let compact_right = self.into_compact(right.clone());
@@ -143,16 +155,16 @@ impl<C: Construct> Proofs<C> where
     }
 
     /// Convert the compact value into full proofs.
-    pub fn from_compact(compact: CompactValue<C::Value>) -> (Self, C::Value) {
+    pub fn from_compact<C: Construct<Value=V>>(compact: CompactValue<V>) -> (Self, V) {
         match compact {
             CompactValue::Single(root) => (Proofs(Default::default()), root),
             CompactValue::Combined(boxed) => {
                 let (compact_left, compact_right) = *boxed;
-                let (left_proofs, left) = Self::from_compact(compact_left);
-                let (right_proofs, right) = Self::from_compact(compact_right);
+                let (left_proofs, left) = Self::from_compact::<C>(compact_left);
+                let (right_proofs, right) = Self::from_compact::<C>(compact_right);
                 let mut proofs = left_proofs.0.into_iter()
                     .chain(right_proofs.0.into_iter())
-                    .collect::<Map<C::Value, (C::Value, C::Value)>>();
+                    .collect::<Map<V, (V, V)>>();
                 let key = C::intermediate_of(&left, &right);
                 proofs.insert(key.clone(), (left, right));
                 (Proofs(proofs), key)
@@ -170,6 +182,12 @@ pub enum CompactValue<V> {
     Single(V),
     /// Value is combined by other left and right entries.
     Combined(Box<(CompactValue<V>, CompactValue<V>)>),
+}
+
+impl<V: Default> Default for CompactValue<V> {
+    fn default() -> Self {
+        CompactValue::Single(Default::default())
+    }
 }
 
 impl<V> CompactValue<V> {

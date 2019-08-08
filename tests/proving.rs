@@ -62,10 +62,10 @@ fn basic_proving_vec() {
     vec.get(&mut proving, 5usize.into()).unwrap();
     vec.get(&mut proving, 7usize.into()).unwrap();
     let vec_hash = vec.deconstruct(&mut proving).unwrap();
-    let proofs = proving.into_proofs();
+    let proofs: Proofs<VecValue> = proving.into();
     let compact_proofs = proofs.into_compact(vec_hash.clone());
     assert_eq!(compact_proofs.len(), 10);
-    let (uncompacted_proofs, uncompacted_vec_hash) = Proofs::from_compact(compact_proofs);
+    let (uncompacted_proofs, uncompacted_vec_hash) = Proofs::from_compact::<bm::InheritedDigestConstruct<Sha256, VecValue>>(compact_proofs);
     assert_eq!(vec_hash, uncompacted_vec_hash);
     assert_eq!(proofs, uncompacted_proofs);
 
