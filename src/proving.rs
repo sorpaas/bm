@@ -50,6 +50,16 @@ impl<'a, DB: Backend> ProvingBackend<'a, DB> where
             state: Default::default(),
         }
     }
+
+    /// From proving state.
+    pub fn from_state(state: ProvingState<<DB::Construct as Construct>::Value>, db: &'a mut DB) -> Self {
+        Self { db, state }
+    }
+
+    /// Into proving state.
+    pub fn into_state(self) -> ProvingState<<DB::Construct as Construct>::Value> {
+        self.state
+    }
 }
 
 impl<'a, DB: Backend> From<ProvingBackend<'a, DB>> for Proofs<<DB::Construct as Construct>::Value> where
