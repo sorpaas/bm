@@ -1,6 +1,6 @@
 [package]
 name = "bm"
-version = "0.10.2"
+version = "0.10.3"
 description = "Binary Merkle Trie"
 authors = ["Wei Tang <hi@that.world>"]
 edition = "2018"
