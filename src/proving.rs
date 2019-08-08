@@ -178,7 +178,7 @@ impl<V: Eq + Hash + Ord + Clone + Default> Proofs<V> {
 /// Compact proofs.
 #[derive(Clone, Eq, PartialEq, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "parity-codec", derive(parity_scale_codec::Encode, parity_scale_codec::Decode))]
+#[cfg_attr(feature = "parity-codec", derive(parity_codec::Encode, parity_codec::Decode))]
 pub enum CompactValue<V> {
     /// Single compact value.
     Single(V),
