@@ -117,11 +117,8 @@ pub trait WriteBackend: ReadBackend {
 }
 
 /// Dynamic backend, where error is stripped.
+#[derive(Default, Clone, Debug)]
 pub struct DynBackend<Ba: Backend>(pub Ba);
-
-impl<Ba: Backend + Default> Default for DynBackend<Ba> {
-	fn default() -> Self { Self(Ba::default()) }
-}
 
 impl<Ba: Backend> core::ops::Deref for DynBackend<Ba> {
 	type Target = Ba;
