@@ -46,7 +46,7 @@ impl<D: Digest, V> Construct for UnitDigestConstruct<D, V> where
         digest.result().into()
     }
 
-    fn empty_at<DB: WriteBackend<Construct=Self>>(
+    fn empty_at<DB: WriteBackend<Construct=Self> + ?Sized>(
         _db: &mut DB,
         _depth_to_bottom: usize
     ) -> Result<Self::Value, DB::Error> {
@@ -69,7 +69,7 @@ impl<D: Digest, V> Construct for InheritedDigestConstruct<D, V> where
         digest.result().into()
     }
 
-    fn empty_at<DB: WriteBackend<Construct=Self>>(
+    fn empty_at<DB: WriteBackend<Construct=Self> + ?Sized>(
         db: &mut DB,
         depth_to_bottom: usize
     ) -> Result<Self::Value, DB::Error> {
@@ -152,6 +152,16 @@ pub enum InMemoryBackendError {
     /// Set subkey does not exist.
     SetIntermediateNotExist
 }
+
+#[cfg(feature = "std")]
+impl std::fmt::Display for InMemoryBackendError {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "{:?}", self)
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for InMemoryBackendError { }
 
 /// In-memory merkle database.
 pub struct InMemoryBackend<C: Construct>(

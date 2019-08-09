@@ -33,14 +33,14 @@ impl<V: Eq + Hash + Ord> From<ProvingState<V>> for Proofs<V> {
 }
 
 /// Proving merkle database.
-pub struct ProvingBackend<'a, DB: Backend> where
+pub struct ProvingBackend<'a, DB: Backend + ?Sized> where
     <DB::Construct as Construct>::Value: Eq + Hash + Ord
 {
     db: &'a mut DB,
     state: ProvingState<<DB::Construct as Construct>::Value>,
 }
 
-impl<'a, DB: Backend> ProvingBackend<'a, DB> where
+impl<'a, DB: Backend + ?Sized> ProvingBackend<'a, DB> where
     <DB::Construct as Construct>::Value: Eq + Hash + Ord,
 {
     /// Create a new proving database.
@@ -62,7 +62,7 @@ impl<'a, DB: Backend> ProvingBackend<'a, DB> where
     }
 }
 
-impl<'a, DB: Backend> From<ProvingBackend<'a, DB>> for Proofs<<DB::Construct as Construct>::Value> where
+impl<'a, DB: Backend + ?Sized> From<ProvingBackend<'a, DB>> for Proofs<<DB::Construct as Construct>::Value> where
     <DB::Construct as Construct>::Value: Eq + Hash + Ord,
 {
     fn from(backend: ProvingBackend<'a, DB>) -> Self {
@@ -70,14 +70,14 @@ impl<'a, DB: Backend> From<ProvingBackend<'a, DB>> for Proofs<<DB::Construct as 
     }
 }
 
-impl<'a, DB: Backend> Backend for ProvingBackend<'a, DB> where
+impl<'a, DB: Backend + ?Sized> Backend for ProvingBackend<'a, DB> where
     <DB::Construct as Construct>::Value: Eq + Hash + Ord,
 {
     type Construct = DB::Construct;
     type Error = DB::Error;
 }
 
-impl<'a, DB: ReadBackend> ReadBackend for ProvingBackend<'a, DB> where
+impl<'a, DB: ReadBackend + ?Sized> ReadBackend for ProvingBackend<'a, DB> where
     <DB::Construct as Construct>::Value: Eq + Hash + Ord,
 {
     fn get(
@@ -95,7 +95,7 @@ impl<'a, DB: ReadBackend> ReadBackend for ProvingBackend<'a, DB> where
     }
 }
 
-impl<'a, DB: WriteBackend> WriteBackend for ProvingBackend<'a, DB> where
+impl<'a, DB: WriteBackend + ?Sized> WriteBackend for ProvingBackend<'a, DB> where
     <DB::Construct as Construct>::Value: Eq + Hash + Ord,
 {
     fn rootify(&mut self, key: &<DB::Construct as Construct>::Value) -> Result<(), Self::Error> {

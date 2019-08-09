@@ -16,32 +16,32 @@ impl<R: RootStatus, C: Construct> List<R, C> where
     C::Value: From<usize> + Into<usize>,
 {
     /// Get value at index.
-    pub fn get<DB: ReadBackend<Construct=C>>(&self, db: &mut DB, index: usize) -> Result<C::Value, Error<DB::Error>> {
+    pub fn get<DB: ReadBackend<Construct=C> + ?Sized>(&self, db: &mut DB, index: usize) -> Result<C::Value, Error<DB::Error>> {
         self.0.with(db, |tuple, db| tuple.get(db, index))
     }
 
     /// Set value at index.
-    pub fn set<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, index: usize, value: C::Value) -> Result<(), Error<DB::Error>> {
+    pub fn set<DB: WriteBackend<Construct=C> + ?Sized>(&mut self, db: &mut DB, index: usize, value: C::Value) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.set(db, index, value))
     }
 
     /// Push a new value to the vector.
-    pub fn push<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, value: C::Value) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: WriteBackend<Construct=C> + ?Sized>(&mut self, db: &mut DB, value: C::Value) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.push(db, value))
     }
 
     /// Pop a value from the vector.
-    pub fn pop<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<C::Value>, Error<DB::Error>> {
+    pub fn pop<DB: WriteBackend<Construct=C> + ?Sized>(&mut self, db: &mut DB) -> Result<Option<C::Value>, Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.pop(db))
     }
 
     /// Deconstruct the vector into one single hash value, and leak only the hash value.
-    pub fn deconstruct<DB: ReadBackend<Construct=C>>(self, db: &mut DB) -> Result<C::Value, Error<DB::Error>> {
+    pub fn deconstruct<DB: ReadBackend<Construct=C> + ?Sized>(self, db: &mut DB) -> Result<C::Value, Error<DB::Error>> {
         self.0.deconstruct(db)
     }
 
     /// Reconstruct the vector from a single hash value.
-    pub fn reconstruct<DB: WriteBackend<Construct=C>>(root: C::Value, db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn reconstruct<DB: WriteBackend<Construct=C> + ?Sized>(root: C::Value, db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::reconstruct(root, db, |tuple_raw, _db, len| {
             Ok(Vector::<Dangling, C>::from_raw(tuple_raw, len, max_len))
         })?))
@@ -58,7 +58,7 @@ impl<R: RootStatus, C: Construct> Tree for List<R, C> where
         self.0.root()
     }
 
-    fn drop<DB: WriteBackend<Construct=C>>(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn drop<DB: WriteBackend<Construct=C> + ?Sized>(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         self.0.drop(db)
     }
 
@@ -93,7 +93,7 @@ impl<C: Construct> List<Owned, C> where
     C::Value: From<usize> + Into<usize>
 {
     /// Create a new vector.
-    pub fn create<DB: WriteBackend<Construct=C>>(
+    pub fn create<DB: WriteBackend<Construct=C> + ?Sized>(
         db: &mut DB,
         max_len: Option<usize>
     ) -> Result<Self, Error<DB::Error>> {

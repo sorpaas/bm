@@ -24,7 +24,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
         Index::from_one((1 << self.depth()) + i)
     }
 
-    fn extend<DB: WriteBackend<Construct=C>>(
+    fn extend<DB: WriteBackend<Construct=C> + ?Sized>(
         &mut self,
         db: &mut DB
     ) -> Result<(), Error<DB::Error>> {
@@ -38,7 +38,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
         Ok(())
     }
 
-    fn shrink<DB: WriteBackend<Construct=C>>(
+    fn shrink<DB: WriteBackend<Construct=C> + ?Sized>(
         &mut self,
         db: &mut DB
     ) -> Result<(), Error<DB::Error>> {
@@ -77,7 +77,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     }
 
     /// Get value at index.
-    pub fn get<DB: ReadBackend<Construct=C>>(
+    pub fn get<DB: ReadBackend<Construct=C> + ?Sized>(
         &self,
         db: &mut DB,
         index: usize
@@ -91,7 +91,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     }
 
     /// Set value at index.
-    pub fn set<DB: WriteBackend<Construct=C>>(
+    pub fn set<DB: WriteBackend<Construct=C> + ?Sized>(
         &mut self,
         db: &mut DB,
         index: usize,
@@ -107,7 +107,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     }
 
     /// Push a new value to the vector.
-    pub fn push<DB: WriteBackend<Construct=C>>(
+    pub fn push<DB: WriteBackend<Construct=C> + ?Sized>(
         &mut self,
         db: &mut DB,
         value: C::Value
@@ -130,7 +130,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     }
 
     /// Pop a value from the vector.
-    pub fn pop<DB: WriteBackend<Construct=C>>(
+    pub fn pop<DB: WriteBackend<Construct=C> + ?Sized>(
         &mut self,
         db: &mut DB
     ) -> Result<Option<C::Value>, Error<DB::Error>> {
@@ -189,7 +189,7 @@ impl<R: RootStatus, C: Construct> Tree for Vector<R, C> {
         self.raw.root()
     }
 
-    fn drop<DB: WriteBackend<Construct=C>>(
+    fn drop<DB: WriteBackend<Construct=C> + ?Sized>(
         self,
         db: &mut DB
     ) -> Result<(), Error<DB::Error>> {
@@ -228,7 +228,7 @@ impl<R: RootStatus, C: Construct> Leak for Vector<R, C> {
 
 impl<C: Construct> Vector<Owned, C> {
     /// Create a new tuple.
-    pub fn create<DB: WriteBackend<Construct=C>>(
+    pub fn create<DB: WriteBackend<Construct=C> + ?Sized>(
         db: &mut DB,
         len: usize,
         max_len: Option<usize>

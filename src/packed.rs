@@ -50,7 +50,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Get value at index.
-    pub fn get<DB: ReadBackend<Construct=C>>(&self, db: &mut DB, index: usize) -> Result<T, Error<DB::Error>> {
+    pub fn get<DB: ReadBackend<Construct=C> + ?Sized>(&self, db: &mut DB, index: usize) -> Result<T, Error<DB::Error>> {
         let mut ret = GenericArray::<u8, V>::default();
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
@@ -65,7 +65,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
     }
 
     /// Set value at index.
-    pub fn set<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
+    pub fn set<DB: WriteBackend<Construct=C> + ?Sized>(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
         let value: GenericArray<u8, V> = value.into();
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
@@ -81,7 +81,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
     }
 
     /// Push a new value to the tuple.
-    pub fn push<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: WriteBackend<Construct=C> + ?Sized>(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
         let index = self.len;
         let (covering_base, covering_ranges) = coverings::<H, V>(index);
 
@@ -94,7 +94,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
     }
 
     /// Pop a value from the tuple.
-    pub fn pop<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
+    pub fn pop<DB: WriteBackend<Construct=C> + ?Sized>(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
         if self.len == 0 {
             return Ok(None)
         }
@@ -148,7 +148,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tre
         self.tuple.root()
     }
 
-    fn drop<DB: WriteBackend<Construct=C>>(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn drop<DB: WriteBackend<Construct=C> + ?Sized>(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         self.tuple.drop(db)
     }
 
@@ -194,7 +194,7 @@ impl<C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<Owned
     T: From<GenericArray<u8, V>>,
 {
     /// Create a new tuple.
-    pub fn create<DB: WriteBackend<Construct=C>>(db: &mut DB, value_len: usize, value_max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn create<DB: WriteBackend<Construct=C> + ?Sized>(db: &mut DB, value_len: usize, value_max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         let host_max_len = value_max_len.map(|l| host_len::<H, V>(l));
         let host_len = host_len::<H, V>(value_len);
 
@@ -226,22 +226,22 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
     T: From<GenericArray<u8, V>> + Into<GenericArray<u8, V>>,
 {
     /// Get value at index.
-    pub fn get<DB: ReadBackend<Construct=C>>(&self, db: &mut DB, index: usize) -> Result<T, Error<DB::Error>> {
+    pub fn get<DB: ReadBackend<Construct=C> + ?Sized>(&self, db: &mut DB, index: usize) -> Result<T, Error<DB::Error>> {
         self.0.with(db, |tuple, db| tuple.get(db, index))
     }
 
     /// Set value at index.
-    pub fn set<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
+    pub fn set<DB: WriteBackend<Construct=C> + ?Sized>(&mut self, db: &mut DB, index: usize, value: T) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.set(db, index, value))
     }
 
     /// Push a new value to the vector.
-    pub fn push<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
+    pub fn push<DB: WriteBackend<Construct=C> + ?Sized>(&mut self, db: &mut DB, value: T) -> Result<(), Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.push(db, value))
     }
 
     /// Pop a value from the vector.
-    pub fn pop<DB: WriteBackend<Construct=C>>(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
+    pub fn pop<DB: WriteBackend<Construct=C> + ?Sized>(&mut self, db: &mut DB) -> Result<Option<T>, Error<DB::Error>> {
         self.0.with_mut(db, |tuple, db| tuple.pop(db))
     }
 }
@@ -257,7 +257,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Tre
         self.0.root()
     }
 
-    fn drop<DB: WriteBackend<Construct=C>>(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
+    fn drop<DB: WriteBackend<Construct=C> + ?Sized>(self, db: &mut DB) -> Result<(), Error<DB::Error>> {
         self.0.drop(db)
     }
 
@@ -295,7 +295,7 @@ impl<C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<Owned, 
     T: From<GenericArray<u8, V>>,
 {
     /// Create a new vector.
-    pub fn create<DB: WriteBackend<Construct=C>>(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn create<DB: WriteBackend<Construct=C> + ?Sized>(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::create(db, |db| PackedVector::<Owned, _, T, H, V>::create(db, 0, max_len))?))
     }
 }

@@ -7,7 +7,7 @@ pub trait Construct: Sized {
     fn intermediate_of(left: &Self::Value, right: &Self::Value) -> Self::Value;
     /// Get or create the empty value given a backend. `empty_at(0)`
     /// should always equal to `Value::End(Default::default())`.
-    fn empty_at<DB: WriteBackend<Construct=Self>>(
+    fn empty_at<DB: WriteBackend<Construct=Self> + ?Sized>(
         db: &mut DB,
         depth_to_bottom: usize
     ) -> Result<Self::Value, DB::Error>;
@@ -23,7 +23,7 @@ pub trait Tree {
     /// Root of the merkle tree.
     fn root(&self) -> <Self::Construct as Construct>::Value;
     /// Drop the merkle tree.
-    fn drop<DB: WriteBackend<Construct=Self::Construct>>(
+    fn drop<DB: WriteBackend<Construct=Self::Construct> + ?Sized>(
         self,
         db: &mut DB
     ) -> Result<(), Error<DB::Error>>;
@@ -114,6 +114,61 @@ pub trait WriteBackend: ReadBackend {
         key: <Self::Construct as Construct>::Value,
         value: (<Self::Construct as Construct>::Value, <Self::Construct as Construct>::Value)
     ) -> Result<(), Self::Error>;
+}
+
+/// Dynamic backend, where error is stripped.
+pub struct DynBackend<Ba: Backend>(pub Ba);
+
+impl<Ba: Backend + Default> Default for DynBackend<Ba> {
+	fn default() -> Self { Self(Ba::default()) }
+}
+
+impl<Ba: Backend> core::ops::Deref for DynBackend<Ba> {
+	type Target = Ba;
+
+	fn deref(&self) -> &Ba { &self.0 }
+}
+
+impl<Ba: Backend> core::ops::DerefMut for DynBackend<Ba> {
+	fn deref_mut(&mut self) -> &mut Ba { &mut self.0 }
+}
+
+impl<Ba: Backend> Backend for DynBackend<Ba> {
+	type Construct = Ba::Construct;
+	type Error = ();
+}
+
+impl<Ba: ReadBackend> ReadBackend for DynBackend<Ba> {
+	fn get(
+        &mut self,
+        key: &<Self::Construct as Construct>::Value,
+    ) -> Result<Option<(<Self::Construct as Construct>::Value, <Self::Construct as Construct>::Value)>, Self::Error> {
+		self.0.get(key).map_err(|_| ())
+	}
+}
+
+impl<Ba: WriteBackend> WriteBackend for DynBackend<Ba> {
+	fn rootify(
+        &mut self,
+        key: &<Self::Construct as Construct>::Value,
+    ) -> Result<(), Self::Error> {
+		self.0.rootify(key).map_err(|_| ())
+	}
+
+    fn unrootify(
+        &mut self,
+        key: &<Self::Construct as Construct>::Value,
+    ) -> Result<(), Self::Error> {
+		self.0.unrootify(key).map_err(|_| ())
+	}
+
+    fn insert(
+        &mut self,
+        key: <Self::Construct as Construct>::Value,
+        value: (<Self::Construct as Construct>::Value, <Self::Construct as Construct>::Value)
+    ) -> Result<(), Self::Error> {
+		self.0.insert(key, value).map_err(|_| ())
+	}
 }
 
 /// Leakable value, whose default behavior of drop is to leak.

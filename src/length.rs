@@ -14,7 +14,7 @@ impl<R: RootStatus, C: Construct, S> LengthMixed<R, C, S> where
     C::Value: From<usize> + Into<usize>,
 {
     /// Reconstruct the mixed-length tree.
-    pub fn reconstruct<DB: WriteBackend<Construct=C>, F>(
+    pub fn reconstruct<DB: WriteBackend<Construct=C> + ?Sized, F>(
         root: C::Value,
         db: &mut DB,
         f: F
@@ -32,7 +32,7 @@ impl<R: RootStatus, C: Construct, S> LengthMixed<R, C, S> where
     }
 
     /// Deconstruct the mixed-length tree.
-    pub fn deconstruct<DB: ReadBackend<Construct=C>>(
+    pub fn deconstruct<DB: ReadBackend<Construct=C> + ?Sized>(
         self,
         db: &mut DB
     ) -> Result<C::Value, Error<DB::Error>> {
@@ -42,7 +42,7 @@ impl<R: RootStatus, C: Construct, S> LengthMixed<R, C, S> where
     }
 
     /// Call with the inner sequence.
-    pub fn with<DB: Backend<Construct=C>, RT, F>(
+    pub fn with<DB: Backend<Construct=C> + ?Sized, RT, F>(
         &self,
         db: &mut DB,
         f: F
@@ -53,7 +53,7 @@ impl<R: RootStatus, C: Construct, S> LengthMixed<R, C, S> where
     }
 
     /// Call with a mutable reference to the inner sequence.
-    pub fn with_mut<DB: WriteBackend<Construct=C>, RT, F>(
+    pub fn with_mut<DB: WriteBackend<Construct=C> + ?Sized, RT, F>(
         &mut self,
         db: &mut DB,
         f: F
@@ -76,7 +76,7 @@ impl<C: Construct, S> LengthMixed<Owned, C, S> where
     C::Value: From<usize> + Into<usize>,
 {
     /// Create a new mixed-length tree.
-    pub fn create<DB: WriteBackend<Construct=C>, OS, F>(
+    pub fn create<DB: WriteBackend<Construct=C> + ?Sized, OS, F>(
         db: &mut DB,
         f: F
     ) -> Result<Self, Error<DB::Error>> where
@@ -107,7 +107,7 @@ impl<R: RootStatus, C: Construct, S> Tree for LengthMixed<R, C, S> where
         self.raw.root()
     }
 
-    fn drop<DB: WriteBackend<Construct=C>>(
+    fn drop<DB: WriteBackend<Construct=C> + ?Sized>(
         self,
         db: &mut DB
     ) -> Result<(), Error<DB::Error>> {

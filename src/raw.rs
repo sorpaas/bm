@@ -34,7 +34,7 @@ impl<R: RootStatus, C: Construct> Tree for Raw<R, C> {
         self.root.clone()
     }
 
-    fn drop<DB: WriteBackend<Construct=C>>(
+    fn drop<DB: WriteBackend<Construct=C> + ?Sized>(
         self,
         db: &mut DB
     ) -> Result<(), Error<DB::Error>> {
@@ -51,7 +51,7 @@ impl<R: RootStatus, C: Construct> Tree for Raw<R, C> {
 
 impl<R: RootStatus, C: Construct> Raw<R, C> {
     /// Return a reference to a subtree.
-    pub fn subtree<DB: ReadBackend<Construct=C>>(
+    pub fn subtree<DB: ReadBackend<Construct=C> + ?Sized>(
         &self,
         db: &mut DB,
         index: Index
@@ -64,7 +64,7 @@ impl<R: RootStatus, C: Construct> Raw<R, C> {
     }
 
     /// Get value from the tree via generalized merkle index.
-    pub fn get<DB: ReadBackend<Construct=C>>(
+    pub fn get<DB: ReadBackend<Construct=C> + ?Sized>(
         &self,
         db: &mut DB,
         index: Index
@@ -91,7 +91,7 @@ impl<R: RootStatus, C: Construct> Raw<R, C> {
     }
 
     /// Set value of the merkle tree via generalized merkle index.
-    pub fn set<DB: WriteBackend<Construct=C>>(
+    pub fn set<DB: WriteBackend<Construct=C> + ?Sized>(
         &mut self,
         db: &mut DB,
         index: Index,
