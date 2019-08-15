@@ -41,7 +41,7 @@ impl<R: RootStatus, C: Construct> List<R, C> where
     }
 
     /// Reconstruct the vector from a single hash value.
-    pub fn reconstruct<DB: WriteBackend<Construct=C> + ?Sized>(root: C::Value, db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn reconstruct<DB: WriteBackend<Construct=C> + ?Sized>(root: C::Value, db: &mut DB, max_len: Option<u64>) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::reconstruct(root, db, |tuple_raw, _db, len| {
             Ok(Vector::<Dangling, C>::from_raw(tuple_raw, len, max_len))
         })?))
@@ -95,7 +95,7 @@ impl<C: Construct> List<Owned, C> where
     /// Create a new vector.
     pub fn create<DB: WriteBackend<Construct=C> + ?Sized>(
         db: &mut DB,
-        max_len: Option<usize>
+        max_len: Option<u64>
     ) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::create(db, |db| Vector::<Owned, _>::create(db, 0, max_len))?))
     }

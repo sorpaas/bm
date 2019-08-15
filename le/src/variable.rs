@@ -65,7 +65,7 @@ impl<'de, T: serde::Deserialize<'de>, N: Unsigned> serde::Deserialize<'de> for M
         D: serde::Deserializer<'de>,
     {
         let vec = Vec::<T>::deserialize(deserializer)?;
-        if vec.len() > N::to_usize() {
+        if (vec.len() as u64) > N::to_u64() {
             return Err(<D::Error as serde::de::Error>::custom("invalid length"))
         }
 
@@ -84,10 +84,10 @@ impl<T: parity_codec::Encode, N: Unsigned> parity_codec::Encode for MaxVec<T, N>
 impl<T: parity_codec::Decode, N: Unsigned> parity_codec::Decode for MaxVec<T, N> {
     fn decode<I: parity_codec::Input>(input: &mut I) -> Option<Self> {
         let decoded = Vec::<T>::decode(input)?;
-        if decoded.len() <= N::to_usize() {
-            Some(Self(decoded, PhantomData))
-        } else {
+        if (decoded.len() as u64) > N::to_u64() {
             None
+        } else {
+            Some(Self(decoded, PhantomData))
         }
     }
 }
@@ -98,7 +98,7 @@ impl<T, ML: Unsigned> IntoTree for MaxVec<T, ML> where
     fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
-        ElementalVariableVecRef(&self.0).into_composite_list_tree(db, Some(ML::to_usize()))
+        ElementalVariableVecRef(&self.0).into_composite_list_tree(db, Some(ML::to_u64()))
     }
 }
 
@@ -109,7 +109,7 @@ impl<T, ML: Unsigned> FromTree for MaxVec<T, ML> where
         DB::Construct: CompatibleConstruct,
     {
         let value = ElementalVariableVec::<T>::from_composite_list_tree(
-            root, db, Some(ML::to_usize())
+            root, db, Some(ML::to_u64())
         )?;
         Ok(MaxVec(value.0, PhantomData))
     }
@@ -121,7 +121,7 @@ impl<'a, T, ML: Unsigned> IntoTree for CompactRef<'a, MaxVec<T, ML>> where
     fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
-        ElementalVariableVecRef(&self.0).into_compact_list_tree(db, Some(ML::to_usize()))
+        ElementalVariableVecRef(&self.0).into_compact_list_tree(db, Some(ML::to_u64()))
     }
 }
 
@@ -131,7 +131,7 @@ impl<T, ML: Unsigned> IntoTree for Compact<MaxVec<T, ML>> where
     fn into_tree<DB: WriteBackend>(&self, db: &mut DB) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
-        ElementalVariableVecRef(&self.0).into_compact_list_tree(db, Some(ML::to_usize()))
+        ElementalVariableVecRef(&self.0).into_compact_list_tree(db, Some(ML::to_u64()))
     }
 }
 
@@ -142,7 +142,7 @@ impl<T, ML: Unsigned> FromTree for Compact<MaxVec<T, ML>> where
         DB::Construct: CompatibleConstruct,
     {
         let value = ElementalVariableVec::<T>::from_compact_list_tree(
-            root, db, Some(ML::to_usize())
+            root, db, Some(ML::to_u64())
         )?;
         Ok(Self(MaxVec(value.0, PhantomData)))
     }

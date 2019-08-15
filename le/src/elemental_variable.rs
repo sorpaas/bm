@@ -14,7 +14,7 @@ pub trait IntoCompositeListTree {
     fn into_composite_list_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
-        max_len: Option<usize>
+        max_len: Option<u64>
     ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;
 }
@@ -26,7 +26,7 @@ pub trait IntoCompactListTree {
     fn into_compact_list_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
-        max_len: Option<usize>
+        max_len: Option<u64>
     ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;
 }
@@ -38,7 +38,7 @@ pub trait FromCompositeListTree: Sized {
     fn from_composite_list_tree<DB: ReadBackend>(
         root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
-        max_len: Option<usize>,
+        max_len: Option<u64>,
     ) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;
 }
@@ -50,7 +50,7 @@ pub trait FromCompactListTree: Sized {
     fn from_compact_list_tree<DB: ReadBackend>(
         root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
-        max_len: Option<usize>,
+        max_len: Option<u64>,
     ) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct;
 }
@@ -68,7 +68,7 @@ macro_rules! impl_packed {
             fn into_compact_list_tree<DB: WriteBackend>(
                 &self,
                 db: &mut DB,
-                max_len: Option<usize>
+                max_len: Option<u64>
             ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
                 DB::Construct: CompatibleConstruct,
             {
@@ -95,7 +95,7 @@ impl<'a, T> IntoCompositeListTree for ElementalVariableVecRef<'a, T> where
     fn into_composite_list_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
-        max_len: Option<usize>
+        max_len: Option<u64>
     ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
@@ -109,11 +109,11 @@ impl<'a, T> IntoCompositeListTree for ElementalVariableVecRef<'a, T> where
 fn from_list_tree<T, F, DB: ReadBackend>(
     root: &<DB::Construct as Construct>::Value,
     db: &mut DB,
-    max_len: Option<usize>,
+    max_len: Option<u64>,
     f: F
 ) -> Result<ElementalVariableVec<T>, Error<DB::Error>> where
     DB::Construct: CompatibleConstruct,
-    F: FnOnce(&<DB::Construct as Construct>::Value, &mut DB, usize, Option<usize>) -> Result<ElementalFixedVec<T>, Error<DB::Error>>
+    F: FnOnce(&<DB::Construct as Construct>::Value, &mut DB, usize, Option<u64>) -> Result<ElementalFixedVec<T>, Error<DB::Error>>
 {
     let (vector_root, len) = decode_with_length::<<DB::Construct as Construct>::Value, _>(root, db)?;
 
@@ -130,7 +130,7 @@ impl<T> FromCompactListTree for ElementalVariableVec<T> where
     fn from_compact_list_tree<DB: ReadBackend>(
         root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
-        max_len: Option<usize>,
+        max_len: Option<u64>,
     ) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
@@ -148,7 +148,7 @@ impl<T> FromCompositeListTree for ElementalVariableVec<T> where
     fn from_composite_list_tree<DB: ReadBackend>(
         root: &<DB::Construct as Construct>::Value,
         db: &mut DB,
-        max_len: Option<usize>,
+        max_len: Option<u64>,
     ) -> Result<Self, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
@@ -166,7 +166,7 @@ impl<T> IntoCompactListTree for ElementalVariableVec<T> where
     fn into_compact_list_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
-        max_len: Option<usize>
+        max_len: Option<u64>
     ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
@@ -180,7 +180,7 @@ impl<T> IntoCompositeListTree for ElementalVariableVec<T> where
     fn into_composite_list_tree<DB: WriteBackend>(
         &self,
         db: &mut DB,
-        max_len: Option<usize>
+        max_len: Option<u64>
     ) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {

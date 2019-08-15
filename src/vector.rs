@@ -15,7 +15,7 @@ pub type DanglingVector<C> = Vector<Dangling, C>;
 /// Binary merkle tuple.
 pub struct Vector<R: RootStatus, C: Construct> {
     raw: Raw<R, C>,
-    max_len: Option<usize>,
+    max_len: Option<u64>,
     len: usize,
 }
 
@@ -50,10 +50,10 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     }
 
     /// Current maximum length of the vector.
-    pub fn current_max_len(&self) -> usize {
+    pub fn current_max_len(&self) -> u64 {
         self.max_len.unwrap_or({
             let mut max_len = 1;
-            while max_len < self.len {
+            while max_len < self.len as u64 {
                 max_len *= 2;
             }
             max_len
@@ -61,7 +61,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     }
 
     /// Overall maximum length of the vector.
-    pub fn max_len(&self) -> Option<usize> {
+    pub fn max_len(&self) -> Option<u64> {
         self.max_len
     }
 
@@ -113,7 +113,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
         value: C::Value
     ) -> Result<(), Error<DB::Error>> {
         let old_len = self.len();
-        if old_len == self.current_max_len() {
+        if (old_len as u64) == self.current_max_len() {
             if self.max_len.is_some() {
                 return Err(Error::AccessOverflowed)
             } else {
@@ -161,7 +161,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
         let empty = C::empty_at(db, empty_depth_to_bottom)?;
         self.raw.set(db, replace_index, empty)?;
 
-        if len <= self.current_max_len() / 2 {
+        if (len as u64) <= self.current_max_len() / 2 {
             if self.max_len.is_none() {
                 self.shrink(db)?;
             }
@@ -176,7 +176,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
     }
 
     /// Create a tuple from raw merkle tree.
-    pub fn from_raw(raw: Raw<R, C>, len: usize, max_len: Option<usize>) -> Self {
+    pub fn from_raw(raw: Raw<R, C>, len: usize, max_len: Option<u64>) -> Self {
         Self { raw, len, max_len }
     }
 }
@@ -209,7 +209,7 @@ impl<R: RootStatus, C: Construct> Sequence for Vector<R, C> {
 }
 
 impl<R: RootStatus, C: Construct> Leak for Vector<R, C> {
-    type Metadata = (C::Value, usize, Option<usize>);
+    type Metadata = (C::Value, usize, Option<u64>);
 
     fn metadata(&self) -> Self::Metadata {
         let len = self.len();
@@ -231,17 +231,17 @@ impl<C: Construct> Vector<Owned, C> {
     pub fn create<DB: WriteBackend<Construct=C> + ?Sized>(
         db: &mut DB,
         len: usize,
-        max_len: Option<usize>
+        max_len: Option<u64>
     ) -> Result<Self, Error<DB::Error>> {
         if let Some(max_len) = max_len {
-            if len < max_len || max_len == 0 {
+            if (len as u64) < max_len || max_len == 0 {
                 return Err(Error::InvalidParameter)
             }
         }
 
         let mut raw = Raw::<Owned, C>::default();
 
-        let target_len = max_len.unwrap_or(len);
+        let target_len = max_len.unwrap_or(len as u64);
         let mut current_max_len = 1;
         let mut depth = 0;
         while current_max_len < target_len {

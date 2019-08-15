@@ -8,7 +8,7 @@ use crate::length::LengthMixed;
 use crate::vector::Vector;
 use crate::raw::Raw;
 use crate::traits::{Construct, ReadBackend, WriteBackend, RootStatus, Owned, Dangling, Leak, Tree, Sequence, Error};
-use crate::utils::host_len;
+use crate::utils::{host_len, host_max_len};
 
 fn coverings<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_index: usize) -> (usize, Vec<Range<usize>>) {
     let host_len = Host::to_usize();
@@ -41,7 +41,7 @@ pub type DanglingPackedVector<C, T, H, V> = PackedVector<Dangling, C, T, H, V>;
 pub struct PackedVector<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> {
     tuple: Vector<R, C>,
     len: usize,
-    max_len: Option<usize>,
+    max_len: Option<u64>,
     _marker: PhantomData<(T, H, V)>,
 }
 
@@ -125,8 +125,8 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Pac
     }
 
     /// Create a packed tuple from raw merkle tree.
-    pub fn from_raw(raw: Raw<R, C>, len: usize, max_len: Option<usize>) -> Self {
-        let host_max_len = max_len.map(|l| host_len::<H, V>(l));
+    pub fn from_raw(raw: Raw<R, C>, len: usize, max_len: Option<u64>) -> Self {
+        let host_max_len = max_len.map(|l| host_max_len::<H, V>(l));
         let host_len = host_len::<H, V>(len);
         Self {
             tuple: Vector::from_raw(raw, host_len, host_max_len),
@@ -170,7 +170,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Lea
     C::Value: From<GenericArray<u8, H>>,
     T: From<GenericArray<u8, V>>,
 {
-    type Metadata = (C::Value, usize, Option<usize>);
+    type Metadata = (C::Value, usize, Option<u64>);
 
     fn metadata(&self) -> Self::Metadata {
         let value_len = self.len();
@@ -181,7 +181,7 @@ impl<R: RootStatus, C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> Lea
 
     fn from_leaked((raw_root, value_len, value_max_len): Self::Metadata) -> Self {
         Self {
-            tuple: Vector::from_leaked((raw_root, host_len::<H, V>(value_len), value_max_len.map(|l| host_len::<H, V>(l)))),
+            tuple: Vector::from_leaked((raw_root, host_len::<H, V>(value_len), value_max_len.map(|l| host_max_len::<H, V>(l)))),
             len: value_len,
             max_len: value_max_len,
             _marker: PhantomData,
@@ -194,8 +194,8 @@ impl<C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedVector<Owned
     T: From<GenericArray<u8, V>>,
 {
     /// Create a new tuple.
-    pub fn create<DB: WriteBackend<Construct=C> + ?Sized>(db: &mut DB, value_len: usize, value_max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
-        let host_max_len = value_max_len.map(|l| host_len::<H, V>(l));
+    pub fn create<DB: WriteBackend<Construct=C> + ?Sized>(db: &mut DB, value_len: usize, value_max_len: Option<u64>) -> Result<Self, Error<DB::Error>> {
+        let host_max_len = value_max_len.map(|l| host_max_len::<H, V>(l));
         let host_len = host_len::<H, V>(value_len);
 
         let tuple = Vector::create(db, host_len, host_max_len)?;
@@ -295,7 +295,7 @@ impl<C: Construct, T, H: ArrayLength<u8>, V: ArrayLength<u8>> PackedList<Owned, 
     T: From<GenericArray<u8, V>>,
 {
     /// Create a new vector.
-    pub fn create<DB: WriteBackend<Construct=C> + ?Sized>(db: &mut DB, max_len: Option<usize>) -> Result<Self, Error<DB::Error>> {
+    pub fn create<DB: WriteBackend<Construct=C> + ?Sized>(db: &mut DB, max_len: Option<u64>) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::create(db, |db| PackedVector::<Owned, _, T, H, V>::create(db, 0, max_len))?))
     }
 }

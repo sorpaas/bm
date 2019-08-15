@@ -5,7 +5,7 @@ use alloc::collections::VecDeque;
 use generic_array::ArrayLength;
 
 /// Required depth of given length.
-pub fn required_depth(len: usize) -> usize {
+pub fn required_depth(len: u64) -> usize {
     let mut max_len = 1;
     let mut total_depth = 0;
     while max_len < len {
@@ -16,8 +16,8 @@ pub fn required_depth(len: usize) -> usize {
 }
 
 /// Serialize a vector at given depth.
-pub fn vector_tree<DB: WriteBackend>(values: &[<DB::Construct as Construct>::Value], db: &mut DB, max_len: Option<usize>) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> {
-    let total_depth = required_depth(max_len.unwrap_or(values.len()));
+pub fn vector_tree<DB: WriteBackend>(values: &[<DB::Construct as Construct>::Value], db: &mut DB, max_len: Option<u64>) -> Result<<DB::Construct as Construct>::Value, Error<DB::Error>> {
+    let total_depth = required_depth(max_len.unwrap_or(values.len() as u64));
 
     let mut current = values.iter().cloned().collect::<VecDeque<_>>();
     let mut next = VecDeque::new();
@@ -44,9 +44,9 @@ pub fn vector_tree<DB: WriteBackend>(values: &[<DB::Construct as Construct>::Val
 }
 
 /// Get the host len of a packed vector.
-pub fn host_len<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_len: usize) -> usize {
-    let host_array_len = Host::to_usize();
-    let value_array_len = Value::to_usize();
+pub fn host_max_len<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_len: u64) -> u64 {
+    let host_array_len = Host::to_u64();
+    let value_array_len = Value::to_u64();
 
     let bytes = value_array_len * value_len;
     if bytes % host_array_len == 0 {
@@ -54,4 +54,9 @@ pub fn host_len<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_len: usize)
     } else {
         bytes / host_array_len + 1
     }
+}
+
+/// Get the host len of a packed vector.
+pub fn host_len<Host: ArrayLength<u8>, Value: ArrayLength<u8>>(value_len: usize) -> usize {
+    host_max_len::<Host, Value>(value_len as u64) as usize
 }
