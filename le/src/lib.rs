@@ -22,8 +22,10 @@ mod elemental_fixed;
 mod elemental_variable;
 mod fixed;
 mod variable;
+mod partial;
 pub mod utils;
 
+pub use basic::Ignored;
 pub use elemental_fixed::{ElementalFixedVec, ElementalFixedVecRef,
                           IntoCompactVectorTree, FromCompactVectorTree,
                           IntoCompositeVectorTree, FromCompositeVectorTree};
@@ -31,6 +33,7 @@ pub use elemental_variable::{ElementalVariableVec, ElementalVariableVecRef,
                              IntoCompactListTree, FromCompactListTree,
                              IntoCompositeListTree, FromCompositeListTree};
 pub use variable::MaxVec;
+pub use partial::PartialIndex;
 #[cfg(feature = "derive")]
 pub use bm_le_derive::{FromTree, IntoTree};
 

@@ -118,6 +118,26 @@ impl Index {
             value = value >> 1;
         }
     }
+
+    /// Get sub from current index.
+    pub fn sub(&self, sub: Index) -> Index {
+        let route = sub.route();
+
+        match route {
+            IndexRoute::Root => self.clone(),
+            IndexRoute::Select(selections) => {
+                let mut current = self.clone();
+
+                for selection in selections {
+                    match selection {
+                        IndexSelection::Left => { current = current.left(); }
+                        IndexSelection::Right => { current = current.right(); }
+                    }
+                }
+                current
+            },
+        }
+    }
 }
 
 #[cfg(test)]

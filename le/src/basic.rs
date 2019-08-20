@@ -173,3 +173,18 @@ impl<T> IntoTree for Box<T> where
         self.as_ref().into_tree(db)
     }
 }
+
+/// Representing an ignored value.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct Ignored;
+
+impl FromTree for Ignored {
+    fn from_tree<DB: ReadBackend>(
+        _root: &<DB::Construct as Construct>::Value,
+        _db: &mut DB
+    ) -> Result<Self, Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct,
+    {
+        Ok(Ignored)
+    }
+}
