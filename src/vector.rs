@@ -259,3 +259,10 @@ impl<C: Construct> Vector<Owned, C> {
         })
     }
 }
+
+impl<R: RootStatus, C: Construct> Raw<R, C> {
+    /// Convert the current value to a vector.
+    pub fn into_vector(self, len: usize, max_len: Option<u64>) -> Vector<R, C> {
+        Vector::from_raw(self, len, max_len)
+    }
+}

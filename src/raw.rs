@@ -50,6 +50,11 @@ impl<R: RootStatus, C: Construct> Tree for Raw<R, C> {
 }
 
 impl<R: RootStatus, C: Construct> Raw<R, C> {
+    /// Create a new raw from given root.
+    pub fn new(root: C::Value) -> Self {
+        Self::from_leaked(root)
+    }
+
     /// Return a reference to a subtree.
     pub fn subtree<DB: ReadBackend<Construct=C> + ?Sized>(
         &self,
@@ -173,6 +178,16 @@ impl<R: RootStatus, C: Construct> Leak for Raw<R, C> {
     fn from_leaked(root: Self::Metadata) -> Self {
         Self {
             root,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<C: Construct> Raw<Owned, C> {
+    /// Convert the current value to a dangling raw.
+    pub fn as_dangling(&self) -> Raw<Dangling, C> {
+        Raw {
+            root: self.root.clone(),
             _marker: PhantomData,
         }
     }

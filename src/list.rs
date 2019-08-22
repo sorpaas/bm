@@ -46,6 +46,11 @@ impl<R: RootStatus, C: Construct> List<R, C> where
             Ok(Vector::<Dangling, C>::from_raw(tuple_raw, len, max_len))
         })?))
     }
+
+    /// Create a list from raw merkle tree.
+    pub fn from_raw(raw: Raw<R, C>, len: usize, max_len: Option<u64>) -> Self {
+        Self::from_leaked((raw.metadata(), (raw.metadata(), len, max_len)))
+    }
 }
 
 impl<R: RootStatus, C: Construct> Tree for List<R, C> where
@@ -98,6 +103,15 @@ impl<C: Construct> List<Owned, C> where
         max_len: Option<u64>
     ) -> Result<Self, Error<DB::Error>> {
         Ok(Self(LengthMixed::create(db, |db| Vector::<Owned, _>::create(db, 0, max_len))?))
+    }
+}
+
+impl<R: RootStatus, C: Construct> Raw<R, C> {
+    /// Convert the current value to a list.
+    pub fn into_list(self, len: usize, max_len: Option<u64>) -> List<R, C> where
+        C::Value: From<usize> + Into<usize>
+    {
+        List::from_raw(self, len, max_len)
     }
 }
 
