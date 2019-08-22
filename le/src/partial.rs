@@ -1,6 +1,6 @@
-use bm::{Index, Error, ReadBackend, Construct, DanglingRaw, Leak};
-use primitive_types::U256;
-use crate::{FromTree, CompatibleConstruct};
+use bm::{Index, Error, ReadBackend, RootStatus, Raw, WriteBackend};
+use primitive_types::{U256, H256};
+use crate::{FromTree, IntoTree, CompatibleConstruct};
 
 /// Partial index for le binary tree.
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -54,15 +54,15 @@ impl PartialIndex {
     }
 
     /// Resolve the index.
-    pub fn resolve<DB: ReadBackend>(
+    pub fn resolve<R: RootStatus, DB: ReadBackend>(
         &self,
-        root: &<DB::Construct as Construct>::Value,
+        raw: &Raw<R, DB::Construct>,
         db: &mut DB
     ) -> Result<Index, Error<DB::Error>> where
         DB::Construct: CompatibleConstruct,
     {
         let parent = match &self.parent {
-            Some(p) => p.resolve(root, db)?,
+            Some(p) => p.resolve(raw, db)?,
             None => Index::root(),
         };
 
@@ -70,7 +70,8 @@ impl PartialIndex {
             PartialSubIndex::Raw(raw) => return Ok(parent.sub(raw)),
             PartialSubIndex::Vector(index, len) => (index, len),
             PartialSubIndex::List(index) => {
-                let len = Self::get_raw::<U256, _>(root, db, parent.right())?;
+                let len_root = raw.get(db, parent.right())?.ok_or(Error::CorruptedDatabase)?;
+                let len = U256::from_tree(&len_root, db)?;
 
                 if len > U256::from(usize::max_value()) {
                     return Err(Error::CorruptedDatabase)
@@ -92,29 +93,104 @@ impl PartialIndex {
 
         Ok(parent.sub(sub))
     }
+}
 
-    /// Get value of type from this partial index.
-    pub fn get<T: FromTree, DB: ReadBackend>(
-        &self,
-        root: &<DB::Construct as Construct>::Value,
+/// Basic partial values.
+pub struct PartialValue<T> {
+    index: PartialIndex,
+    value: Option<T>,
+}
+
+impl<T: FromTree> PartialValue<T> {
+    /// Fetch the partial value from the database.
+    pub fn fetch<R: RootStatus, DB: ReadBackend>(
+        &mut self,
+        raw: &Raw<R, DB::Construct>,
         db: &mut DB,
-    ) -> Result<T, Error<DB::Error>> where
-        DB::Construct: CompatibleConstruct,
+    ) -> Result<(), Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct
     {
-        let index = self.resolve(root, db)?;
-        Self::get_raw(root, db, index)
+        let index = self.index.resolve(raw, db)?;
+        let index_root = raw.get(db, index)?.ok_or(Error::CorruptedDatabase)?;
+        let value = T::from_tree(&index_root, db)?;
+
+        self.value = Some(value);
+        Ok(())
     }
 
-    fn get_raw<T: FromTree, DB: ReadBackend>(
-        root: &<DB::Construct as Construct>::Value,
+    /// Get a reference to the fetched partial value.
+    pub fn get<R: RootStatus, DB: ReadBackend>(
+        &mut self,
+        raw: &Raw<R, DB::Construct>,
         db: &mut DB,
-        index: Index,
-    ) -> Result<T, Error<DB::Error>> where
-        DB::Construct: CompatibleConstruct,
+    ) -> Result<&T, Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct
     {
-        let index_root = DanglingRaw::from_leaked(root.clone()).get(db, index)?
-            .ok_or(Error::CorruptedDatabase)?;
+        if self.value.is_none() {
+            self.fetch(raw, db)?;
+        }
 
-        T::from_tree(&index_root, db)
+        Ok(self.value.as_ref().expect("value is checked to be some or set before; qed"))
+    }
+
+    /// Set the partial value.
+    pub fn set(&mut self, value: T) {
+        self.value = Some(value);
     }
 }
+
+impl<T: IntoTree> PartialItem for PartialValue<T> {
+    fn new(index: PartialIndex) -> Self {
+        Self {
+            index,
+            value: None
+        }
+    }
+
+    fn flush<R: RootStatus, DB: WriteBackend>(
+        &mut self,
+        raw: &mut Raw<R, DB::Construct>,
+        db: &mut DB,
+    ) -> Result<(), Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct
+    {
+        if let Some(value) = self.value.take() {
+            let index = self.index.resolve(raw, db)?;
+            let value_root = value.into_tree(db)?;
+
+            raw.set(db, index, value_root)?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Partial item.
+pub trait PartialItem {
+    /// Create a new partial item.
+    fn new(index: PartialIndex) -> Self;
+
+    /// Flush the value back to the database.
+    fn flush<R: RootStatus, DB: WriteBackend>(
+        &mut self,
+        raw: &mut Raw<R, DB::Construct>,
+        db: &mut DB,
+    ) -> Result<(), Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct;
+}
+
+/// Partialable
+pub trait Partialable {
+    /// Value type of the partial item.
+    type Value;
+}
+
+macro_rules! basic_partialables {
+    ( $( $t:ty ),* ) => { $(
+        impl Partialable for $t {
+            type Value = PartialValue<$t>;
+        }
+    )* }
+}
+
+basic_partialables!(u8, u16, u32, u64, u128, U256, H256);

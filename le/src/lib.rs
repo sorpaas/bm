@@ -15,7 +15,8 @@ use digest::Digest;
 
 pub use bm::{Backend, ReadBackend, WriteBackend, InheritedDigestConstruct,
              UnitDigestConstruct, Construct, InheritedEmpty, Error, Vector,
-             DanglingVector, List, Leak, NoopBackend, InMemoryBackend};
+             DanglingVector, List, Leak, NoopBackend, InMemoryBackend, Raw,
+             RootStatus, OwnedRaw, DanglingRaw};
 
 mod basic;
 mod elemental_fixed;
@@ -33,9 +34,9 @@ pub use elemental_variable::{ElementalVariableVec, ElementalVariableVecRef,
                              IntoCompactListTree, FromCompactListTree,
                              IntoCompositeListTree, FromCompositeListTree};
 pub use variable::MaxVec;
-pub use partial::PartialIndex;
+pub use partial::{PartialIndex, PartialValue, PartialItem, Partialable};
 #[cfg(feature = "derive")]
-pub use bm_le_derive::{FromTree, IntoTree};
+pub use bm_le_derive::{FromTree, IntoTree, Partialable};
 
 /// Digest construct for bm-le.
 pub type DigestConstruct<D> = bm::InheritedDigestConstruct<D, Value>;

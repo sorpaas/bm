@@ -3,7 +3,7 @@
 extern crate proc_macro;
 
 use quote::{quote, quote_spanned};
-use syn::{parse_macro_input, Fields, DeriveInput, Data};
+use syn::{parse_macro_input, Fields, Ident, DeriveInput, Data};
 use syn::spanned::Spanned;
 use deriving::{has_attribute, normalized_fields, is_fields_variant_unnamed, normalized_variant_match_cause};
 
@@ -301,6 +301,81 @@ pub fn from_tree_derive(input: TokenStream) -> TokenStream {
                 }
             }
         };
+
+    proc_macro::TokenStream::from(expanded)
+}
+
+#[proc_macro_derive(Partialable, attributes(bm))]
+pub fn partialable_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let vis = input.vis;
+    let name = input.ident;
+    let partial_name = Ident::new(&format!("Partial{}", name), name.span());
+
+    let expanded = match input.data {
+        Data::Struct(ref data) => {
+            let fields = normalized_fields(&data.fields);
+
+            let struct_inner = fields.clone().into_iter().map(|f| {
+                let name = &f.0;
+                let ty = &f.1.ty;
+
+                quote! {
+                    pub #name: <#ty as bm_le::Partialable>::Value,
+                }
+            });
+
+            let total = fields.len();
+
+            let new_inner = fields.clone().into_iter().enumerate().map(|(i, f)| {
+                let name = &f.0;
+
+                quote! {
+                    #name: bm_le::PartialItem::new(partial_index.vector(#i, #total)),
+                }
+            });
+
+            let flush_inner = fields.clone().into_iter().map(|f| {
+                let name = &f.0;
+
+                quote! {
+                    bm_le::PartialItem::flush(&mut self.#name, raw, db)?;
+                }
+            });
+
+            quote! {
+                /// Partial value type.
+                #vis struct #partial_name {
+                    #(#struct_inner)*
+                }
+
+                impl bm_le::PartialItem for #partial_name {
+                    fn new(partial_index: bm_le::PartialIndex) -> Self {
+                        Self {
+                            #(#new_inner)*
+                        }
+                    }
+
+                    fn flush<R: bm_le::RootStatus, DB: bm_le::WriteBackend>(
+                        &mut self,
+                        raw: &mut bm_le::Raw<R, DB::Construct>,
+                        db: &mut DB,
+                    ) -> Result<(), bm_le::Error<DB::Error>> where
+                        DB::Construct: bm_le::CompatibleConstruct
+                    {
+                        #(#flush_inner)*
+
+                        Ok(())
+                    }
+                }
+
+                impl bm_le::Partialable for #name {
+                    type Value = #partial_name;
+                }
+            }
+        },
+        _ => panic!("Unsupported data type"),
+    };
 
     proc_macro::TokenStream::from(expanded)
 }
