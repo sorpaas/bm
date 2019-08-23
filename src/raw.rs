@@ -183,7 +183,7 @@ impl<R: RootStatus, C: Construct> Leak for Raw<R, C> {
     }
 }
 
-impl<C: Construct> Raw<Owned, C> {
+impl<R: RootStatus, C: Construct> Raw<R, C> {
     /// Convert the current value to a dangling raw.
     pub fn as_dangling(&self) -> Raw<Dangling, C> {
         Raw {

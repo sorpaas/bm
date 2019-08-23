@@ -1,5 +1,10 @@
-use bm::{Index, Error, ReadBackend, RootStatus, Raw, WriteBackend};
+use bm::{Index, Error, ReadBackend, RootStatus, Raw, DanglingList, Tree, WriteBackend};
 use primitive_types::{U256, H256};
+use core::mem;
+#[cfg(not(feature = "std"))]
+use alloc::collections::BTreeMap as Map;
+#[cfg(feature = "std")]
+use std::collections::HashMap as Map;
 use crate::{FromTree, IntoTree, CompatibleConstruct};
 
 /// Partial index for le binary tree.
@@ -165,6 +170,63 @@ impl<T: IntoTree> PartialItem for PartialValue<T> {
     }
 }
 
+/// Partial item for Vec.
+pub struct PartialVec<T: Partialable> {
+    index: PartialIndex,
+    values: Map<usize, T::Value>,
+    pushed: Vec<T>,
+}
+
+impl<T: Partialable> PartialVec<T> {
+    /// Access a value at given position.
+    pub fn at(&mut self, index: usize) -> &mut T::Value {
+        self.values.entry(index).or_insert(PartialItem::new(PartialIndex {
+            parent: Some(Box::new(self.index.clone())),
+            sub: PartialSubIndex::List(index),
+        }))
+    }
+
+    /// Push a value at given position.
+    pub fn push(&mut self, value: T) {
+        self.pushed.push(value);
+    }
+}
+
+impl<T: Partialable + IntoTree> PartialItem for PartialVec<T> {
+    fn new(index: PartialIndex) -> Self {
+        Self {
+            index,
+            values: Default::default(),
+            pushed: Default::default(),
+        }
+    }
+
+    fn flush<R: RootStatus, DB: WriteBackend>(
+        &mut self,
+        raw: &mut Raw<R, DB::Construct>,
+        db: &mut DB,
+    ) -> Result<(), Error<DB::Error>> where
+        DB::Construct: CompatibleConstruct,
+    {
+        let mut values = Map::default();
+        mem::swap(&mut values, &mut self.values);
+
+        for (_, mut value) in values {
+            value.flush(raw, db)?;
+        }
+
+        let mut pushed = Vec::default();
+        mem::swap(&mut pushed, &mut self.pushed);
+        let mut list = DanglingList::reconstruct(raw.root(), db, None)?;
+        for value in pushed {
+            let value_root = value.into_tree(db)?;
+            list.push(db, value_root)?;
+        }
+
+        Ok(())
+    }
+}
+
 /// Partial item.
 pub trait PartialItem {
     /// Create a new partial item.
@@ -182,7 +244,7 @@ pub trait PartialItem {
 /// Partialable
 pub trait Partialable {
     /// Value type of the partial item.
-    type Value;
+    type Value: PartialItem;
 }
 
 macro_rules! basic_partialables {

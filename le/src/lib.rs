@@ -34,7 +34,7 @@ pub use elemental_variable::{ElementalVariableVec, ElementalVariableVecRef,
                              IntoCompactListTree, FromCompactListTree,
                              IntoCompositeListTree, FromCompositeListTree};
 pub use variable::MaxVec;
-pub use partial::{PartialIndex, PartialValue, PartialItem, Partialable};
+pub use partial::{PartialIndex, PartialValue, PartialVec, PartialItem, Partialable};
 #[cfg(feature = "derive")]
 pub use bm_le_derive::{FromTree, IntoTree, Partialable};
 
