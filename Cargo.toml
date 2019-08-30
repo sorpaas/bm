@@ -25,6 +25,6 @@ std = ["serde/std", "parity-codec/std"]
 
 [workspace]
 members = [
-  "le",
-  "le/derive",
+	"le",
+	"le/derive",
 ]
