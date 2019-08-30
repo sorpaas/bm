@@ -1,4 +1,4 @@
-use crate::{Backend, ReadBackend, WriteBackend, Construct};
+use crate::{Backend, ReadBackend, WriteBackend, Construct, Index, IndexRoute, IndexSelection};
 use core::hash::Hash;
 use core::ops::Deref;
 use core::fmt;
@@ -173,20 +173,13 @@ impl<V: Eq + Hash + Ord + Clone + Default> Proofs<V> {
 
     /// Convert the compact value into full proofs.
     pub fn from_compact<C: Construct<Value=V>>(compact: CompactValue<V>) -> (Self, V) {
-        match compact {
-            CompactValue::Single(root) => (Proofs(Default::default()), root),
-            CompactValue::Combined(boxed) => {
-                let (compact_left, compact_right) = *boxed;
-                let (left_proofs, left) = Self::from_compact::<C>(compact_left);
-                let (right_proofs, right) = Self::from_compact::<C>(compact_right);
-                let mut proofs = left_proofs.0.into_iter()
-                    .chain(right_proofs.0.into_iter())
-                    .collect::<Map<V, (V, V)>>();
-                let key = C::intermediate_of(&left, &right);
-                proofs.insert(key.clone(), (left, right));
-                (Proofs(proofs), key)
-            },
-        }
+		compact.fold::<C, Proofs<V>, _>(&|key, (left_proofs, left), (right_proofs, right)| {
+			let mut proofs = left_proofs.0.into_iter()
+				.chain(right_proofs.0.into_iter())
+				.collect::<Map<V, (V, V)>>();
+			proofs.insert(key, (left, right));
+			Proofs(proofs)
+		})
     }
 }
 
@@ -207,7 +200,7 @@ impl<V: Default> Default for CompactValue<V> {
     }
 }
 
-impl<V> CompactValue<V> {
+impl<V: Default + Clone> CompactValue<V> {
     /// Get the length of the current value.
     pub fn len(&self) -> usize {
         match self {
@@ -217,4 +210,70 @@ impl<V> CompactValue<V> {
             },
         }
     }
+
+	/// Fold the compact value.
+	pub fn fold<C: Construct<Value=V>, R: Default, F: Fn(V, (R, V), (R, V)) -> R>(
+		self,
+		f: &F,
+	) -> (R, V) {
+		match self {
+			CompactValue::Single(root) => (R::default(), root),
+			CompactValue::Combined(boxed) => {
+				let (compact_left, compact_right) = *boxed;
+				let (left_proofs, left) = compact_left.fold::<C, R, F>(f);
+				let (right_proofs, right) = compact_right.fold::<C, R, F>(f);
+				let key = C::intermediate_of(&left, &right);
+				let proofs = f(key.clone(), (left_proofs, left), (right_proofs, right));
+				(proofs, key)
+			},
+		}
+	}
+
+	/// Get the root value of the compact.
+	pub fn root<C: Construct<Value=V>>(self) -> V {
+		self.fold::<C, (), _>(&|_, _, _| ()).1
+	}
+
+	/// Convert from plain proof.
+	pub fn from_plain<I: IntoIterator<Item=V>>(proofs: I, index: Index) -> Option<Self> {
+		let mut proofs = proofs.into_iter();
+
+		let mut current = CompactValue::Single(proofs.next()?);
+		let route = index.route();
+
+		match route {
+			IndexRoute::Root => if proofs.next().is_none() {
+				Some(current)
+			} else {
+				None
+			},
+			IndexRoute::Select(selections) => {
+				let mut selections = selections.into_iter().rev();
+
+				loop {
+					let selection = selections.next();
+					let proof = proofs.next();
+
+					match (selection, proof) {
+						(Some(selection), Some(proof)) => {
+							match selection {
+								IndexSelection::Left => {
+									current = CompactValue::Combined(
+										Box::new((current, CompactValue::Single(proof)))
+									);
+								},
+								IndexSelection::Right => {
+									current = CompactValue::Combined(
+										Box::new((CompactValue::Single(proof), current))
+									);
+								},
+							}
+						},
+						(None, None) => return Some(current),
+						_ => return None,
+					}
+				}
+			},
+		}
+	}
 }
