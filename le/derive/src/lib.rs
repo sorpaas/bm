@@ -24,14 +24,14 @@ pub fn into_tree_derive(input: TokenStream) -> TokenStream {
 
 				if has_attribute("bm", &f.1.attrs, "compact") {
 					quote_spanned! {
-				f.1.span() => for<'a> bm_le::CompactRef<'a, #ty>: bm_le::IntoTree
-				}
+						f.1.span() => for<'a> bm_le::CompactRef<'a, #ty>: bm_le::IntoTree
+					}
 				} else {
-				quote_spanned! {
-				f.1.span() => #ty: bm_le::IntoTree
+					quote_spanned! {
+						f.1.span() => #ty: bm_le::IntoTree
+					}
 				}
-				}
-		}).collect::<Vec<_>>();
+			}).collect::<Vec<_>>();
 
 		let fields = normalized_fields(fs)
 			.iter()

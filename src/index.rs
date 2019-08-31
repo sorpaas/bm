@@ -91,6 +91,11 @@ impl Index {
 		Self(value + 1)
 	}
 
+	/// From depth.
+	pub fn from_depth(index: usize, depth: usize) -> Self {
+		Self((1 << depth) + index)
+	}
+
 	/// Get selections from current index.
 	pub fn route(&self) -> IndexRoute {
 		let mut value = self.0;
