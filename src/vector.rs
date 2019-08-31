@@ -20,8 +20,8 @@ pub struct Vector<R: RootStatus, C: Construct> {
 }
 
 impl<R: RootStatus, C: Construct> Vector<R, C> {
-	fn raw_index(&self, i: usize) -> Option<Index> {
-		Index::from_one((1 << self.depth()) + i)
+	fn raw_index(&self, i: usize) -> Index {
+		Index::from_depth(i, self.depth())
 	}
 
 	fn extend<DB: WriteBackend<Construct=C> + ?Sized>(
@@ -86,7 +86,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
 			return Err(Error::AccessOverflowed)
 		}
 
-		let raw_index = self.raw_index(index).ok_or(Error::InvalidParameter)?;
+		let raw_index = self.raw_index(index);
 		self.raw.get(db, raw_index)?.ok_or(Error::CorruptedDatabase)
 	}
 
@@ -101,7 +101,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
 			return Err(Error::AccessOverflowed)
 		}
 
-		let raw_index = self.raw_index(index).ok_or(Error::InvalidParameter)?;
+		let raw_index = self.raw_index(index);
 		self.raw.set(db, raw_index, value)?;
 		Ok(())
 	}
@@ -124,7 +124,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
 		let index = old_len;
 		self.len = len;
 
-		let raw_index = self.raw_index(index).ok_or(Error::InvalidParameter)?;
+		let raw_index = self.raw_index(index);
 		self.raw.set(db, raw_index, value)?;
 		Ok(())
 	}
@@ -141,7 +141,7 @@ impl<R: RootStatus, C: Construct> Vector<R, C> {
 
 		let len = old_len - 1;
 		let index = old_len - 1;
-		let raw_index = self.raw_index(index).ok_or(Error::InvalidParameter)?;
+		let raw_index = self.raw_index(index);
 		let value = self.raw.get(db, raw_index)?.ok_or(Error::CorruptedDatabase)?;
 
 		let mut empty_depth_to_bottom = 0;
