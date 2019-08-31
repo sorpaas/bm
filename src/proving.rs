@@ -235,10 +235,10 @@ impl<V: Default + Clone> CompactValue<V> {
 	}
 
 	/// Convert from plain proof.
-	pub fn from_plain<I: IntoIterator<Item=V>>(proofs: I, index: Index) -> Option<Self> {
+	pub fn from_plain<I: IntoIterator<Item=V>>(leaf: V, proofs: I, index: Index) -> Option<Self> {
 		let mut proofs = proofs.into_iter();
 
-		let mut current = CompactValue::Single(proofs.next()?);
+		let mut current = CompactValue::Single(leaf);
 		let route = index.route();
 
 		match route {
